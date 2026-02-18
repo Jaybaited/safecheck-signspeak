@@ -1,0 +1,133 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  TEACHER
+  PARENT
+  STUDENT
+}
+
+enum GradeLevel {
+  GRADE_1
+  GRADE_2
+  GRADE_3
+  GRADE_4
+  GRADE_5
+  GRADE_6
+  GRADE_7
+  GRADE_8
+  GRADE_9
+  GRADE_10
+  GRADE_11
+  GRADE_12
+}
+
+
+enum CardStatus {
+  ACTIVE
+  LOST
+  REPLACED
+  SUSPENDED
+}
+
+model User {
+  id            String      @id @default(uuid())
+  username      String      @unique
+  email         String?     @unique
+  password      String
+  role          Role
+  firstName     String
+  lastName      String
+  gradeLevel    GradeLevel?
+  rfidCard      String?     @unique
+  photoUrl      String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  
+  // Relations
+  attendances   Attendance[]
+  fslProgress   FSLProgress[]
+  parentLinks   ParentStudent[] @relation("ParentUser")
+  childLinks    ParentStudent[] @relation("StudentUser")
+  
+  @@map("users")
+}
+
+model ParentStudent {
+  id        String   @id @default(uuid())
+  parentId  String
+  studentId String
+  parent    User     @relation("ParentUser", fields: [parentId], references: [id], onDelete: Cascade)
+  student   User     @relation("StudentUser", fields: [studentId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  
+  @@unique([parentId, studentId])
+  @@map("parent_students")
+}
+
+model RFIDCard {
+  id          String     @id @default(uuid())
+  cardUID     String     @unique
+  studentId   String
+  status      CardStatus @default(ACTIVE)
+  issuedAt    DateTime   @default(now())
+  replacedAt  DateTime?
+  
+  @@map("rfid_cards")
+}
+
+model Attendance {
+  id        String    @id @default(uuid())
+  studentId String
+  student   User      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  timeIn    DateTime  @default(now())
+  timeOut   DateTime?
+  date      DateTime  @default(now()) @db.Date
+  
+  @@map("attendances")
+}
+
+model FSLWord {
+  id          String        @id @default(uuid())
+  word        String        @unique
+  category    String        // alphabet, numbers, greetings, etc.
+  videoUrl    String
+  createdAt   DateTime      @default(now())
+  
+  progress    FSLProgress[]
+  
+  @@map("fsl_words")
+}
+
+model FSLProgress {
+  id         String   @id @default(uuid())
+  studentId  String
+  student    User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  wordId     String
+  word       FSLWord  @relation(fields: [wordId], references: [id], onDelete: Cascade)
+  accuracy   Float    @default(0)
+  attempts   Int      @default(0)
+  completed  Boolean  @default(false)
+  lastPracticed DateTime @default(now())
+  
+  @@unique([studentId, wordId])
+  @@map("fsl_progress")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  type      String   // SMS, PUSH, EMAIL
+  message   String
+  sentAt    DateTime @default(now())
+  status    String   // SENT, FAILED, PENDING
+  
+  @@map("notifications")
+}
