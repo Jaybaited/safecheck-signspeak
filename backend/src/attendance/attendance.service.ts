@@ -3,7 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 
 type AttendanceAction = 'CHECK_IN' | 'CHECK_OUT';
 
-export interface RfidTapResult {  // ✅ EXPORTED - Controller can now import this
+export interface RfidTapResult {
   success: boolean;
   action: AttendanceAction;
   student: {

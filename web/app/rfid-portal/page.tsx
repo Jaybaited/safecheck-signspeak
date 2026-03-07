@@ -24,9 +24,11 @@ export default function RFIDPortalPage() {
   const [lastTap, setLastTap] = useState<TapResponse | null>(null);
   const [error, setError] = useState('');
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [mounted, setMounted] = useState(false); // ✅ Fix: mounted state
 
-  // Update clock every second
+  // ✅ Fix: Set mounted + start clock after mount
   useEffect(() => {
+    setMounted(true);
     const timer = setInterval(() => {
       setCurrentTime(new Date());
     }, 1000);
@@ -39,7 +41,6 @@ export default function RFIDPortalPage() {
     let timeout: NodeJS.Timeout;
 
     const handleKeyPress = (e: KeyboardEvent) => {
-      // Clear previous messages when starting new scan
       if (buffer.length === 0) {
         setError('');
         setLastTap(null);
@@ -76,7 +77,6 @@ export default function RFIDPortalPage() {
       setLastTap(response);
       setScannedCard(rfidCard);
 
-      // Clear success message after 5 seconds
       setTimeout(() => {
         setLastTap(null);
       }, 5000);
@@ -127,12 +127,14 @@ export default function RFIDPortalPage() {
         <p className="text-xl text-gray-400">RFID Attendance Portal</p>
       </div>
 
-      {/* Clock */}
+      {/* Clock - ✅ Fix: Only render after mounted */}
       <div className="text-center mb-12">
         <div className="text-6xl font-bold text-white mb-2">
-          {formatTime(currentTime)}
+          {mounted ? formatTime(currentTime) : '--:--:-- --'}
         </div>
-        <div className="text-xl text-gray-400">{formatDate(currentTime)}</div>
+        <div className="text-xl text-gray-400">
+          {mounted ? formatDate(currentTime) : ''}
+        </div>
       </div>
 
       {/* Main Card */}
@@ -203,7 +205,7 @@ export default function RFIDPortalPage() {
               <span>
                 {lastTap.action === 'CHECK_IN' ? 'Checked in' : 'Checked out'}{' '}
                 at{' '}
-                {formatTime(
+                {mounted && formatTime(
                   new Date(
                     lastTap.action === 'CHECK_IN'
                       ? lastTap.attendance.timeIn
