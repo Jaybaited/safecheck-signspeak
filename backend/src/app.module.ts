@@ -5,6 +5,7 @@ import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { AttendanceModule } from './attendance/attendance.module';
+import { NotificationsModule } from './notifications/notifications.module'; // ADD
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { AttendanceModule } from './attendance/attendance.module';
     AuthModule,
     UsersModule,
     AttendanceModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

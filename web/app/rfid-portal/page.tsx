@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Wifi, CheckCircle, XCircle, Clock, User } from 'lucide-react';
 import { api } from '@/lib/api';
 
@@ -24,48 +24,43 @@ export default function RFIDPortalPage() {
   const [lastTap, setLastTap] = useState<TapResponse | null>(null);
   const [error, setError] = useState('');
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [mounted, setMounted] = useState(false); // ✅ Fix: mounted state
+  const [mounted, setMounted] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  // ✅ Fix: Set mounted + start clock after mount
+  // Clock + mount
   useEffect(() => {
     setMounted(true);
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  // Listen for RFID card input
+  // Auto-focus hidden input on mount
   useEffect(() => {
-    let buffer = '';
-    let timeout: NodeJS.Timeout;
+    inputRef.current?.focus();
+  }, []);
 
-    const handleKeyPress = (e: KeyboardEvent) => {
-      if (buffer.length === 0) {
-        setError('');
-        setLastTap(null);
-      }
-
-      if (e.key === 'Enter') {
-        if (buffer.length > 0) {
-          handleRfidTap(buffer);
-          buffer = '';
-        }
-      } else {
-        buffer += e.key;
-        clearTimeout(timeout);
-        timeout = setTimeout(() => {
-          buffer = '';
-        }, 100);
-      }
+  // Re-focus if user clicks away or tabs back
+  useEffect(() => {
+    const refocus = () => {
+      setTimeout(() => inputRef.current?.focus(), 100);
     };
-
-    window.addEventListener('keypress', handleKeyPress);
+    window.addEventListener('click', refocus);
+    window.addEventListener('visibilitychange', refocus);
     return () => {
-      window.removeEventListener('keypress', handleKeyPress);
-      clearTimeout(timeout);
+      window.removeEventListener('click', refocus);
+      window.removeEventListener('visibilitychange', refocus);
     };
   }, []);
+
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      const rfid = e.currentTarget.value.trim();
+      if (rfid.length > 0) {
+        handleRfidTap(rfid);
+        e.currentTarget.value = '';
+      }
+    }
+  };
 
   const handleRfidTap = async (rfidCard: string) => {
     setIsScanning(true);
@@ -77,16 +72,14 @@ export default function RFIDPortalPage() {
       setLastTap(response);
       setScannedCard(rfidCard);
 
-      setTimeout(() => {
-        setLastTap(null);
-      }, 5000);
+      setTimeout(() => setLastTap(null), 5000);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Invalid RFID card');
-      setTimeout(() => {
-        setError('');
-      }, 5000);
+      setTimeout(() => setError(''), 5000);
     } finally {
       setIsScanning(false);
+      // Re-focus after tap so next scan is ready
+      setTimeout(() => inputRef.current?.focus(), 100);
     }
   };
 
@@ -113,7 +106,20 @@ export default function RFIDPortalPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center p-8">
+    <div
+      className="min-h-screen bg-gray-950 flex flex-col items-center justify-center p-8"
+      onClick={() => inputRef.current?.focus()}
+    >
+      {/* Hidden RFID input — captures all keyboard input */}
+      <input
+        ref={inputRef}
+        onKeyDown={handleInputKeyDown}
+        className="fixed opacity-0 w-0 h-0 pointer-events-none"
+        autoFocus
+        autoComplete="off"
+        readOnly={false}
+      />
+
       {/* Header */}
       <div className="text-center mb-12">
         <div className="flex items-center justify-center gap-3 mb-4">
@@ -127,7 +133,7 @@ export default function RFIDPortalPage() {
         <p className="text-xl text-gray-400">RFID Attendance Portal</p>
       </div>
 
-      {/* Clock - ✅ Fix: Only render after mounted */}
+      {/* Clock */}
       <div className="text-center mb-12">
         <div className="text-6xl font-bold text-white mb-2">
           {mounted ? formatTime(currentTime) : '--:--:-- --'}
@@ -149,7 +155,7 @@ export default function RFIDPortalPage() {
               </div>
             </div>
             <h2 className="text-3xl font-bold text-white mb-4">
-              Ready to Scan
+              {isScanning ? 'Processing...' : 'Ready to Scan'}
             </h2>
             <p className="text-xl text-gray-400">
               Please tap your RFID card on the scanner
@@ -205,13 +211,14 @@ export default function RFIDPortalPage() {
               <span>
                 {lastTap.action === 'CHECK_IN' ? 'Checked in' : 'Checked out'}{' '}
                 at{' '}
-                {mounted && formatTime(
-                  new Date(
-                    lastTap.action === 'CHECK_IN'
-                      ? lastTap.attendance.timeIn
-                      : lastTap.attendance.timeOut!
-                  )
-                )}
+                {mounted &&
+                  formatTime(
+                    new Date(
+                      lastTap.action === 'CHECK_IN'
+                        ? lastTap.attendance.timeIn
+                        : lastTap.attendance.timeOut!
+                    )
+                  )}
               </span>
             </div>
           </div>

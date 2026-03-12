@@ -157,4 +157,23 @@ export class UsersService {
       total: admins + teachers + students + parents,
     };
   }
+
+  async getMyChildren(parentId: string) {
+  const links = await this.prisma.parentStudent.findMany({
+    where: { parentId },
+    include: {
+      student: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          gradeLevel: true,
+          photoUrl: true,
+        },
+      },
+    },
+  });
+  return links.map((link) => link.student);
+}
+
 }

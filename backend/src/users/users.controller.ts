@@ -46,4 +46,9 @@ export class UsersController {
   remove(@Param('id') id: string) {
     return this.usersService.remove(id);
   }
+  @Get('my-children/:parentId')
+getMyChildren(@Param('parentId') parentId: string) {
+  return this.usersService.getMyChildren(parentId);
+}
+
 }
