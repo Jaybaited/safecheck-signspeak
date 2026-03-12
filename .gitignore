@@ -6,3 +6,28 @@ build/
 .expo/
 *.log
 .DS_Store
+
+# Python virtual environments
+machine-learning/fsl_env/
+**/venv/
+**/__pycache__/
+**/*.pyc
+**/*.pyd
+**/*.lib
+
+# React Native specific
+**/android/build/
+**/android/.gradle/
+**/ios/build/
+**/ios/Pods/
+
+# Next.js
+**/.next/
+**/out/
+
+# More env files
+**/.env.production
+**/.env*.local
+
+# OS
+Thumbs.db
