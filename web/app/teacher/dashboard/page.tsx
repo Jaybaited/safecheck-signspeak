@@ -57,19 +57,19 @@ export default function TeacherDashboardPage() {
   useEffect(() => {
     const token    = localStorage.getItem('token');
     const userData = localStorage.getItem('user');
-    if (!token || !userData) { router.push('/'); return; }
+    if (!token || !userData) { router.push('/login'); return; }
     try {
       const parsedUser = JSON.parse(userData) as User;
-      if (parsedUser.role !== 'TEACHER') { router.push('/'); return; }
+      if (parsedUser.role !== 'TEACHER') { router.push('/login'); return; }
       setUser(parsedUser);
-    } catch { router.push('/'); }
+    } catch { router.push('/login'); }
     finally { setLoading(false); }
   }, [router]);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    router.push('/');
+    router.push('/login');
   };
 
   if (loading || !user) {
@@ -236,3 +236,4 @@ export default function TeacherDashboardPage() {
     </div>
   );
 }
+

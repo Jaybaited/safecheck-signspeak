@@ -50,19 +50,19 @@ export default function TeacherReportsPage() {
   useEffect(() => {
     const token    = localStorage.getItem('token');
     const userData = localStorage.getItem('user');
-    if (!token || !userData) { router.push('/'); return; }
+    if (!token || !userData) { router.push('/login'); return; }
     try {
       const p = JSON.parse(userData) as User;
-      if (p.role !== 'TEACHER') { router.push('/'); return; }
+      if (p.role !== 'TEACHER') { router.push('/login'); return; }
       setUser(p);
-    } catch { router.push('/'); }
+    } catch { router.push('/login'); }
     finally { setAuthLoading(false); }
   }, [router]);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    router.push('/');
+    router.push('/login');
   };
 
   const handleGenerate = async () => {
@@ -213,3 +213,4 @@ export default function TeacherReportsPage() {
     </div>
   );
 }
+

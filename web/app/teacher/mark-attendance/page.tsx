@@ -56,20 +56,20 @@ export default function MarkAttendancePage() {
   useEffect(() => {
     const token    = localStorage.getItem('token');
     const userData = localStorage.getItem('user');
-    if (!token || !userData) { router.push('/'); return; }
+    if (!token || !userData) { router.push('/login'); return; }
     try {
       const p = JSON.parse(userData) as User;
-      if (p.role !== 'TEACHER') { router.push('/'); return; }
+      if (p.role !== 'TEACHER') { router.push('/login'); return; }
       setUser(p);
       setStudents(CLASS_LIST.map((s) => ({ ...s, status: null, timeIn: nowTime })));
-    } catch { router.push('/'); }
+    } catch { router.push('/login'); }
     finally { setAuthLoading(false); }
   }, [router]);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    router.push('/');
+    router.push('/login');
   };
 
   const setStatus = (id: string, status: Student['status']) => {
@@ -250,3 +250,4 @@ export default function MarkAttendancePage() {
     </div>
   );
 }
+
