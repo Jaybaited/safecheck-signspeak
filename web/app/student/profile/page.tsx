@@ -56,22 +56,22 @@ export default function StudentProfilePage() {
   useEffect(() => {
     const token    = localStorage.getItem('token');
     const userData = localStorage.getItem('user');
-    if (!token || !userData) { router.push('/'); return; }
+    if (!token || !userData) { router.push('/login'); return; }
     try {
       const parsedUser = JSON.parse(userData) as UserProfile;
-      if (parsedUser.role !== 'STUDENT') { router.push('/'); return; }
+      if (parsedUser.role !== 'STUDENT') { router.push('/login'); return; }
       setUser(parsedUser);
       setFirstName(parsedUser.firstName);
       setLastName(parsedUser.lastName);
       setGradeLevel(parsedUser.gradeLevel ?? '');
-    } catch { router.push('/'); }
+    } catch { router.push('/login'); }
     finally { setAuthLoading(false); }
   }, [router]);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    router.push('/');
+    router.push('/login');
   };
 
   const handleSaveProfile = async () => {
@@ -503,3 +503,4 @@ export default function StudentProfilePage() {
     </div>
   );
 }
+

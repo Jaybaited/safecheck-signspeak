@@ -46,13 +46,13 @@ export default function StudentAttendancePage() {
   useEffect(() => {
     const token    = localStorage.getItem('token');
     const userData = localStorage.getItem('user');
-    if (!token || !userData) { router.push('/'); return; }
+    if (!token || !userData) { router.push('/login'); return; }
     try {
       const parsedUser = JSON.parse(userData) as User;
-      if (parsedUser.role !== 'STUDENT') { router.push('/'); return; }
+      if (parsedUser.role !== 'STUDENT') { router.push('/login'); return; }
       setUser(parsedUser);
       fetchAttendanceData(parsedUser.id);
-    } catch { router.push('/'); }
+    } catch { router.push('/login'); }
     finally { setAuthLoading(false); }
   }, [router]);
 
@@ -75,7 +75,7 @@ export default function StudentAttendancePage() {
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    router.push('/');
+    router.push('/login');
   };
 
   const formatDate = (dateString: string) =>
@@ -318,3 +318,4 @@ export default function StudentAttendancePage() {
     </div>
   );
 }
+

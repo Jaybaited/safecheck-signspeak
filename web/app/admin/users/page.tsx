@@ -48,20 +48,20 @@ export default function ManageUsersPage() {
     const userData = localStorage.getItem('user');
 
     if (!token || !userData) {
-      router.push('/');
+      router.push('/login');
       return;
     }
 
     try {
       const parsedUser = JSON.parse(userData) as User;
       if (parsedUser.role !== 'ADMIN') {
-        router.push('/');
+        router.push('/login');
         return;
       }
       setUser(parsedUser);
       fetchUsers();
     } catch {
-      router.push('/');
+      router.push('/login');
     } finally {
       setLoading(false);
     }
@@ -80,7 +80,7 @@ export default function ManageUsersPage() {
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    router.push('/');
+    router.push('/login');
   };
 
   const handleAddUser = async (formData: CreateUserDto) => {

@@ -1,176 +1,158 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+// lib/api.ts
 
-interface LoginResponse {
-  token: string;
-  user: User;
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL;
+
+// ─── Core Fetcher ─────────────────────────────────────────────────────────────
+
+async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(`${BASE_URL}${path}`, {
+    headers: { "Content-Type": "application/json" },
+    ...options,
+  });
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    throw new Error(error?.message || `Request failed: ${res.status}`);
+  }
+
+  return res.json();
 }
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface User {
   id: string;
   username: string;
-  email: string | null;
-  role: string;
   firstName: string;
   lastName: string;
-  gradeLevel: string | null;
-  rfidCard: string | null;
-  photoUrl: string | null;
+  email?: string;
+  rfidCard?: string;
+  gradeLevel?: string | null;
+  role: "ADMIN" | "TEACHER" | "STUDENT" | "PARENT";
   createdAt: string;
-  updatedAt: string;
 }
 
 export interface CreateUserDto {
   username: string;
-  email?: string;
-  password: string;
-  role: 'ADMIN' | 'TEACHER' | 'STUDENT' | 'PARENT';
   firstName: string;
   lastName: string;
-  gradeLevel?: string;
+  email?: string;
+  password: string;
   rfidCard?: string;
-  photoUrl?: string;
+  gradeLevel?: string;
+  role: "ADMIN" | "TEACHER" | "STUDENT" | "PARENT";
+}
+
+export interface UserStats {
+  admins: number;
+  teachers: number;
+  students: number;
+  parents: number;
+  total: number;
+}
+
+export interface AuthUser {
+  id: string;
+  username: string;
+  role: string;
+  firstName: string;
+  lastName: string;
+}
+
+export interface LoginResponse {
+  accessToken: string;
+  user: AuthUser;
 }
 
 export interface AttendanceRecord {
   id: string;
   studentId: string;
-  timeIn: string;
-  timeOut: string | null;
+  status: "PRESENT" | "ABSENT" | "LATE";
+  timeIn?: string;
+  timeOut?: string;
   date: string;
 }
 
 export interface AttendanceStats {
   totalDays: number;
   present: number;
-  late: number;
   absent: number;
+  late: number;
   attendanceRate: number;
 }
 
 export interface RfidTapResponse {
   success: boolean;
-  action: 'CHECK_IN' | 'CHECK_OUT';
-  student: {
-    firstName: string;
-    lastName: string;
-    gradeLevel: string | null;
-  };
-  attendance: {
-    timeIn: string;
-    timeOut: string | null;
-  };
+  message: string;
+  student?: User;
+  attendance?: AttendanceRecord;
 }
 
-class ApiClient {
-  private baseUrl: string;
+// ─── Auth ─────────────────────────────────────────────────────────────────────
 
-  constructor() {
-    this.baseUrl = API_URL;
-  }
+export const login = (username: string, password: string) =>
+  apiFetch<LoginResponse>("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ username, password }),
+  });
 
-  private async request<T>(
-    endpoint: string,
-    options?: RequestInit
-  ): Promise<T> {
-    const url = `${this.baseUrl}${endpoint}`;
-    const token = localStorage.getItem('token');
+// ─── Users ────────────────────────────────────────────────────────────────────
 
-    const headers: HeadersInit = {
-      'Content-Type': 'application/json',
-      ...(token && { Authorization: `Bearer ${token}` }),
-      ...options?.headers,
-    };
+export const getAllUsers = () =>
+  apiFetch<User[]>("/users");
 
-    const response = await fetch(url, {
-      ...options,
-      headers,
-    });
+export const getUserStats = () =>
+  apiFetch<UserStats>("/users/stats");
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({
-        message: 'An error occurred',
-      }));
-      throw new Error(error.message || 'Request failed');
-    }
+export const getUserById = (id: string) =>
+  apiFetch<User>(`/users/${id}`);
 
-    return response.json();
-  }
+export const createUser = (data: CreateUserDto) =>
+  apiFetch<User>("/users", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
 
-  // Auth
-  async login(username: string, password: string): Promise<LoginResponse> {
-    return this.request<LoginResponse>('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ username, password }),
-    });
-  }
+export const updateUser = (id: string, data: Partial<CreateUserDto>) =>
+  apiFetch<User>(`/users/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
 
-  // Users
-  async getUsers(): Promise<User[]> {
-    return this.request<User[]>('/users');
-  }
+export const deleteUser = (id: string) =>
+  apiFetch<void>(`/users/${id}`, { method: "DELETE" });
 
-  async getUser(id: string): Promise<User> {
-    return this.request<User>(`/users/${id}`);
-  }
+// ─── Attendance ───────────────────────────────────────────────────────────────
 
-  async createUser(data: CreateUserDto): Promise<User> {
-    return this.request<User>('/users', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
+export const handleRfidTap = (rfidCard: string) =>
+  apiFetch<RfidTapResponse>("/attendance/rfid-tap", {
+    method: "POST",
+    body: JSON.stringify({ rfidCard }),
+  });
 
-  async updateUser(id: string, data: Partial<CreateUserDto>): Promise<User> {
-    return this.request<User>(`/users/${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify(data),
-    });
-  }
+export const getStudentAttendance = (studentId: string) =>
+  apiFetch<AttendanceRecord[]>(`/attendance/student/${studentId}`);
 
-  async deleteUser(id: string): Promise<void> {
-    return this.request<void>(`/users/${id}`, {
-      method: 'DELETE',
-    });
-  }
+export const getStudentStats = (studentId: string) =>
+  apiFetch<AttendanceStats>(`/attendance/student/${studentId}/stats`);
 
-  async getUserStats() {
-    return this.request<{
-      admins: number;
-      teachers: number;
-      students: number;
-      parents: number;
-      total: number;
-    }>('/users/stats');
-  }
+export const getTodayAttendance = (studentId: string) =>
+  apiFetch<AttendanceRecord>(`/attendance/student/${studentId}/today`);
 
-  // Attendance
-  async getStudentAttendance(studentId: string): Promise<AttendanceRecord[]> {
-    return this.request<AttendanceRecord[]>(
-      `/attendance/student/${studentId}`
-    );
-  }
+// ─── Compatibility Object (used by existing pages) ────────────────────────────
 
-  async getStudentStats(studentId: string): Promise<AttendanceStats> {
-    return this.request<AttendanceStats>(
-      `/attendance/student/${studentId}/stats`
-    );
-  }
 
-  async getTodayAttendance(
-    studentId: string
-  ): Promise<AttendanceRecord | null> {
-    return this.request<AttendanceRecord | null>(
-      `/attendance/student/${studentId}/today`
-    );
-  }
 
-  // RFID
-  async rfidTap(rfidCard: string): Promise<RfidTapResponse> {
-    return this.request<RfidTapResponse>('/attendance/rfid-tap', {
-      method: 'POST',
-      body: JSON.stringify({ rfidCard }),
-    });
-  }
-}
-
-export const api = new ApiClient();
+export const api = {
+  login,                  // ← add this line
+  getUsers: getAllUsers,
+  getUserStats,
+  getUserById,
+  createUser,
+  updateUser,
+  deleteUser,
+  handleRfidTap,
+  getStudentAttendance,
+  getStudentStats,
+  getTodayAttendance,
+};

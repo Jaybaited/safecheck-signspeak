@@ -59,14 +59,14 @@ export default function FSLGamesPage() {
   useEffect(() => {
     const token    = localStorage.getItem('token');
     const userData = localStorage.getItem('user');
-    if (!token || !userData) { router.push('/'); return; }
+    if (!token || !userData) { router.push('/login'); return; }
     try {
       const parsedUser = JSON.parse(userData) as User;
-      if (parsedUser.role !== 'STUDENT') { router.push('/'); return; }
+      if (parsedUser.role !== 'STUDENT') { router.push('/login'); return; }
       setUser(parsedUser);
       const saved = localStorage.getItem('fsl_highscore');
       if (saved) setHighScore(parseInt(saved));
-    } catch { router.push('/'); }
+    } catch { router.push('/login'); }
     finally { setAuthLoading(false); }
   }, [router]);
 
@@ -146,7 +146,7 @@ export default function FSLGamesPage() {
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    router.push('/');
+    router.push('/login');
   };
 
   if (authLoading || !user) {
@@ -444,3 +444,4 @@ export default function FSLGamesPage() {
     </div>
   );
 }
+
