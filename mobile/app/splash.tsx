@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { Animated, StyleSheet, View, Image } from "react-native";
 import { useRouter } from "expo-router";
 import { useAuthStore } from "../store/authStore";
+import * as SecureStore from "expo-secure-store";
 
 export default function SplashScreen() {
   const router = useRouter();
@@ -10,6 +11,8 @@ export default function SplashScreen() {
   const opacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    // ✅ LINE REMOVED — no more SecureStore.deleteItemAsync("onboarding_done")
+
     Animated.parallel([
       Animated.timing(scale, {
         toValue: 1,
@@ -21,10 +24,15 @@ export default function SplashScreen() {
         duration: 700,
         useNativeDriver: true,
       }),
-    ]).start(() => {
-      setTimeout(() => {
+    ]).start(async () => {
+      setTimeout(async () => {
         if (!token) {
-          router.replace("/onboarding");
+          const onboardingDone = await SecureStore.getItemAsync("onboarding_done");
+          if (onboardingDone === "true") {
+            router.replace("/login");       // ✅ Already seen onboarding → login
+          } else {
+            router.replace("/onboarding"); // First install only
+          }
           return;
         }
 
@@ -36,11 +44,13 @@ export default function SplashScreen() {
             router.replace("/(parent)");
             break;
           case "TEACHER":
+            router.replace("/(teacher)");  // ✅ Fixed
+            break;
           case "ADMIN":
             router.replace("/(admin)");
             break;
           default:
-            router.replace("/onboarding");
+            router.replace("/login");
         }
       }, 600);
     });

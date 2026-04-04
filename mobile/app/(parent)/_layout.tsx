@@ -3,12 +3,17 @@ import { Tabs } from "expo-router";
 import * as Notifications from "expo-notifications";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Platform } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useThemeStore } from "../../store/themeStore";
+import { getColors } from "../../lib/theme";
 
 export default function ParentLayout() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { resolvedTheme } = useThemeStore();
+  const C = getColors(resolvedTheme);
+
   const notificationListener = useRef<any>(null);
   const responseListener = useRef<any>(null);
 
@@ -36,16 +41,20 @@ export default function ParentLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-       tabBarStyle: {
-        backgroundColor: "#0F0F23",
-        borderTopColor: "#1E1E3A",
-        borderTopWidth: 1,
-        height: Platform.OS === "android" ? 60 + insets.bottom : 56 + insets.bottom,
-        paddingBottom: Platform.OS === "android" ? insets.bottom + 8 : insets.bottom + 4,
-        paddingTop: 8,
-    },
-        tabBarActiveTintColor: "#8B5CF6",
-        tabBarInactiveTintColor: "#6B7280",
+        tabBarStyle: {
+          backgroundColor: C.card,
+          borderTopColor: C.border,
+          borderTopWidth: 1,
+          height: Platform.OS === "android"
+            ? 60 + insets.bottom
+            : 56 + insets.bottom,
+          paddingBottom: Platform.OS === "android"
+            ? insets.bottom + 8
+            : insets.bottom + 4,
+          paddingTop: 8,
+        },
+        tabBarActiveTintColor: C.primary,
+        tabBarInactiveTintColor: C.muted,
         tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },
       }}
     >

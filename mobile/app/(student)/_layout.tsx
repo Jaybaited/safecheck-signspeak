@@ -1,24 +1,28 @@
 import { Tabs } from "expo-router";
 import { Home, CalendarDays, HandMetal, User } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useThemeStore } from "../../store/themeStore";
+import { getColors } from "../../lib/theme";
 
 export default function StudentLayout() {
   const insets = useSafeAreaInsets();
+  const { resolvedTheme } = useThemeStore();
+  const C = getColors(resolvedTheme);
 
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: "#0F0F23",
-          borderTopColor: "#1E1E3A",
+          backgroundColor: C.tabBar,
+          borderTopColor: C.tabBorder,
           borderTopWidth: 1,
           paddingBottom: insets.bottom + 8,
           paddingTop: 8,
           height: 65 + insets.bottom,
         },
-        tabBarActiveTintColor: "#8B5CF6",
-        tabBarInactiveTintColor: "#6B7280",
+        tabBarActiveTintColor: C.primary,
+        tabBarInactiveTintColor: C.muted,
         tabBarLabelStyle: {
           fontSize: 11,
           fontWeight: "600",
@@ -57,6 +61,11 @@ export default function StudentLayout() {
           tabBarIcon: ({ color, size }) => <User color={color} size={size} />,
         }}
       />
+
+      {/* Hidden from bottom nav */}
+      <Tabs.Screen name="fsl-detection" options={{ href: null }} />
+      <Tabs.Screen name="fsl-game"      options={{ href: null }} />
+      <Tabs.Screen name="fsl-learn"     options={{ href: null }} />
     </Tabs>
   );
 }

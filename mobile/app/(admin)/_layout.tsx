@@ -1,8 +1,12 @@
 import { Tabs } from "expo-router";
 import { LayoutDashboard, Users, CalendarDays, User } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useThemeStore } from "../../store/themeStore";
+import { getColors } from "../../lib/theme";
 
 export default function AdminLayout() {
+  const { resolvedTheme } = useThemeStore();
+  const C = getColors(resolvedTheme);
   const insets = useSafeAreaInsets();
 
   return (
@@ -10,15 +14,15 @@ export default function AdminLayout() {
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: "#0F0F23",
-          borderTopColor: "#1E1E3A",
+          backgroundColor: C.card,
+          borderTopColor: C.border,
           borderTopWidth: 1,
           paddingBottom: insets.bottom + 8,
           paddingTop: 8,
           height: 65 + insets.bottom,
         },
-        tabBarActiveTintColor: "#8B5CF6",
-        tabBarInactiveTintColor: "#6B7280",
+        tabBarActiveTintColor: C.primary,
+        tabBarInactiveTintColor: C.muted,
         tabBarLabelStyle: {
           fontSize: 11,
           fontWeight: "600",

@@ -3,12 +3,15 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
+  FlatList,
   ActivityIndicator,
   RefreshControl,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
+import { useThemeStore } from "../../store/themeStore";
+import { getColors } from "../../lib/theme";
 import { api } from "../../lib/api";
 
 interface NotificationItem {
@@ -20,7 +23,9 @@ interface NotificationItem {
 }
 
 export default function ParentNotifications() {
-  const insets = useSafeAreaInsets();
+  const { resolvedTheme } = useThemeStore();
+  const C = getColors(resolvedTheme);
+
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -46,161 +51,219 @@ export default function ParentNotifications() {
     fetchNotifications();
   };
 
-  const formatTime = (iso: string) => {
-    return new Date(iso).toLocaleString("en-PH", {
+  const formatTime = (iso: string) =>
+    new Date(iso).toLocaleString("en-PH", {
       month: "short",
       day: "numeric",
       hour: "2-digit",
       minute: "2-digit",
     });
+
+  const getNotifMeta = (message: string) => {
+    const lower = message.toLowerCase();
+    if (lower.includes("entered") || lower.includes("check in") || lower.includes("arrived")) {
+      return { icon: "enter-outline" as const, color: "#10B981", label: "Check In" };
+    }
+    if (lower.includes("left") || lower.includes("check out") || lower.includes("exit")) {
+      return { icon: "exit-outline" as const, color: C.primary, label: "Check Out" };
+    }
+    return { icon: "notifications-outline" as const, color: C.muted, label: "Notice" };
   };
 
-  const getIcon = (message: string) => {
-    if (message.toLowerCase().includes("entered")) return "enter-outline";
-    if (message.toLowerCase().includes("left")) return "exit-outline";
-    return "notifications-outline";
-  };
-
-  const getIconColor = (message: string) => {
-    if (message.toLowerCase().includes("entered")) return "#10B981";
-    if (message.toLowerCase().includes("left")) return "#8B5CF6";
-    return "#6B7280";
-  };
-
+  // ── Loading State ──────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#8B5CF6" />
-      </View>
+      <SafeAreaView style={{ flex: 1, backgroundColor: C.background }}>
+        <StatusBar style={resolvedTheme === "dark" ? "light" : "dark"} />
+        <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+          <ActivityIndicator size="large" color={C.primary} />
+        </View>
+      </SafeAreaView>
     );
   }
 
+  // ── Main Render ────────────────────────────────────────────────────────────
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.title}>Notifications</Text>
-        <Text style={styles.subtitle}>
-          {notifications.length} alert{notifications.length !== 1 ? "s" : ""}
-        </Text>
+    <SafeAreaView style={{ flex: 1, backgroundColor: C.background }}>
+      <StatusBar style={resolvedTheme === "dark" ? "light" : "dark"} />
+
+      {/* ── Header ── */}
+      <View
+        style={[
+          styles.header,
+          { borderBottomColor: C.border, backgroundColor: C.background },
+        ]}
+      >
+        <View style={[styles.headerIconBadge, { backgroundColor: C.primary + "22" }]}>
+          <Ionicons name="notifications-outline" size={18} color={C.primary} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.headerTitle, { color: C.text }]}>Notifications</Text>
+          <Text style={[styles.headerSub, { color: C.muted }]}>
+            {notifications.length} alert{notifications.length !== 1 ? "s" : ""}
+          </Text>
+        </View>
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.list}
+      {/* ── List ── */}
+      <FlatList
+        data={notifications}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={[
+          styles.listContent,
+          notifications.length === 0 && styles.emptyContainer,
+        ]}
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#8B5CF6"
+            tintColor={C.primary}
+            colors={[C.primary]}
           />
         }
-        showsVerticalScrollIndicator={false}
-      >
-        {notifications.length === 0 ? (
+        ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Ionicons name="notifications-outline" size={52} color="#2D2D4E" />
-            <Text style={styles.emptyTitle}>No notifications yet</Text>
-            <Text style={styles.emptySubtitle}>
+            <View style={[styles.emptyIconRing, { borderColor: C.border }]}>
+              <Ionicons name="notifications-off-outline" size={36} color={C.muted} />
+            </View>
+            <Text style={[styles.emptyTitle, { color: C.text }]}>No notifications yet</Text>
+            <Text style={[styles.emptySub, { color: C.muted }]}>
               You'll see alerts here when your child enters or leaves school
             </Text>
           </View>
-        ) : (
-          notifications.map((notif) => (
-            <View key={notif.id} style={styles.card}>
+        }
+        renderItem={({ item, index }) => {
+          const meta = getNotifMeta(item.message);
+          return (
+            <View
+              style={[
+                styles.card,
+                {
+                  backgroundColor: C.card,
+                  borderColor: C.border,
+                  marginTop: index === 0 ? 0 : 10,
+                },
+              ]}
+            >
+              
+
               {/* Icon */}
               <View
                 style={[
-                  styles.iconContainer,
-                  { backgroundColor: getIconColor(notif.message) + "22" },
+                  styles.iconBadge,
+                  { backgroundColor: meta.color + "22" },
                 ]}
               >
-                <Ionicons
-                  name={getIcon(notif.message) as any}
-                  size={20}
-                  color={getIconColor(notif.message)}
-                />
+                <Ionicons name={meta.icon} size={20} color={meta.color} />
               </View>
 
               {/* Content */}
               <View style={styles.cardContent}>
-                <Text style={styles.message}>{notif.message}</Text>
-                <Text style={styles.time}>{formatTime(notif.sentAt)}</Text>
+                <View style={styles.cardTopRow}>
+                  <View
+                    style={[
+                      styles.labelPill,
+                      { backgroundColor: meta.color + "22" },
+                    ]}
+                  >
+                    <Text style={[styles.labelPillText, { color: meta.color }]}>
+                      {meta.label}
+                    </Text>
+                  </View>
+                  {/* Status dot */}
+                  <View
+                    style={[
+                      styles.statusDot,
+                      {
+                        backgroundColor:
+                          item.status === "SENT" ? "#10B981" : "#EF4444",
+                      },
+                    ]}
+                  />
+                </View>
+                <Text style={[styles.message, { color: C.text }]}>{item.message}</Text>
+                <View style={styles.timeRow}>
+                  <Ionicons name="time-outline" size={12} color={C.muted} />
+                  <Text style={[styles.timeText, { color: C.muted }]}>
+                    {formatTime(item.sentAt)}
+                  </Text>
+                </View>
               </View>
-
-              {/* Status dot */}
-              <View
-                style={[
-                  styles.statusDot,
-                  {
-                    backgroundColor:
-                      notif.status === "SENT" ? "#10B981" : "#EF4444",
-                  },
-                ]}
-              />
             </View>
-          ))
-        )}
-      </ScrollView>
-    </View>
+          );
+        }}
+      />
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0F0F23" },
-  centered: {
-    flex: 1,
-    backgroundColor: "#0F0F23",
+  // ── Header ──────────────────────────────────
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    gap: 12,
+  },
+  headerIconBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
     justifyContent: "center",
     alignItems: "center",
   },
-  header: {
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#1E1E3A",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  title: { fontSize: 24, fontWeight: "700", color: "#FFFFFF" },
-  subtitle: { fontSize: 13, color: "#6B7280" },
-  list: { padding: 24, gap: 10 },
-  emptyState: {
-    alignItems: "center",
-    gap: 12,
-    marginTop: 80,
-  },
-  emptyTitle: { color: "#FFFFFF", fontSize: 16, fontWeight: "600" },
-  emptySubtitle: {
-    color: "#6B7280",
-    fontSize: 13,
-    textAlign: "center",
-    lineHeight: 20,
-    maxWidth: 260,
-  },
+  headerTitle: { fontSize: 20, fontWeight: "700" },
+  headerSub:   { fontSize: 12, marginTop: 1 },
+
+  // ── List ────────────────────────────────────
+  listContent:    { padding: 16 },
+  emptyContainer: { flex: 1, justifyContent: "center" },
+
+  // ── Card ────────────────────────────────────
   card: {
-    backgroundColor: "#1E1E3A",
     borderRadius: 14,
-    padding: 14,
+    borderWidth: 1,
     flexDirection: "row",
     alignItems: "center",
+    overflow: "hidden",
+    paddingVertical: 14,
+    paddingRight: 14,
+    paddingLeft:14,
     gap: 12,
-    borderWidth: 1,
-    borderColor: "#2D2D4E",
   },
-  iconContainer: {
+  
+  iconBadge: {
     width: 40,
     height: 40,
     borderRadius: 20,
     justifyContent: "center",
     alignItems: "center",
   },
-  cardContent: { flex: 1, gap: 4 },
-  message: { color: "#FFFFFF", fontSize: 14, fontWeight: "500", lineHeight: 20 },
-  time: { color: "#6B7280", fontSize: 12 },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+  cardContent: { flex: 1, gap: 6 },
+  cardTopRow:  { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+
+  labelPill:     { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 },
+  labelPillText: { fontSize: 10, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5 },
+
+  message:  { fontSize: 13, fontWeight: "500", lineHeight: 19 },
+  timeRow:  { flexDirection: "row", alignItems: "center", gap: 4 },
+  timeText: { fontSize: 11 },
+
+  statusDot: { width: 8, height: 8, borderRadius: 4 },
+
+  // ── Empty State ─────────────────────────────
+  emptyState:   { alignItems: "center", gap: 12, paddingVertical: 60 },
+  emptyIconRing: {
+    width: 80, height: 80,
+    borderRadius: 40,
+    borderWidth: 1.5,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 4,
   },
+  emptyTitle: { fontSize: 16, fontWeight: "600" },
+  emptySub:   { fontSize: 13, textAlign: "center", lineHeight: 20, maxWidth: 260 },
 });

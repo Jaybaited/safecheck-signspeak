@@ -1,29 +1,25 @@
 import React, { useState } from "react";
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  Alert,
+  View, Text, TextInput, TouchableOpacity,
+  StyleSheet, ActivityIndicator, KeyboardAvoidingView,
+  Platform, Alert, Image, Dimensions, ScrollView,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { api } from "../lib/api";
 import { useAuthStore } from "../store/authStore";
 import { registerPushToken } from "../lib/notifications";
+
+const { width, height } = Dimensions.get("window");
 
 export default function LoginScreen() {
   const router = useRouter();
   const setAuth = useAuthStore((state) => state.setAuth);
 
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [username, setUsername]       = useState("");
+  const [password, setPassword]       = useState("");
+  const [loading, setLoading]         = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = async () => {
@@ -50,6 +46,8 @@ export default function LoginScreen() {
           router.replace("/(parent)");
           break;
         case "TEACHER":
+           router.replace("/(teacher)");   
+          break;
         case "ADMIN":
           router.replace("/(admin)");
           break;
@@ -66,210 +64,197 @@ export default function LoginScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-    >
-      <View style={styles.inner}>
-
-        {/* Logo + Brand */}
-        <View style={styles.logoRow}>
-          <LinearGradient
-            colors={["#22D3EE", "#8B5CF6"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.logoBox}
-          >
-            <Ionicons name="wifi" size={28} color="#fff" />
-          </LinearGradient>
-          <Text style={styles.brandText}>
-            Safe<Text style={styles.brandAccent}>Check</Text>
-          </Text>
-        </View>
-
-        {/* Subtitle */}
-        <Text style={styles.subtitle}>Sign in to your account</Text>
-
-        {/* Card */}
-        <View style={styles.card}>
-
-          {/* Username */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Username</Text>
-            <View style={styles.inputWrapper}>
-              <Ionicons
-                name="person-outline"
-                size={18}
-                color="#6B7280"
-                style={styles.inputIcon}
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="Enter your username"
-                placeholderTextColor="#6B7280"
-                value={username}
-                onChangeText={setUsername}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-            </View>
+    <SafeAreaView style={s.container}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1 }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Top illustration area */}
+          <View style={s.illustrationWrap}>
+            <Image
+              source={require("../assets/images/login-illustration.png")}
+              style={s.illustration}
+              resizeMode="contain"
+            />
           </View>
 
-          {/* Password */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Password</Text>
-            <View style={styles.inputWrapper}>
-              <Ionicons
-                name="lock-closed-outline"
-                size={18}
-                color="#6B7280"
-                style={styles.inputIcon}
-              />
-              <TextInput
-                style={[styles.input, { flex: 1 }]}
-                placeholder="Enter your password"
-                placeholderTextColor="#6B7280"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-                autoCapitalize="none"
-              />
-              <TouchableOpacity
-                onPress={() => setShowPassword(!showPassword)}
-                style={styles.eyeBtn}
-              >
+          {/* Bottom white card */}
+          <View style={s.card}>
+            {/* Header */}
+            <Text style={s.title}>Welcome Back!</Text>
+            <Text style={s.subtitle}>Sign in to your account to continue</Text>
+
+            {/* Username */}
+            <View style={s.inputGroup}>
+              <Text style={s.label}>Username</Text>
+              <View style={s.inputWrapper}>
                 <Ionicons
-                  name={showPassword ? "eye-off-outline" : "eye-outline"}
+                  name="person-outline"
                   size={18}
-                  color="#6B7280"
+                  color="#8B1A1A"
+                  style={s.inputIcon}
                 />
-              </TouchableOpacity>
+                <TextInput
+                  style={s.input}
+                  placeholder="Enter your username"
+                  placeholderTextColor="#C4A0A0"
+                  value={username}
+                  onChangeText={setUsername}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
             </View>
-          </View>
 
-          {/* Sign In Button */}
-          <TouchableOpacity
-            onPress={handleLogin}
-            disabled={loading}
-            style={styles.buttonWrapper}
-          >
-            <LinearGradient
-              colors={loading ? ["#4B3A8A", "#4B3A8A"] : ["#22D3EE", "#8B5CF6"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.button}
+            {/* Password */}
+            <View style={s.inputGroup}>
+              <Text style={s.label}>Password</Text>
+              <View style={s.inputWrapper}>
+                <Ionicons
+                  name="lock-closed-outline"
+                  size={18}
+                  color="#8B1A1A"
+                  style={s.inputIcon}
+                />
+                <TextInput
+                  style={[s.input, { flex: 1 }]}
+                  placeholder="Enter your password"
+                  placeholderTextColor="#C4A0A0"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                />
+                <TouchableOpacity
+                  onPress={() => setShowPassword(!showPassword)}
+                  style={s.eyeBtn}
+                >
+                  <Ionicons
+                    name={showPassword ? "eye-off-outline" : "eye-outline"}
+                    size={18}
+                    color="#8B1A1A"
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Sign In Button */}
+            <TouchableOpacity
+              style={[s.signInBtn, loading && { opacity: 0.7 }]}
+              onPress={handleLogin}
+              disabled={loading}
+              activeOpacity={0.85}
             >
               {loading ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.buttonText}>Sign In</Text>
+                <Text style={s.signInText}>Sign In</Text>
               )}
-            </LinearGradient>
-          </TouchableOpacity>
-        </View>
+            </TouchableOpacity>
 
-        {/* Footer */}
-        <Text style={styles.footer}>SafeCheck Attendance System v1.0</Text>
-      </View>
-    </KeyboardAvoidingView>
+            {/* Footer */}
+            <Text style={s.footer}>SafeCheck Attendance System v1.0</Text>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#0F0F23",
-  },
-  inner: {
-    flex: 1,
-    paddingHorizontal: 24,
+const s = StyleSheet.create({
+  container:        { flex: 1, backgroundColor: "#FDF4F4" },
+
+  // Illustration
+  illustrationWrap: {
+    width,
+    height: height * 0.42,
+    alignItems: "center",
     justifyContent: "center",
-    alignItems: "center",
-    gap: 12,
+    backgroundColor: "#FDF4F4",
+    paddingTop: 10,
   },
-  logoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    marginBottom: 4,
+  illustration:     { width: width * 0.82, height: height * 0.38 },
+
+  // Card
+  card:             {
+    flex: 1,
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 40,
+    borderTopRightRadius: 40,
+    paddingHorizontal: 28,
+    paddingTop: 32,
+    paddingBottom: 28,
+    shadowColor: "#8B1A1A",
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: -4 },
+    elevation: 10,
   },
-  logoBox: {
-    width: 52,
-    height: 52,
-    borderRadius: 14,
-    justifyContent: "center",
-    alignItems: "center",
+
+  title:            {
+    color: "#1A0505",
+    fontSize: 26,
+    fontWeight: "800",
+    marginBottom: 6,
   },
-  brandText: {
-    fontSize: 36,
-    fontWeight: "700",
-    color: "#FFFFFF",
+  subtitle:         {
+    color: "#7A4040",
+    fontSize: 14,
+    marginBottom: 24,
   },
-  brandAccent: {
-    color: "#22D3EE",
-  },
-  subtitle: {
-    fontSize: 15,
-    color: "#9CA3AF",
-    marginBottom: 8,
-  },
-  card: {
-    width: "100%",
-    backgroundColor: "#1A1A2E",
-    borderRadius: 20,
-    padding: 24,
-    gap: 16,
-    borderWidth: 1,
-    borderColor: "#2D2D4E",
-  },
-  inputGroup: {
-    gap: 6,
-  },
-  label: {
+
+  // Inputs
+  inputGroup:       { marginBottom: 16 },
+  label:            {
+    color: "#4A1A1A",
     fontSize: 13,
-    color: "#D1D5DB",
-    fontWeight: "500",
+    fontWeight: "600",
+    marginBottom: 6,
   },
-  inputWrapper: {
+  inputWrapper:     {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#0F0F23",
-    borderWidth: 1,
-    borderColor: "#374151",
-    borderRadius: 10,
-    paddingHorizontal: 12,
+    backgroundColor: "#FDF4F4",
+    borderWidth: 1.5,
+    borderColor: "#E8C4C4",
+    borderRadius: 14,
+    paddingHorizontal: 14,
   },
-  inputIcon: {
-    marginRight: 8,
-  },
-  input: {
+  inputIcon:        { marginRight: 8 },
+  input:            {
     flex: 1,
-    paddingVertical: 13,
-    color: "#FFFFFF",
+    paddingVertical: 14,
+    color: "#1A0505",
     fontSize: 15,
   },
-  eyeBtn: {
-    paddingLeft: 8,
-    paddingVertical: 4,
-  },
-  buttonWrapper: {
-    marginTop: 4,
-    borderRadius: 999,
-    overflow: "hidden",
-  },
-  button: {
-    paddingVertical: 14,
+  eyeBtn:           { paddingLeft: 8, paddingVertical: 4 },
+
+  // Button
+  signInBtn:        {
+    width: "100%",
+    backgroundColor: "#8B1A1A",
+    paddingVertical: 16,
+    borderRadius: 18,
     alignItems: "center",
-    borderRadius: 999,
-  },
-  buttonText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  footer: {
-    fontSize: 12,
-    color: "#4B5563",
     marginTop: 8,
+    shadowColor: "#8B1A1A",
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
+  },
+  signInText:       { color: "#fff", fontWeight: "800", fontSize: 16 },
+
+  // Footer
+  footer:           {
+    textAlign: "center",
+    color: "#C4A0A0",
+    fontSize: 12,
+    marginTop: 24,
   },
 });

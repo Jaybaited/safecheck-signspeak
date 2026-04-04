@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -6,11 +6,19 @@ import {
   ScrollView,
   ActivityIndicator,
   RefreshControl,
+  TouchableOpacity,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { StatusBar } from "expo-status-bar";
+import { useRouter } from "expo-router";
 import { useAuthStore } from "../../store/authStore";
+import { useThemeStore } from "../../store/themeStore";
+import { getColors } from "../../lib/theme";
 import { api } from "../../lib/api";
-import { Users, GraduationCap, UserCheck, ShieldCheck } from "lucide-react-native";
+import {
+  GraduationCap, UserCheck, Users, ShieldCheck,
+  BookOpen, Gamepad2, ClipboardList, ChevronRight,
+} from "lucide-react-native";
 
 interface UserStats {
   adminCount: number;
@@ -21,11 +29,15 @@ interface UserStats {
 
 export default function AdminDashboard() {
   const { user, token } = useAuthStore();
-  const [stats, setStats] = useState<UserStats | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { resolvedTheme } = useThemeStore();
+  const C = getColors(resolvedTheme);
+  const router = useRouter();
+
+  const [stats, setStats]           = useState<UserStats | null>(null);
+  const [loading, setLoading]       = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const fetchStats = async () => {
+  const fetchStats = useCallback(async () => {
     try {
       const res = await api.get("/users/stats", {
         headers: { Authorization: `Bearer ${token}` },
@@ -37,180 +49,226 @@ export default function AdminDashboard() {
       setLoading(false);
       setRefreshing(false);
     }
+  }, [token]);
+
+  useEffect(() => { fetchStats(); }, []);
+
+  const getGreeting = () => {
+    const h = new Date().getHours();
+    if (h < 12) return "Good Morning!";
+    if (h < 18) return "Good Afternoon!";
+    return "Good Evening!";
   };
 
-  useEffect(() => {
-    fetchStats();
-  }, []);
-
-  const statCards = stats
-    ? [
-        {
-          label: "Students",
-          value: stats.studentCount,
-          icon: <GraduationCap color="#8B5CF6" size={24} />,
-          color: "#8B5CF6",
-        },
-        {
-          label: "Teachers",
-          value: stats.teacherCount,
-          icon: <UserCheck color="#10B981" size={24} />,
-          color: "#10B981",
-        },
-        {
-          label: "Parents",
-          value: stats.parentCount,
-          icon: <Users color="#F59E0B" size={24} />,
-          color: "#F59E0B",
-        },
-        {
-          label: "Admins",
-          value: stats.adminCount,
-          icon: <ShieldCheck color="#EF4444" size={24} />,
-          color: "#EF4444",
-        },
-      ]
-    : [];
+  const quickActions = [
+    { label: "Manage\nStudents", icon: GraduationCap, color: "#8B1A1A",   onPress: () => router.push("/(admin)/students") },
+    { label: "Manage\nTeachers", icon: UserCheck,     color: "#B45309",   onPress: () => router.push("/(admin)/teachers") },
+    { label: "Manage\nParents",  icon: Users,         color: "#8B1A1A",   onPress: () => router.push("/(admin)/parents")  },
+  ];
 
   if (loading) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#8B5CF6" />
-      </View>
+      <SafeAreaView style={{ flex: 1, backgroundColor: C.background }}>
+        <StatusBar style={resolvedTheme === "dark" ? "light" : "dark"} />
+        <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+          <ActivityIndicator size="large" color={C.primary} />
+        </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: C.background }}>
+      <StatusBar style={resolvedTheme === "dark" ? "light" : "dark"} />
+
       <ScrollView
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 32 }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={() => {
-              setRefreshing(true);
-              fetchStats();
-            }}
-            tintColor="#8B5CF6"
+            onRefresh={() => { setRefreshing(true); fetchStats(); }}
+            tintColor={C.primary}
+            colors={[C.primary]}
           />
         }
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.greeting}>Welcome back,</Text>
-            <Text style={styles.name}>
-              {user?.firstName} {user?.lastName} 👋
+        {/* ── Header ───────────────────────────────────────────── */}
+        <View style={[s.headerRow, { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12 }]}>
+          <View style={{ flex: 1 }}>
+            <Text style={[s.greeting, { color: C.muted }]}>{getGreeting()} 👋</Text>
+            <Text style={[s.name, { color: C.text }]}>
+              {user?.firstName} {user?.lastName}
             </Text>
           </View>
-          <View style={styles.roleBadge}>
-            <Text style={styles.roleText}>Admin</Text>
+          {/* Avatar initials */}
+          <View style={[s.avatarCircle, { backgroundColor: "#8B1A1A" }]}>
+            <Text style={s.avatarText}>
+              {user?.firstName?.[0]}{user?.lastName?.[0]}
+            </Text>
           </View>
         </View>
 
-        {/* Stats Grid */}
-        <Text style={styles.sectionTitle}>System Overview</Text>
-        <View style={styles.statsGrid}>
-          {statCards.map((card, index) => (
-            <View key={index} style={styles.statCard}>
-              <View
-                style={[
-                  styles.iconBox,
-                  { backgroundColor: card.color + "20" },
-                ]}
-              >
-                {card.icon}
-              </View>
-              <Text style={styles.statValue}>{card.value}</Text>
-              <Text style={styles.statLabel}>{card.label}</Text>
+        {/* ── Attendance Overview Card ──────────────────────────── */}
+        <View style={{ paddingHorizontal: 20, marginBottom: 24 }}>
+          <View style={[s.overviewCard, { backgroundColor: "#8B1A1A" }]}>
+            <View style={{ flex: 1 }}>
+              <Text style={s.overviewLabel}>System Overview</Text>
+              <Text style={s.overviewValue}>
+                {(stats?.studentCount ?? 0) + (stats?.teacherCount ?? 0) + (stats?.parentCount ?? 0) + (stats?.adminCount ?? 0)}
+              </Text>
+              <Text style={s.overviewSub}>Total registered users</Text>
             </View>
-          ))}
+            <View style={s.overviewDivider} />
+            <View style={s.overviewRight}>
+              <View style={s.overviewStatRow}>
+                <Text style={s.overviewStatVal}>{stats?.studentCount ?? 0}</Text>
+                <Text style={s.overviewStatLabel}>Students</Text>
+              </View>
+              <View style={s.overviewStatRow}>
+                <Text style={s.overviewStatVal}>{stats?.teacherCount ?? 0}</Text>
+                <Text style={s.overviewStatLabel}>Teachers</Text>
+              </View>
+              <View style={s.overviewStatRow}>
+                <Text style={s.overviewStatVal}>{stats?.parentCount ?? 0}</Text>
+                <Text style={s.overviewStatLabel}>Parents</Text>
+              </View>
+            </View>
+          </View>
         </View>
 
-        {/* Quick Info */}
-        <View style={styles.infoCard}>
-          <Text style={styles.infoTitle}>SafeCheck–SignSpeak</Text>
-          <Text style={styles.infoText}>
-            RFID-Based Attendance & FSL Recognition System for Philippine School for the Deaf
-          </Text>
+        {/* ── Quick Access ──────────────────────────────────────── */}
+        <View style={{ paddingHorizontal: 20, marginBottom: 24 }}>
+          <Text style={[s.sectionTitle, { color: C.text }]}>Quick Access</Text>
+          <View style={s.quickRow}>
+            {quickActions.map((item, i) => {
+              const Icon = item.icon;
+              return (
+                <TouchableOpacity
+                  key={i}
+                  style={[s.quickCard, { backgroundColor: item.color }]}
+                  onPress={item.onPress}
+                  activeOpacity={0.85}
+                >
+                  <Icon size={28} color="#fff" />
+                  <Text style={s.quickLabel}>{item.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         </View>
+
+        {/* ── Stats Grid ────────────────────────────────────────── */}
+        <View style={{ paddingHorizontal: 20, marginBottom: 24 }}>
+          <Text style={[s.sectionTitle, { color: C.text }]}>User Breakdown</Text>
+          <View style={s.statsGrid}>
+            {[
+              { label: "Students", value: stats?.studentCount ?? 0, icon: GraduationCap, color: C.primary },
+              { label: "Teachers", value: stats?.teacherCount ?? 0, icon: UserCheck,     color: "#10B981" },
+              { label: "Parents",  value: stats?.parentCount  ?? 0, icon: Users,         color: "#F59E0B" },
+              { label: "Admins",   value: stats?.adminCount   ?? 0, icon: ShieldCheck,   color: "#EF4444" },
+            ].map((card, i) => {
+              const Icon = card.icon;
+              return (
+                <View
+                  key={i}
+                  style={[s.statCard, { backgroundColor: C.card, borderColor: C.border }]}
+                >
+                  <View style={[s.statIconBox, { backgroundColor: card.color + "22" }]}>
+                    <Icon size={20} color={card.color} />
+                  </View>
+                  <Text style={[s.statValue, { color: C.text }]}>{card.value}</Text>
+                  <Text style={[s.statLabel, { color: C.muted }]}>{card.label}</Text>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* ── Info Card ─────────────────────────────────────────── */}
+        <View style={{ paddingHorizontal: 20 }}>
+          <View style={[s.infoCard, { backgroundColor: C.card, borderColor: C.border }]}>
+            <View style={[s.infoIconBox, { backgroundColor: C.primary + "22" }]}>
+              <ShieldCheck size={20} color={C.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[s.infoTitle, { color: C.text }]}>SafeCheck – SignSpeak</Text>
+              <Text style={[s.infoSub, { color: C.muted }]}>
+                RFID-Based Attendance & FSL Recognition System for Philippine School for the Deaf
+              </Text>
+            </View>
+          </View>
+        </View>
+
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0F0F23" },
-  centered: {
+const s = StyleSheet.create({
+  // ── Header ────────────────────────────────────
+  headerRow:   { flexDirection: "row", alignItems: "center" },
+  greeting:    { fontSize: 13, fontWeight: "500" },
+  name:        { fontSize: 22, fontWeight: "800", marginTop: 2 },
+  avatarCircle:{ width: 46, height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center" },
+  avatarText:  { color: "#fff", fontSize: 16, fontWeight: "800" },
+
+  // ── Overview Card ─────────────────────────────
+  overviewCard: {
+    borderRadius: 20,
+    padding: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+  },
+  overviewLabel: { color: "#ffffff99", fontSize: 12, fontWeight: "600", marginBottom: 4 },
+  overviewValue: { color: "#fff", fontSize: 36, fontWeight: "800", lineHeight: 40 },
+  overviewSub:   { color: "#ffffff99", fontSize: 12, marginTop: 2 },
+  overviewDivider: { width: 1, height: "100%", backgroundColor: "#ffffff30" },
+  overviewRight:   { gap: 8 },
+  overviewStatRow: { alignItems: "flex-end" },
+  overviewStatVal: { color: "#fff", fontSize: 18, fontWeight: "800" },
+  overviewStatLabel:{ color: "#ffffff99", fontSize: 11 },
+
+  // ── Section Title ─────────────────────────────
+  sectionTitle: { fontSize: 16, fontWeight: "700", marginBottom: 12 },
+
+  // ── Quick Access ──────────────────────────────
+  quickRow: { flexDirection: "row", gap: 10 },
+  quickCard: {
     flex: 1,
-    backgroundColor: "#0F0F23",
+    borderRadius: 18,
+    paddingVertical: 20,
     alignItems: "center",
     justifyContent: "center",
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 12,
-  },
-  greeting: { fontSize: 14, color: "#9CA3AF" },
-  name: { fontSize: 22, fontWeight: "700", color: "#FFFFFF" },
-  roleBadge: {
-    backgroundColor: "#1E1E3A",
-    borderWidth: 1,
-    borderColor: "#8B5CF6",
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-  },
-  roleText: { color: "#8B5CF6", fontSize: 12, fontWeight: "600" },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#FFFFFF",
-    paddingHorizontal: 20,
-    marginBottom: 12,
-    marginTop: 4,
-  },
-  statsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    paddingHorizontal: 12,
     gap: 10,
-    marginBottom: 20,
   },
+  quickLabel: { color: "#fff", fontSize: 12, fontWeight: "700", textAlign: "center" },
+
+  // ── Stats Grid ────────────────────────────────
+  statsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   statCard: {
-    backgroundColor: "#1E1E3A",
+    width: "47.5%",
     borderRadius: 16,
+    borderWidth: 1,
     padding: 16,
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#2D2D4E",
-    width: "47%",
-    marginHorizontal: "1.5%",
     gap: 8,
   },
-  iconBox: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  statValue: { fontSize: 28, fontWeight: "700", color: "#FFFFFF" },
-  statLabel: { fontSize: 13, color: "#9CA3AF", fontWeight: "500" },
+  statIconBox: { width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  statValue:   { fontSize: 28, fontWeight: "800" },
+  statLabel:   { fontSize: 12, fontWeight: "500" },
+
+  // ── Info Card ─────────────────────────────────
   infoCard: {
-    backgroundColor: "#1E1E3A",
     borderRadius: 16,
-    marginHorizontal: 20,
-    marginBottom: 20,
-    padding: 16,
     borderWidth: 1,
-    borderColor: "#2D2D4E",
-    gap: 6,
+    padding: 16,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
   },
-  infoTitle: { fontSize: 15, fontWeight: "700", color: "#8B5CF6" },
-  infoText: { fontSize: 13, color: "#9CA3AF", lineHeight: 20 },
+  infoIconBox: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  infoTitle:   { fontSize: 14, fontWeight: "700", marginBottom: 4 },
+  infoSub:     { fontSize: 12, lineHeight: 18 },
 });

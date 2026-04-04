@@ -1,0 +1,11 @@
+mediapipe==0.10.14
+opencv-python
+numpy<2.0
+tensorflow==2.13.0
+scikit-learn
+fastapi
+uvicorn[standard]
+joblib
+tensorflowjs
+matplotlib
+pandas

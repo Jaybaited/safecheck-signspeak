@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 
 interface UseRfidScannerReturn {
   isScanning: boolean;
@@ -12,74 +12,74 @@ export function useRfidScanner(): UseRfidScannerReturn {
   const [isScanning, setIsScanning] = useState(false);
   const [scannedRfid, setScannedRfid] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const bufferRef = useRef('');
-const timeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
-const scanTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
-
 
   useEffect(() => {
     if (!isScanning) return;
 
-    const handleKeyDown = (event: KeyboardEvent) => {
-      // Always block shortcuts while scanning
-      event.preventDefault();
-      event.stopPropagation();
+    let buffer = '';
+    let timeoutId: NodeJS.Timeout;
 
-      if (event.key === 'Enter') {
-        if (bufferRef.current.length > 0) {
-          setScannedRfid(bufferRef.current);
-          setIsScanning(false);
-          bufferRef.current = '';
-          clearTimeout(timeoutRef.current);
-          clearTimeout(scanTimeoutRef.current);
-        }
-        return;
+    const handleKeyPress = (event: KeyboardEvent) => {
+      // Prevent default behavior to avoid typing in background
+      if (isScanning) {
+        event.preventDefault();
+        event.stopPropagation();
       }
 
-      // Only accept printable characters
-      if (event.key.length === 1) {
-        bufferRef.current += event.key;
-
-        clearTimeout(timeoutRef.current);
-        timeoutRef.current = setTimeout(() => {
-          if (bufferRef.current.length > 0) {
-            setScannedRfid(bufferRef.current);
+      // Check if Enter key (RFID readers usually end with Enter)
+      if (event.key === 'Enter') {
+        if (buffer.length > 0) {
+          // Successfully scanned RFID
+          setScannedRfid(buffer);
+          setIsScanning(false);
+          buffer = '';
+        }
+      } else if (event.key.length === 1) {
+        // Add character to buffer (ignore special keys)
+        buffer += event.key;
+        
+        // Reset timeout on each keypress
+        clearTimeout(timeoutId);
+        
+        // Auto-finish scan if no more input for 100ms
+        timeoutId = setTimeout(() => {
+          if (buffer.length > 0) {
+            setScannedRfid(buffer);
             setIsScanning(false);
-            bufferRef.current = '';
+            buffer = '';
           }
         }, 100);
       }
     };
 
-    // Use only keydown — NOT keypress (keypress is deprecated + causes duplicates)
-    document.addEventListener('keydown', handleKeyDown);
+    // Add keyboard event listener
+    document.addEventListener('keypress', handleKeyPress);
+    document.addEventListener('keydown', handleKeyPress);
 
-    // 10 second scan timeout
-    scanTimeoutRef.current = setTimeout(() => {
+    // Set scan timeout (10 seconds)
+    const scanTimeout = setTimeout(() => {
       setIsScanning(false);
       setError('Scan timeout - please try again');
-      bufferRef.current = '';
     }, 10000);
 
+    // Cleanup
     return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      clearTimeout(timeoutRef.current);
-      clearTimeout(scanTimeoutRef.current);
+      document.removeEventListener('keypress', handleKeyPress);
+      document.removeEventListener('keydown', handleKeyPress);
+      clearTimeout(timeoutId);
+      clearTimeout(scanTimeout);
     };
   }, [isScanning]);
 
   const startScan = useCallback(() => {
-    bufferRef.current = '';
-    setScannedRfid(null);
-    setError(null);
     setIsScanning(true);
+    setError(null);
   }, []);
 
   const resetScan = useCallback(() => {
     setScannedRfid(null);
     setError(null);
     setIsScanning(false);
-    bufferRef.current = '';
   }, []);
 
   return {
