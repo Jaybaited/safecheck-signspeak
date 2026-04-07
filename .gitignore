@@ -31,3 +31,12 @@ machine-learning/fsl_env/
 
 # OS
 Thumbs.db
+
+# ML dataset images — too large for GitHub
+machine-learning/dataset/
+
+# Extracted landmark data — regeneratable
+machine-learning/data/
+
+# ML models (optional — uncomment to exclude)
+# machine-learning/models/
