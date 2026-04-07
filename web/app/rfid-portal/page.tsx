@@ -1,32 +1,19 @@
+// web/app/rfid-portal/page.tsx
+
 'use client';
 
 import { useState, useEffect } from 'react';
 import { Wifi, CheckCircle, XCircle, Clock, User } from 'lucide-react';
-import { api } from '@/lib/api';
-
-interface TapResponse {
-  success: boolean;
-  action: 'CHECK_IN' | 'CHECK_OUT';
-  student: {
-    firstName: string;
-    lastName: string;
-    gradeLevel: string | null;
-  };
-  attendance: {
-    timeIn: string;
-    timeOut: string | null;
-  };
-}
+import { api, RfidTapResponse } from '@/lib/api';
 
 export default function RFIDPortalPage() {
-  const [scannedCard, setScannedCard] = useState('');
   const [isScanning, setIsScanning] = useState(false);
-  const [lastTap, setLastTap] = useState<TapResponse | null>(null);
+  const [lastTap, setLastTap] = useState<RfidTapResponse | null>(null);
   const [error, setError] = useState('');
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [mounted, setMounted] = useState(false); // ✅ Fix: mounted state
+  const [mounted, setMounted] = useState(false);
 
-  // ✅ Fix: Set mounted + start clock after mount
+  // Set mounted + start clock after mount
   useEffect(() => {
     setMounted(true);
     const timer = setInterval(() => {
@@ -35,7 +22,7 @@ export default function RFIDPortalPage() {
     return () => clearInterval(timer);
   }, []);
 
-  // Listen for RFID card input
+  // Listen for RFID card input (USB HID keyboard emulation)
   useEffect(() => {
     let buffer = '';
     let timeout: NodeJS.Timeout;
@@ -73,9 +60,8 @@ export default function RFIDPortalPage() {
     setLastTap(null);
 
     try {
-      const response = await api.rfidTap(rfidCard);
+      const response = await api.handleRfidTap(rfidCard);
       setLastTap(response);
-      setScannedCard(rfidCard);
 
       setTimeout(() => {
         setLastTap(null);
@@ -107,17 +93,22 @@ export default function RFIDPortalPage() {
     });
   };
 
-  const formatGradeLevel = (gradeLevel: string | null) => {
+  const formatGradeLevel = (gradeLevel: string | null | undefined) => {
     if (!gradeLevel) return '';
     return gradeLevel.replace('GRADE_', 'Grade ');
   };
+
+  // Derive check-in vs check-out from timeOut being null
+  const isCheckIn = lastTap?.attendance
+    ? !lastTap.attendance.timeOut
+    : false;
 
   return (
     <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center p-8">
       {/* Header */}
       <div className="text-center mb-12">
         <div className="flex items-center justify-center gap-3 mb-4">
-          <div className="w-16 h-16 bg-gradient-to-br from-cyan-400 to-purple-600 rounded-xl flex items-center justify-center">
+          <div className="w-16 h-16 bg-linear-to-br from-cyan-400 to-purple-600 rounded-xl flex items-center justify-center">
             <Wifi className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-5xl font-bold text-white">
@@ -127,7 +118,7 @@ export default function RFIDPortalPage() {
         <p className="text-xl text-gray-400">RFID Attendance Portal</p>
       </div>
 
-      {/* Clock - ✅ Fix: Only render after mounted */}
+      {/* Clock */}
       <div className="text-center mb-12">
         <div className="text-6xl font-bold text-white mb-2">
           {mounted ? formatTime(currentTime) : '--:--:-- --'}
@@ -139,11 +130,27 @@ export default function RFIDPortalPage() {
 
       {/* Main Card */}
       <div className="w-full max-w-2xl bg-gray-900 border-2 border-gray-800 rounded-3xl p-12">
-        {/* Scanning State */}
-        {!lastTap && !error && (
+
+        {/* Processing State */}
+        {isScanning && (
           <div className="text-center">
             <div className="relative mx-auto w-32 h-32 mb-8">
-              <div className="absolute inset-0 bg-cyan-500/20 rounded-full animate-ping"></div>
+              <div className="absolute inset-0 bg-cyan-500/20 rounded-full animate-ping" />
+              <div className="relative w-full h-full bg-cyan-500/10 rounded-full flex items-center justify-center border-4 border-cyan-500/50">
+                <Wifi className="w-16 h-16 text-cyan-400 animate-pulse" />
+              </div>
+            </div>
+            <h2 className="text-3xl font-bold text-cyan-400 animate-pulse">
+              Processing...
+            </h2>
+          </div>
+        )}
+
+        {/* Ready to Scan State */}
+        {!isScanning && !lastTap && !error && (
+          <div className="text-center">
+            <div className="relative mx-auto w-32 h-32 mb-8">
+              <div className="absolute inset-0 bg-cyan-500/20 rounded-full animate-ping" />
               <div className="relative w-full h-full bg-cyan-500/10 rounded-full flex items-center justify-center border-4 border-cyan-500/50">
                 <Wifi className="w-16 h-16 text-cyan-400" />
               </div>
@@ -158,32 +165,28 @@ export default function RFIDPortalPage() {
         )}
 
         {/* Success State */}
-        {lastTap && (
+        {!isScanning && lastTap && lastTap.student && lastTap.attendance && (
           <div className="text-center">
             <div
               className={`mx-auto w-32 h-32 mb-8 rounded-full flex items-center justify-center ${
-                lastTap.action === 'CHECK_IN'
+                isCheckIn
                   ? 'bg-green-500/20 border-4 border-green-500'
                   : 'bg-blue-500/20 border-4 border-blue-500'
               }`}
             >
               <CheckCircle
                 className={`w-16 h-16 ${
-                  lastTap.action === 'CHECK_IN'
-                    ? 'text-green-400'
-                    : 'text-blue-400'
+                  isCheckIn ? 'text-green-400' : 'text-blue-400'
                 }`}
               />
             </div>
 
             <h2
               className={`text-4xl font-bold mb-4 ${
-                lastTap.action === 'CHECK_IN'
-                  ? 'text-green-400'
-                  : 'text-blue-400'
+                isCheckIn ? 'text-green-400' : 'text-blue-400'
               }`}
             >
-              {lastTap.action === 'CHECK_IN' ? 'Welcome!' : 'Goodbye!'}
+              {isCheckIn ? 'Welcome!' : 'Goodbye!'}
             </h2>
 
             <div className="bg-gray-800 rounded-xl p-6 mb-6">
@@ -203,22 +206,20 @@ export default function RFIDPortalPage() {
             <div className="flex items-center justify-center gap-2 text-xl text-gray-400">
               <Clock className="w-6 h-6" />
               <span>
-                {lastTap.action === 'CHECK_IN' ? 'Checked in' : 'Checked out'}{' '}
-                at{' '}
-                {mounted && formatTime(
-                  new Date(
-                    lastTap.action === 'CHECK_IN'
-                      ? lastTap.attendance.timeIn
-                      : lastTap.attendance.timeOut!
-                  )
-                )}
+                {isCheckIn ? 'Checked in' : 'Checked out'} at{' '}
+                {mounted &&
+                  formatTime(
+                    new Date(
+                      lastTap.attendance.timeOut ?? lastTap.attendance.timeIn!
+                    )
+                  )}
               </span>
             </div>
           </div>
         )}
 
         {/* Error State */}
-        {error && (
+        {!isScanning && error && (
           <div className="text-center">
             <div className="mx-auto w-32 h-32 mb-8 bg-red-500/20 rounded-full flex items-center justify-center border-4 border-red-500">
               <XCircle className="w-16 h-16 text-red-400" />
@@ -231,10 +232,9 @@ export default function RFIDPortalPage() {
 
       {/* Status Indicator */}
       <div className="mt-12 flex items-center gap-3">
-        <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+        <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" />
         <span className="text-gray-400">System Online</span>
       </div>
     </div>
   );
 }
-

@@ -1,8 +1,9 @@
+// components/student/StudentSidebar.tsx
 'use client';
 
-
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import Link                    from 'next/link';
+import { usePathname }         from 'next/navigation';
 import {
   LayoutDashboard,
   Calendar,
@@ -15,8 +16,11 @@ import {
   Gamepad2,
   ClipboardList,
   Megaphone,
+  ChevronDown,
+  Hand,
 } from 'lucide-react';
 
+// ── Types ──────────────────────────────────────────────────────────────────
 interface StudentSidebarProps {
   onLogout: () => void;
   student: {
@@ -26,51 +30,81 @@ interface StudentSidebarProps {
   };
 }
 
-const navigation = [
-  { name: 'Dashboard',     href: '/student/dashboard',  icon: LayoutDashboard },
-  { name: 'My Attendance', href: '/student/attendance', icon: Calendar },
-  { name: 'FSL Learning',  href: '/student/fsl',        icon: BookOpen },
-  { name: 'FSL Games',     href: '/student/games',      icon: Gamepad2 },   // ← new
-  { name: 'FSL Quizzes',   href: '/student/quiz',       icon: ClipboardList }, // ← new
-  { name: 'Announcements',   href: '/student/announcements',  icon: Megaphone },
-  { name: 'My Progress',   href: '/student/progress',   icon: TrendingUp },
-  { name: 'Profile',       href: '/student/profile',    icon: User },
+// ── Nav config ─────────────────────────────────────────────────────────────
+const TOP_NAV = [
+  { name: 'Dashboard',     href: '/student/dashboard',     icon: LayoutDashboard },
+  { name: 'My Attendance', href: '/student/attendance',    icon: Calendar        },
+  { name: 'Announcements', href: '/student/announcements', icon: Megaphone       },
 ];
 
+const BOTTOM_NAV = [
+  { name: 'Profile', href: '/student/profile', icon: User },
+];
 
+const FSL_GROUP = {
+  label:    'FSL & Progress',
+  icon:     Hand,
+  children: [
+    { name: 'FSL Learning', href: '/student/fsl',      icon: BookOpen      },
+    { name: 'FSL Games',    href: '/student/games',    icon: Gamepad2      },
+    { name: 'FSL Quizzes',  href: '/student/quiz',     icon: ClipboardList },
+    { name: 'My Progress',  href: '/student/progress', icon: TrendingUp    },
+  ],
+};
+
+const FSL_HREFS = FSL_GROUP.children.map((c) => c.href);
+
+// ── Brand color classes — centralised so future updates are a 1-line change
+// Active item:  maroon bg tint + maroon text (light) / gold text (dark)
+const ACTIVE_CLS =
+  'bg-[#7B1113]/10 dark:bg-[#7B1113]/20 text-[#7B1113] dark:text-[#E8C96A]';
+const INACTIVE_CLS =
+  'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white';
+
+// ── Helpers ────────────────────────────────────────────────────────────────
 function formatGradeLevel(gradeLevel: string | null) {
   if (!gradeLevel) return 'Not Set';
   return gradeLevel.replace('GRADE_', 'Grade ');
 }
 
+// ── Component ──────────────────────────────────────────────────────────────
 export default function StudentSidebar({ onLogout, student }: StudentSidebarProps) {
-  const pathname = usePathname();
+  const pathname   = usePathname();
+  const isFslActive = FSL_HREFS.includes(pathname);
+  const [fslOpen, setFslOpen] = useState(isFslActive);
+
+  useEffect(() => {
+    if (isFslActive) setFslOpen(true);
+  }, [isFslActive]);
 
   return (
     <aside className="fixed left-0 top-0 h-screen w-64 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col">
-      {/* Logo */}
+
+      {/* ── Logo ──────────────────────────────────────────────────────── */}
       <div className="p-6 border-b border-gray-200 dark:border-gray-800">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-br from-cyan-400 to-purple-600 rounded-lg flex items-center justify-center">
+          {/* Brand gradient: maroon tones instead of cyan-purple */}
+          <div className="w-10 h-10 bg-gradient-to-br from-[#9B2020] to-[#5A0A0A] rounded-lg flex items-center justify-center">
             <GraduationCap className="w-5 h-5 text-white" />
           </div>
           <div>
             <h2 className="font-bold text-gray-900 dark:text-white">
-              Safe<span className="text-purple-600 dark:text-purple-400">Check</span>
+              Safe<span className="text-[#7B1113] dark:text-[#E8C96A]">Check</span>
             </h2>
             <p className="text-xs text-gray-500 dark:text-gray-400">Student Portal</p>
           </div>
         </div>
       </div>
 
-      {/* Student Info */}
+      {/* ── Student Info ───────────────────────────────────────────────── */}
       <div className="p-4 border-b border-gray-200 dark:border-gray-800">
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-600 rounded-full flex items-center justify-center font-bold text-lg text-white">
+          {/* Avatar: maroon gradient instead of purple-pink */}
+          <div className="w-12 h-12 bg-gradient-to-br from-[#9B2020] to-[#7B1113] rounded-full flex items-center justify-center font-bold text-lg text-white select-none shrink-0">
             {student.firstName[0]}{student.lastName[0]}
           </div>
-          <div>
-            <p className="font-medium text-gray-900 dark:text-white">
+          <div className="min-w-0">
+            <p className="font-medium text-gray-900 dark:text-white truncate">
               {student.firstName} {student.lastName}
             </p>
             <p className="text-xs text-gray-500 dark:text-gray-400">
@@ -80,18 +114,81 @@ export default function StudentSidebar({ onLogout, student }: StudentSidebarProp
         </div>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 p-4 space-y-1">
-        {navigation.map((item) => {
+      {/* ── Navigation ────────────────────────────────────────────────── */}
+      <nav
+        className="flex-1 overflow-y-auto p-4 space-y-1"
+        aria-label="Student navigation"
+      >
+        {/* Top flat items */}
+        {TOP_NAV.map((item) => {
           const isActive = pathname === item.href;
           return (
             <Link key={item.name} href={item.href}>
               <div className={`flex items-center gap-3 px-4 py-3 rounded-lg cursor-pointer transition-colors ${
-                isActive
-                  ? 'bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'
+                isActive ? ACTIVE_CLS : INACTIVE_CLS
               }`}>
-                <item.icon className="w-5 h-5" />
+                <item.icon className="w-5 h-5 shrink-0" />
+                <span className={isActive ? 'font-medium' : ''}>{item.name}</span>
+              </div>
+            </Link>
+          );
+        })}
+
+        {/* ── FSL Collapsible ─────────────────────────────────────────── */}
+        <div>
+          <button
+            type="button"
+            onClick={() => setFslOpen((o) => !o)}
+            aria-expanded={fslOpen}
+            aria-controls="fsl-submenu"
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              isFslActive ? ACTIVE_CLS : INACTIVE_CLS
+            }`}
+          >
+            <FSL_GROUP.icon className="w-5 h-5 shrink-0" />
+            <span className={`flex-1 text-left ${isFslActive ? 'font-medium' : ''}`}>
+              {FSL_GROUP.label}
+            </span>
+            <ChevronDown
+              className={`w-4 h-4 shrink-0 transition-transform duration-200 ${
+                fslOpen ? 'rotate-180' : 'rotate-0'
+              }`}
+            />
+          </button>
+
+          {/* Animated submenu */}
+          <div
+            id="fsl-submenu"
+            className="overflow-hidden transition-all duration-200 ease-in-out"
+            style={{ maxHeight: fslOpen ? `${FSL_GROUP.children.length * 56}px` : '0px' }}
+          >
+            <div className="mt-1 ml-4 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-1">
+              {FSL_GROUP.children.map((child) => {
+                const isActive = pathname === child.href;
+                return (
+                  <Link key={child.name} href={child.href}>
+                    <div className={`flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-colors text-sm ${
+                      isActive ? ACTIVE_CLS : INACTIVE_CLS
+                    }`}>
+                      <child.icon className="w-4 h-4 shrink-0" />
+                      <span className={isActive ? 'font-medium' : ''}>{child.name}</span>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom flat items */}
+        {BOTTOM_NAV.map((item) => {
+          const isActive = pathname === item.href;
+          return (
+            <Link key={item.name} href={item.href}>
+              <div className={`flex items-center gap-3 px-4 py-3 rounded-lg cursor-pointer transition-colors ${
+                isActive ? ACTIVE_CLS : INACTIVE_CLS
+              }`}>
+                <item.icon className="w-5 h-5 shrink-0" />
                 <span className={isActive ? 'font-medium' : ''}>{item.name}</span>
               </div>
             </Link>
@@ -99,7 +196,7 @@ export default function StudentSidebar({ onLogout, student }: StudentSidebarProp
         })}
       </nav>
 
-      {/* RFID Status */}
+      {/* ── RFID Status ───────────────────────────────────────────────── */}
       <div className="p-4 border-t border-gray-200 dark:border-gray-800">
         <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">RFID Status</div>
         <div className="flex items-center gap-2">
@@ -109,11 +206,11 @@ export default function StudentSidebar({ onLogout, student }: StudentSidebarProp
         </div>
       </div>
 
-      {/* Logout */}
+      {/* ── Logout ────────────────────────────────────────────────────── */}
       <div className="p-4 border-t border-gray-200 dark:border-gray-800">
         <button
           onClick={onLogout}
-          className="flex items-center gap-3 px-4 py-3 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-red-500 dark:hover:text-red-400 rounded-lg w-full transition-colors"
+          className="flex items-center gap-3 px-4 py-3 text-gray-500 dark:text-gray-400 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400 rounded-lg w-full transition-colors"
         >
           <LogOut className="w-5 h-5" />
           <span>Logout</span>
