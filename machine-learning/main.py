@@ -9,7 +9,7 @@ app = FastAPI(title="SafeCheck FSL Inference API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001"],
+    allow_origins=["http://localhost:3000", "http://localhost:3001", "https://safecheck-signspeak.vercel.app/"],
     allow_methods=["POST", "GET"],
     allow_headers=["*"],
 )
