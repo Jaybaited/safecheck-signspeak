@@ -1,7 +1,7 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  ScrollView, Image, Dimensions,
+  ScrollView, Image, Dimensions, Animated,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
@@ -28,7 +28,7 @@ const MODES = [
     label: "Sign Game",
     description: "Sign the letter shown on screen to score points",
     route: "/(student)/fsl-game",
-    image: require("../../assets/images/fsl-game-card.jpg"),
+    image: require("../../assets/images/fsl-game-card.png"),
     color: "#B45309",
     lightColor: "#FEF3C7",
   },
@@ -37,7 +37,7 @@ const MODES = [
     label: "Learn Signs",
     description: "Browse all 26 FSL alphabet hand signs",
     route: "/(student)/fsl-learn",
-    image: require("../../assets/images/quiz.jpg"),
+    image: require("../../assets/images/quiz.png"),
     color: "#065F46",
     lightColor: "#D1FAE5",
   },
@@ -48,6 +48,48 @@ export default function FSLScreen() {
   const { resolvedTheme } = useThemeStore();
   const C = getColors(resolvedTheme);
 
+  // ── Entrance animations ──
+  const headerAnim  = useRef(new Animated.Value(0)).current;
+  const bannerAnim  = useRef(new Animated.Value(0)).current;
+  const cardAnims   = useRef(MODES.map(() => new Animated.Value(0))).current;
+
+  useEffect(() => {
+    Animated.sequence([
+      // Header fades in first
+      Animated.timing(headerAnim, {
+        toValue: 1, duration: 320, useNativeDriver: true,
+      }),
+      // Banner slides up
+      Animated.timing(bannerAnim, {
+        toValue: 1, duration: 360, useNativeDriver: true,
+      }),
+      // Cards stagger in
+      Animated.stagger(80, cardAnims.map((anim) =>
+        Animated.timing(anim, {
+          toValue: 1, duration: 300, useNativeDriver: true,
+        })
+      )),
+    ]).start();
+  }, []);
+
+  const headerStyle = {
+    opacity: headerAnim,
+    transform: [{
+      translateY: headerAnim.interpolate({
+        inputRange: [0, 1], outputRange: [12, 0],
+      }),
+    }],
+  };
+
+  const bannerStyle = {
+    opacity: bannerAnim,
+    transform: [{
+      translateY: bannerAnim.interpolate({
+        inputRange: [0, 1], outputRange: [20, 0],
+      }),
+    }],
+  };
+
   return (
     <SafeAreaView style={[s.container, { backgroundColor: C.background }]}>
       <StatusBar style={C.statusBar} />
@@ -56,83 +98,103 @@ export default function FSLScreen() {
         contentContainerStyle={{ paddingBottom: 32 }}
       >
         {/* ── Header ── */}
-        <View style={s.header}>
+        <Animated.View style={[s.header, headerStyle]}>
           <Text style={[s.title, { color: C.text }]}>FSL Learning</Text>
           <Text style={[s.subtitle, { color: C.muted }]}>
             Choose a mode to get started
           </Text>
-        </View>
+        </Animated.View>
 
         {/* ── Top Banner Card ── */}
-        <TouchableOpacity
-          style={[s.banner, { backgroundColor: "#8B1A1A" }]}
-          onPress={() => router.push("/(student)/fsl-detection" as any)}
-          activeOpacity={0.88}
-        >
-          <View style={s.bannerLeft}>
-            <Text style={s.bannerTag}>✦ Featured</Text>
-            <Text style={s.bannerTitle}>
-              More Ways to{"\n"}Learn Sign Language
-            </Text>
-            <Text style={s.bannerSub}>
-              Practice FSL anytime, anywhere — with games, AI detection, and guided lessons.
-            </Text>
-            <View style={s.bannerBtn}>
-              <Text style={s.bannerBtnText}>Explore Now</Text>
-              <ArrowRight size={14} color="#8B1A1A" />
+        <Animated.View style={bannerStyle}>
+          <TouchableOpacity
+            style={[s.banner, { backgroundColor: "#8B1A1A" }]}
+            onPress={() => router.push("/(student)/fsl-detection" as any)}
+            activeOpacity={0.88}
+          >
+            <View style={s.bannerLeft}>
+              <Text style={s.bannerTag}>✦ Featured</Text>
+              <Text style={s.bannerTitle}>
+                More Ways to{"\n"}Learn Sign Language
+              </Text>
+              <Text style={s.bannerSub}>
+                Practice FSL anytime, anywhere — with games, AI detection, and guided lessons.
+              </Text>
+              <View style={s.bannerBtn}>
+                <Text style={s.bannerBtnText}>Explore Now</Text>
+                <ArrowRight size={14} color="#8B1A1A" />
+              </View>
             </View>
-          </View>
-          <Image
-            source={require("../../assets/images/fsl-banner.png")}
-            style={s.bannerImage}
-            resizeMode="contain"
-          />
-        </TouchableOpacity>
+            <Image
+              source={require("../../assets/images/fsl-banner.png")}
+              style={s.bannerImage}
+              resizeMode="contain"
+            />
+          </TouchableOpacity>
+        </Animated.View>
 
         {/* ── Section Label ── */}
-        <Text style={[s.sectionLabel, { color: C.text }]}>Learning Modes</Text>
+        <Animated.Text style={[s.sectionLabel, { color: C.text }, {
+          opacity: bannerAnim,
+          transform: [{
+            translateY: bannerAnim.interpolate({
+              inputRange: [0, 1], outputRange: [10, 0],
+            }),
+          }],
+        }]}>
+          Learning Modes
+        </Animated.Text>
 
         {/* ── Mode Cards Grid ── */}
         <View style={s.grid}>
-          {MODES.map((mode, index) => (
-            <TouchableOpacity
-      key={index}
-      style={[s.modeCard, {
-        backgroundColor: C.card,
-        borderColor: C.border,
-        width: CARD_SIZE,   // ✅ all cards same size, no special case
-      }]}
-      onPress={() => router.push(mode.route as any)}
-      activeOpacity={0.8}
-    >
-              {/* Illustration */}
-              <View style={[s.modeImageWrap, { backgroundColor: mode.lightColor }]}>
-                <Image
-                  source={mode.image}
-                  style={s.modeImage}
-                  resizeMode="contain"
-                />
-                {/* Icon badge */}
-                <View style={[s.modeBadge, { backgroundColor: mode.color }]}>
-                  <mode.icon size={14} color="#fff" />
-                </View>
-              </View>
+          {MODES.map((mode, index) => {
+            const cardStyle = {
+              opacity: cardAnims[index],
+              transform: [{
+                translateY: cardAnims[index].interpolate({
+                  inputRange: [0, 1], outputRange: [24, 0],
+                }),
+              }],
+            };
+            return (
+              <Animated.View key={index} style={[{ width: CARD_SIZE }, cardStyle]}>
+                <TouchableOpacity
+                  style={[s.modeCard, {
+                    backgroundColor: C.card,
+                    borderColor: C.border,
+                  }]}
+                  onPress={() => router.push(mode.route as any)}
+                  activeOpacity={0.8}
+                >
+                  {/* Illustration */}
+                  <View style={[s.modeImageWrap, { backgroundColor: mode.lightColor }]}>
+                    <Image
+                      source={mode.image}
+                      style={s.modeImage}
+                      resizeMode="contain"
+                    />
+                    <View style={[s.modeBadge, { backgroundColor: mode.color }]}>
+                      <mode.icon size={14} color="#fff" />
+                    </View>
+                  </View>
 
-              {/* Text */}
-              <View style={s.modeBody}>
-                <Text style={[s.modeTitle, { color: C.text }]}>{mode.label}</Text>
-                <Text style={[s.modeDesc, { color: C.muted }]} numberOfLines={3}>
-                  {mode.description}
-                </Text>
-              </View>
+                  {/* Text */}
+                  <View style={s.modeBody}>
+                    <Text style={[s.modeTitle, { color: C.text }]}>{mode.label}</Text>
+                    <Text style={[s.modeDesc, { color: C.muted }]} numberOfLines={3}>
+                      {mode.description}
+                    </Text>
+                  </View>
 
-              {/* Bottom CTA */}
-              <View style={[s.modeCta, { borderTopColor: C.border }]}>
-                <Text style={[s.modeCtaText, { color: mode.color }]}>Start</Text>
-                <ArrowRight size={13} color={mode.color} />
-              </View>
-            </TouchableOpacity>
-          ))}
+                  {/* Bottom CTA */}
+                  <View style={[s.modeCta, { borderTopColor: C.border }]}>
+                    <Text style={[s.modeCtaText, { color: mode.color }]}>Start</Text>
+                    <ArrowRight size={13} color={mode.color} />
+                  </View>
+                </TouchableOpacity>
+              </Animated.View>
+            );
+          })}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -141,13 +203,9 @@ export default function FSLScreen() {
 
 const s = StyleSheet.create({
   container:      { flex: 1 },
-
-  // Header
   header:         { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12 },
   title:          { fontSize: 24, fontWeight: "800" },
   subtitle:       { fontSize: 13, marginTop: 2 },
-
-  // Banner
   banner:         {
     marginHorizontal: 20, marginBottom: 24,
     borderRadius: 24, padding: 22,
@@ -169,38 +227,15 @@ const s = StyleSheet.create({
   },
   bannerBtnText:  { color: "#8B1A1A", fontWeight: "700", fontSize: 13 },
   bannerImage:    { width: 110, height: 110, marginLeft: 8 },
-
-  // Section label
   sectionLabel:   { fontSize: 16, fontWeight: "700", paddingHorizontal: 20, marginBottom: 14 },
-
-  // Grid
-  grid:           {
-    flexDirection: "row", flexWrap: "wrap",
-    paddingHorizontal: 20, gap: 12,
-  },
-  modeCard:       {
-    borderRadius: 20, borderWidth: 1,
-    overflow: "hidden",
-  },
-  modeImageWrap:  {
-    width: "100%", height: 130,
-    alignItems: "center", justifyContent: "center",
-    position: "relative",
-  },
+  grid:           { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 20, gap: 12 },
+  modeCard:       { borderRadius: 20, borderWidth: 1, overflow: "hidden", width: "100%" },
+  modeImageWrap:  { width: "100%", height: 130, alignItems: "center", justifyContent: "center", position: "relative" },
   modeImage:      { width: "85%", height: "85%" },
-  modeBadge:      {
-    position: "absolute", bottom: 10, right: 10,
-    width: 30, height: 30, borderRadius: 10,
-    alignItems: "center", justifyContent: "center",
-  },
+  modeBadge:      { position: "absolute", bottom: 10, right: 10, width: 30, height: 30, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   modeBody:       { padding: 12, gap: 4 },
   modeTitle:      { fontSize: 14, fontWeight: "800" },
   modeDesc:       { fontSize: 11, lineHeight: 16 },
-  modeCta:        {
-    flexDirection: "row", alignItems: "center",
-    justifyContent: "flex-end", gap: 4,
-    paddingHorizontal: 12, paddingVertical: 10,
-    borderTopWidth: 1,
-  },
+  modeCta:        { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 4, paddingHorizontal: 12, paddingVertical: 10, borderTopWidth: 1 },
   modeCtaText:    { fontSize: 13, fontWeight: "700" },
 });

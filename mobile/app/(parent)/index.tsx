@@ -1,8 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import {
-  View, Text, StyleSheet, ScrollView,
-  ActivityIndicator, Image, RefreshControl,
-  Dimensions,
+  View, Text, StyleSheet, ScrollView, Animated,
+  Image, RefreshControl, Dimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
@@ -68,15 +67,120 @@ const getGreeting = () => {
 const getInitials = (first?: string, last?: string) =>
   `${first?.[0] ?? ""}${last?.[0] ?? ""}`.toUpperCase();
 
+// ── Skeleton Box ───────────────────────────────────────────────────
+function SkeletonBox({
+  width: w = "100%", height = 16, borderRadius = 8, style,
+}: {
+  width?: number | string; height?: number; borderRadius?: number; style?: any;
+}) {
+  const { resolvedTheme } = useThemeStore();
+  const C = getColors(resolvedTheme);
+  const shimmer = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmer, { toValue: 1, duration: 900, useNativeDriver: true }),
+        Animated.timing(shimmer, { toValue: 0, duration: 900, useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+
+  const opacity = shimmer.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.8] });
+  return (
+    <Animated.View style={[{ width: w as any, height, borderRadius, backgroundColor: C.border, opacity }, style]} />
+  );
+}
+
+// ── Skeleton Screen ────────────────────────────────────────────────
+function ParentHomeSkeleton() {
+  const { resolvedTheme } = useThemeStore();
+  const C = getColors(resolvedTheme);
+
+  return (
+    <ScrollView
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={{ paddingBottom: 32 }}
+    >
+      {/* Header */}
+      <View style={[s.header]}>
+        <View style={{ gap: 8 }}>
+          <SkeletonBox width={110} height={13} borderRadius={6} />
+          <SkeletonBox width={180} height={22} borderRadius={8} />
+        </View>
+        <SkeletonBox width={46} height={46} borderRadius={23} />
+      </View>
+
+      {/* Banner */}
+      <View style={{ paddingHorizontal: 20 }}>
+        <SkeletonBox width={BANNER_WIDTH} height={148} borderRadius={24} />
+      </View>
+
+      {/* Dots */}
+      <View style={[s.dotsRow]}>
+        {[1, 2, 3].map((i) => (
+          <SkeletonBox key={i} width={i === 1 ? 20 : 7} height={7} borderRadius={999} />
+        ))}
+      </View>
+
+      {/* Summary banner */}
+      <View style={{ marginHorizontal: 20, marginBottom: 20 }}>
+        <View style={[s.summaryBanner, { backgroundColor: C.card, borderColor: C.border }]}>
+          <View style={{ gap: 8 }}>
+            <SkeletonBox width={100} height={12} borderRadius={4} />
+            <SkeletonBox width={60}  height={24} borderRadius={8} />
+            <SkeletonBox width={130} height={12} borderRadius={4} />
+          </View>
+          <SkeletonBox width={110} height={34} borderRadius={999} />
+        </View>
+      </View>
+
+      {/* Section title */}
+      <SkeletonBox
+        width={120} height={12} borderRadius={4}
+        style={{ marginHorizontal: 20, marginBottom: 12 }}
+      />
+
+      {/* Child cards — 2 rows */}
+      {[1, 2].map((i) => (
+        <View
+          key={i}
+          style={[s.childCard, { backgroundColor: C.card, borderColor: C.border }]}
+        >
+          <SkeletonBox width={54} height={54} borderRadius={27} />
+          <View style={{ flex: 1, gap: 7 }}>
+            <SkeletonBox width="60%" height={15} borderRadius={6} />
+            <SkeletonBox width="40%" height={12} borderRadius={4} />
+            <SkeletonBox width={80}  height={22} borderRadius={999} />
+          </View>
+          {/* Time columns */}
+          <View style={s.times}>
+            <View style={s.timeBlock}>
+              <SkeletonBox width={20} height={9}  borderRadius={4} />
+              <SkeletonBox width={44} height={13} borderRadius={4} />
+            </View>
+            <SkeletonBox width={1} height={28} borderRadius={1} />
+            <View style={s.timeBlock}>
+              <SkeletonBox width={24} height={9}  borderRadius={4} />
+              <SkeletonBox width={44} height={13} borderRadius={4} />
+            </View>
+          </View>
+        </View>
+      ))}
+    </ScrollView>
+  );
+}
+
+// ── Main Screen ────────────────────────────────────────────────────
 export default function ParentHome() {
   const { user } = useAuthStore();
   const { resolvedTheme } = useThemeStore();
   const C = getColors(resolvedTheme);
 
-  const [children, setChildren]     = useState<Child[]>([]);
-  const [attendance, setAttendance] = useState<Record<string, TodayAttendance>>({});
-  const [loading, setLoading]       = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [children, setChildren]         = useState<Child[]>([]);
+  const [attendance, setAttendance]     = useState<Record<string, TodayAttendance>>({});
+  const [loading, setLoading]           = useState(true);
+  const [refreshing, setRefreshing]     = useState(false);
   const [activeBanner, setActiveBanner] = useState(0);
 
   const scrollRef   = useRef<ScrollView>(null);
@@ -90,10 +194,7 @@ export default function ParentHome() {
       const next = (bannerIndex.current + 1) % BANNERS.length;
       bannerIndex.current = next;
       setActiveBanner(next);
-      scrollRef.current?.scrollTo({
-        x: next * (BANNER_WIDTH + 20),
-        animated: true,
-      });
+      scrollRef.current?.scrollTo({ x: next * (BANNER_WIDTH + 20), animated: true });
     }, 3500);
     return () => { if (bannerTimer.current) clearInterval(bannerTimer.current); };
   }, []);
@@ -137,11 +238,13 @@ export default function ParentHome() {
     return               { label: "Went Home", color: C.primary };
   };
 
+  // ── Skeleton ──
   if (loading) {
     return (
-      <View style={[s.centered, { backgroundColor: C.background }]}>
-        <ActivityIndicator size="large" color={C.primary} />
-      </View>
+      <SafeAreaView style={[s.container, { backgroundColor: C.background }]}>
+        <StatusBar style={C.statusBar} />
+        <ParentHomeSkeleton />
+      </SafeAreaView>
     );
   }
 
@@ -185,9 +288,7 @@ export default function ParentHome() {
           contentContainerStyle={{ paddingHorizontal: 20, gap: 20 }}
           scrollEventThrottle={16}
           onMomentumScrollEnd={(e) => {
-            const idx = Math.round(
-              e.nativeEvent.contentOffset.x / (BANNER_WIDTH + 20)
-            );
+            const idx = Math.round(e.nativeEvent.contentOffset.x / (BANNER_WIDTH + 20));
             bannerIndex.current = idx;
             setActiveBanner(idx);
           }}
@@ -195,11 +296,7 @@ export default function ParentHome() {
           {BANNERS.map((item) => (
             <View
               key={item.id}
-              style={[s.banner, {
-                backgroundColor: item.bg,
-                width: BANNER_WIDTH,
-                shadowColor: item.bg,
-              }]}
+              style={[s.banner, { backgroundColor: item.bg, width: BANNER_WIDTH, shadowColor: item.bg }]}
             >
               <View style={s.bannerLeft}>
                 <View style={[s.bannerTag, { backgroundColor: item.tagBg }]}>
@@ -208,11 +305,7 @@ export default function ParentHome() {
                 <Text style={s.bannerTitle}>{item.title}</Text>
                 <Text style={s.bannerSub}>{item.sub}</Text>
               </View>
-              <Image
-                source={item.image}
-                style={s.bannerImage}
-                resizeMode="contain"
-              />
+              <Image source={item.image} style={s.bannerImage} resizeMode="contain" />
             </View>
           ))}
         </ScrollView>
@@ -225,21 +318,13 @@ export default function ParentHome() {
               onPress={() => {
                 bannerIndex.current = i;
                 setActiveBanner(i);
-                scrollRef.current?.scrollTo({
-                  x: i * (BANNER_WIDTH + 20),
-                  animated: true,
-                });
+                scrollRef.current?.scrollTo({ x: i * (BANNER_WIDTH + 20), animated: true });
               }}
             >
-              <View
-                style={[
-                  s.dot,
-                  {
-                    backgroundColor: i === activeBanner ? C.primary : C.border,
-                    width: i === activeBanner ? 20 : 7,
-                  },
-                ]}
-              />
+              <View style={[s.dot, {
+                backgroundColor: i === activeBanner ? C.primary : C.border,
+                width: i === activeBanner ? 20 : 7,
+              }]} />
             </TouchableOpacity>
           ))}
         </View>
@@ -253,10 +338,7 @@ export default function ParentHome() {
             </Text>
             <Text style={[s.summarySub, { color: C.muted }]}>children in school</Text>
           </View>
-          <View style={[s.summaryPill, {
-            backgroundColor: C.primary + "22",
-            borderColor: C.primary + "44",
-          }]}>
+          <View style={[s.summaryPill, { backgroundColor: C.primary + "22", borderColor: C.primary + "44" }]}>
             <Text style={[s.summaryPillText, { color: C.primary }]}>
               {children.length === 0
                 ? "—"
@@ -286,7 +368,6 @@ export default function ParentHome() {
                 key={child.id}
                 style={[s.childCard, { backgroundColor: C.card, borderColor: C.border }]}
               >
-                {/* Avatar */}
                 {child.photoUrl ? (
                   <Image source={{ uri: child.photoUrl }} style={s.childAvatar} />
                 ) : (
@@ -296,8 +377,6 @@ export default function ParentHome() {
                     </Text>
                   </View>
                 )}
-
-                {/* Info */}
                 <View style={s.childInfo}>
                   <Text style={[s.childName, { color: C.text }]} numberOfLines={1}>
                     {child.firstName} {child.lastName}
@@ -307,26 +386,18 @@ export default function ParentHome() {
                   </Text>
                   <View style={[s.statusBadge, { backgroundColor: status.color + "22" }]}>
                     <View style={[s.statusDot, { backgroundColor: status.color }]} />
-                    <Text style={[s.statusText, { color: status.color }]}>
-                      {status.label}
-                    </Text>
+                    <Text style={[s.statusText, { color: status.color }]}>{status.label}</Text>
                   </View>
                 </View>
-
-                {/* Times */}
                 <View style={s.times}>
                   <View style={s.timeBlock}>
                     <Text style={[s.timeLabel, { color: C.muted }]}>IN</Text>
-                    <Text style={[s.timeVal, { color: C.text }]}>
-                      {formatTime(att?.timeIn ?? null)}
-                    </Text>
+                    <Text style={[s.timeVal, { color: C.text }]}>{formatTime(att?.timeIn ?? null)}</Text>
                   </View>
                   <View style={[s.timeDivider, { backgroundColor: C.border }]} />
                   <View style={s.timeBlock}>
                     <Text style={[s.timeLabel, { color: C.muted }]}>OUT</Text>
-                    <Text style={[s.timeVal, { color: C.text }]}>
-                      {formatTime(att?.timeOut ?? null)}
-                    </Text>
+                    <Text style={[s.timeVal, { color: C.text }]}>{formatTime(att?.timeOut ?? null)}</Text>
                   </View>
                 </View>
               </View>
@@ -340,17 +411,12 @@ export default function ParentHome() {
 
 const s = StyleSheet.create({
   container:              { flex: 1 },
-  centered:               { flex: 1, alignItems: "center", justifyContent: "center" },
-
-  // Header
   header:                 { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12 },
   headerLeft:             { gap: 2 },
   greeting:               { fontSize: 13 },
   name:                   { fontSize: 22, fontWeight: "800" },
   avatar:                 { width: 46, height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center" },
   avatarText:             { color: "#fff", fontWeight: "800", fontSize: 16 },
-
-  // Banner
   banner:                 { borderRadius: 24, padding: 20, flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 148, overflow: "hidden", shadowOpacity: 0.35, shadowRadius: 14, shadowOffset: { width: 0, height: 8 }, elevation: 10 },
   bannerLeft:             { flex: 1, gap: 6 },
   bannerTag:              { alignSelf: "flex-start", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3, marginBottom: 2 },
@@ -358,12 +424,8 @@ const s = StyleSheet.create({
   bannerTitle:            { color: "#fff", fontSize: 20, fontWeight: "800", lineHeight: 26 },
   bannerSub:              { color: "rgba(255,255,255,0.78)", fontSize: 11, lineHeight: 16 },
   bannerImage:            { width: 110, height: 110, marginLeft: 8 },
-
-  // Dots
   dotsRow:                { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 6, marginTop: 12, marginBottom: 20 },
   dot:                    { height: 7, borderRadius: 999 },
-
-  // Summary
   summaryBanner:          { marginHorizontal: 20, marginBottom: 20, borderRadius: 20, borderWidth: 1, padding: 16, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   summaryLeft:            { gap: 2 },
   summaryLabel:           { fontSize: 12, fontWeight: "600" },
@@ -371,16 +433,10 @@ const s = StyleSheet.create({
   summarySub:             { fontSize: 12 },
   summaryPill:            { borderRadius: 999, paddingHorizontal: 14, paddingVertical: 6, borderWidth: 1 },
   summaryPillText:        { fontSize: 13, fontWeight: "700" },
-
-  // Section title
   sectionTitle:           { fontSize: 12, fontWeight: "700", letterSpacing: 0.5, marginHorizontal: 20, marginBottom: 12 },
-
-  // Empty
   emptyCard:              { marginHorizontal: 20, borderRadius: 20, borderWidth: 1, padding: 28, alignItems: "center", gap: 8 },
   emptyTitle:             { fontSize: 15, fontWeight: "700" },
   emptySub:               { fontSize: 13, textAlign: "center" },
-
-  // Child card
   childCard:              { marginHorizontal: 20, borderRadius: 20, borderWidth: 1, padding: 16, flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 12 },
   childAvatar:            { width: 54, height: 54, borderRadius: 27 },
   childAvatarPlaceholder: { width: 54, height: 54, borderRadius: 27, alignItems: "center", justifyContent: "center" },
@@ -391,8 +447,6 @@ const s = StyleSheet.create({
   statusBadge:            { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, gap: 4, marginTop: 2 },
   statusDot:              { width: 6, height: 6, borderRadius: 3 },
   statusText:             { fontSize: 11, fontWeight: "600" },
-
-  // Times
   times:                  { flexDirection: "row", alignItems: "center", gap: 10 },
   timeBlock:              { alignItems: "center", gap: 2 },
   timeLabel:              { fontSize: 9, fontWeight: "700", letterSpacing: 0.5 },

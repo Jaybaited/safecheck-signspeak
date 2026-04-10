@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import {
   View, Text, StyleSheet, FlatList,
-  ActivityIndicator, RefreshControl, TouchableOpacity,
+  RefreshControl, TouchableOpacity,
   Modal, Animated, Easing,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -22,6 +22,105 @@ interface AttendanceRecord {
   timeOut: string | null;
 }
 
+// ── Skeleton Box ───────────────────────────────────────────────────
+function SkeletonBox({
+  width: w = "100%",
+  height = 16,
+  borderRadius = 8,
+  style,
+}: {
+  width?: number | string;
+  height?: number;
+  borderRadius?: number;
+  style?: any;
+}) {
+  const { resolvedTheme } = useThemeStore();
+  const C = getColors(resolvedTheme);
+  const shimmer = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmer, { toValue: 1, duration: 900, useNativeDriver: true }),
+        Animated.timing(shimmer, { toValue: 0, duration: 900, useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+
+  const opacity = shimmer.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.3, 0.8],
+  });
+
+  return (
+    <Animated.View
+      style={[{ width: w as any, height, borderRadius, backgroundColor: C.border, opacity }, style]}
+    />
+  );
+}
+
+// ── Skeleton Screen ────────────────────────────────────────────────
+function AttendanceSkeleton() {
+  const { resolvedTheme } = useThemeStore();
+  const C = getColors(resolvedTheme);
+
+  return (
+    <View style={{ flex: 1 }}>
+      {/* Header skeleton */}
+      <View style={[s.header, { gap: 8 }]}>
+        <SkeletonBox width={200} height={24} borderRadius={8} />
+        <SkeletonBox width={120} height={13} borderRadius={6} />
+      </View>
+
+      {/* Summary row skeleton */}
+      <View style={s.summaryRow}>
+        {[1, 2, 3].map((i) => (
+          <View
+            key={i}
+            style={[s.summaryCard, { backgroundColor: C.card, borderColor: C.border, gap: 8 }]}
+          >
+            <SkeletonBox width={18} height={18} borderRadius={9} />
+            <SkeletonBox width={32} height={22} borderRadius={6} />
+            <SkeletonBox width={44} height={11} borderRadius={4} />
+          </View>
+        ))}
+      </View>
+
+      {/* List skeleton — 6 card rows */}
+      <View style={s.list}>
+        {[1, 2, 3, 4, 5, 6].map((i) => (
+          <View
+            key={i}
+            style={[
+              s.card,
+              { backgroundColor: C.card, borderColor: C.border, marginBottom: 10 },
+            ]}
+          >
+            <View style={[s.cardBody, { gap: 10 }]}>
+              {/* Top row: status + date */}
+              <View style={s.cardTop}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <SkeletonBox width={16} height={16} borderRadius={8} />
+                  <SkeletonBox width={60} height={13} borderRadius={6} />
+                </View>
+                <SkeletonBox width={110} height={13} borderRadius={6} />
+              </View>
+              {/* Bottom row: time pills */}
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                <SkeletonBox width={90} height={24} borderRadius={20} />
+                <SkeletonBox width={90} height={24} borderRadius={20} />
+              </View>
+            </View>
+            {/* Arrow hint */}
+            <SkeletonBox width={12} height={20} borderRadius={4} style={{ marginRight: 14 }} />
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+// ── Main Screen ────────────────────────────────────────────────────
 export default function AttendanceScreen() {
   const { user, token } = useAuthStore();
   const { resolvedTheme } = useThemeStore();
@@ -41,15 +140,11 @@ export default function AttendanceScreen() {
     fadeAnim.setValue(0);
     Animated.parallel([
       Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 380,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
+        toValue: 0, duration: 380,
+        easing: Easing.out(Easing.cubic), useNativeDriver: true,
       }),
       Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 280,
-        useNativeDriver: true,
+        toValue: 1, duration: 280, useNativeDriver: true,
       }),
     ]).start();
   };
@@ -57,15 +152,11 @@ export default function AttendanceScreen() {
   const closeSheet = () => {
     Animated.parallel([
       Animated.timing(slideAnim, {
-        toValue: 600,
-        duration: 300,
-        easing: Easing.in(Easing.cubic),
-        useNativeDriver: true,
+        toValue: 600, duration: 300,
+        easing: Easing.in(Easing.cubic), useNativeDriver: true,
       }),
       Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 220,
-        useNativeDriver: true,
+        toValue: 0, duration: 220, useNativeDriver: true,
       }),
     ]).start(() => setSelected(null));
   };
@@ -113,11 +204,13 @@ export default function AttendanceScreen() {
 
   const presentCount = records.filter((r) => r.timeIn).length;
 
+  // ── Skeleton while loading ──
   if (loading) {
     return (
-      <View style={[s.centered, { backgroundColor: C.background }]}>
-        <ActivityIndicator size="large" color={C.primary} />
-      </View>
+      <SafeAreaView style={[s.container, { backgroundColor: C.background }]}>
+        <StatusBar style={C.statusBar} />
+        <AttendanceSkeleton />
+      </SafeAreaView>
     );
   }
 
@@ -134,25 +227,23 @@ export default function AttendanceScreen() {
       </View>
 
       {/* ── Summary Row ── */}
-<View style={s.summaryRow}>
-  <View style={[s.summaryCard, { backgroundColor: "#8B1A1A", borderColor: "#8B1A1A" }]}>
-    <TrendingUp size={18} color="#FECACA" />
-    <Text style={[s.summaryVal, { color: "#fff" }]}>{records.length}</Text>
-    <Text style={[s.summaryLabel, { color: "#FECACA" }]}>Total</Text>
-  </View>
-
-  <View style={[s.summaryCard, { backgroundColor: "#065F46", borderColor: "#065F46" }]}>
-    <CheckCircle size={18} color="#6EE7B7" />
-    <Text style={[s.summaryVal, { color: "#fff" }]}>{presentCount}</Text>
-    <Text style={[s.summaryLabel, { color: "#6EE7B7" }]}>Present</Text>
-  </View>
-
-  <View style={[s.summaryCard, { backgroundColor: "#991B1B", borderColor: "#991B1B" }]}>
-    <XCircle size={18} color="#FCA5A5" />
-    <Text style={[s.summaryVal, { color: "#fff" }]}>{records.length - presentCount}</Text>
-    <Text style={[s.summaryLabel, { color: "#FCA5A5" }]}>Absent</Text>
-  </View>
-</View>
+      <View style={s.summaryRow}>
+        <View style={[s.summaryCard, { backgroundColor: "#8B1A1A", borderColor: "#8B1A1A" }]}>
+          <TrendingUp size={18} color="#FECACA" />
+          <Text style={[s.summaryVal, { color: "#fff" }]}>{records.length}</Text>
+          <Text style={[s.summaryLabel, { color: "#FECACA" }]}>Total</Text>
+        </View>
+        <View style={[s.summaryCard, { backgroundColor: "#065F46", borderColor: "#065F46" }]}>
+          <CheckCircle size={18} color="#6EE7B7" />
+          <Text style={[s.summaryVal, { color: "#fff" }]}>{presentCount}</Text>
+          <Text style={[s.summaryLabel, { color: "#6EE7B7" }]}>Present</Text>
+        </View>
+        <View style={[s.summaryCard, { backgroundColor: "#991B1B", borderColor: "#991B1B" }]}>
+          <XCircle size={18} color="#FCA5A5" />
+          <Text style={[s.summaryVal, { color: "#fff" }]}>{records.length - presentCount}</Text>
+          <Text style={[s.summaryLabel, { color: "#FCA5A5" }]}>Absent</Text>
+        </View>
+      </View>
 
       {/* ── List ── */}
       <FlatList
@@ -180,7 +271,6 @@ export default function AttendanceScreen() {
               onPress={() => openSheet(item)}
               activeOpacity={0.75}
             >
-              
               <View style={s.cardBody}>
                 <View style={s.cardTop}>
                   <View style={s.cardIconRow}>
@@ -223,16 +313,10 @@ export default function AttendanceScreen() {
         animationType="none"
         onRequestClose={closeSheet}
       >
-        {/* Backdrop */}
         <Animated.View style={[s.backdrop, { opacity: fadeAnim }]}>
-          <TouchableOpacity
-            style={{ flex: 1 }}
-            activeOpacity={1}
-            onPress={closeSheet}
-          />
+          <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={closeSheet} />
         </Animated.View>
 
-        {/* Sheet */}
         {selected && (
           <View style={s.sheetWrapper} pointerEvents="box-none">
             <Animated.View
@@ -242,10 +326,8 @@ export default function AttendanceScreen() {
                 { transform: [{ translateY: slideAnim }] },
               ]}
             >
-              {/* Handle */}
               <View style={[s.sheetHandle, { backgroundColor: C.border }]} />
 
-              {/* Close */}
               <TouchableOpacity
                 style={[s.closeBtn, { backgroundColor: C.inputBg }]}
                 onPress={closeSheet}
@@ -253,7 +335,6 @@ export default function AttendanceScreen() {
                 <X size={18} color={C.muted} />
               </TouchableOpacity>
 
-              {/* Status icon */}
               <View style={[
                 s.sheetIconWrap,
                 { backgroundColor: selected.timeIn ? "#D1FAE5" : "#FEE2E2" },
@@ -273,7 +354,6 @@ export default function AttendanceScreen() {
                 {formatDate(selected.date)}
               </Text>
 
-              {/* Detail rows */}
               <View style={[s.detailBox, { backgroundColor: C.background, borderColor: C.border }]}>
                 <View style={[s.detailRow, { borderBottomColor: C.border }]}>
                   <View style={s.detailLeft}>
@@ -332,22 +412,16 @@ export default function AttendanceScreen() {
 
 const s = StyleSheet.create({
   container:         { flex: 1 },
-  centered:          { flex: 1, alignItems: "center", justifyContent: "center" },
-
   header:            { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12 },
   title:             { fontSize: 24, fontWeight: "800" },
   subtitle:          { fontSize: 13, marginTop: 2 },
-
   summaryRow:        { flexDirection: "row", paddingHorizontal: 20, gap: 12, marginBottom: 16 },
   summaryCard:       { flex: 1, borderRadius: 16, borderWidth: 1, paddingVertical: 14, alignItems: "center", gap: 4 },
   summaryVal:        { fontSize: 20, fontWeight: "800" },
   summaryLabel:      { fontSize: 11, fontWeight: "600" },
-
   list:              { paddingHorizontal: 20, paddingBottom: 24 },
   emptyText:         { textAlign: "center", marginTop: 40, fontSize: 14 },
-
   card:              { borderRadius: 18, borderWidth: 1, marginBottom: 10, flexDirection: "row", alignItems: "center", overflow: "hidden" },
- 
   cardBody:          { flex: 1, padding: 14, gap: 8 },
   cardTop:           { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   cardIconRow:       { flexDirection: "row", alignItems: "center", gap: 6 },
@@ -357,7 +431,6 @@ const s = StyleSheet.create({
   timePill:          { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 },
   timePillText:      { fontSize: 11, fontWeight: "600" },
   tapHint:           { fontSize: 22, paddingRight: 14, fontWeight: "300" },
-
   backdrop:          { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.5)" },
   sheetWrapper:      { flex: 1, justifyContent: "flex-end" },
   sheet:             { borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 24, paddingBottom: 40, alignItems: "center", shadowColor: "#000", shadowOpacity: 0.2, shadowRadius: 20, elevation: 20 },
