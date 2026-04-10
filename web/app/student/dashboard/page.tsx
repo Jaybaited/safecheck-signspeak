@@ -71,7 +71,7 @@ function toActivityItem(record: AttendanceRecord) {
       return {
         id:    record.id,
         title: 'Checked In (Late)',
-        time:  formatTime(record.timeIn),
+        time:  formatTime(record.timeIn ?? undefined),
         date:  formatDate(record.date),
         icon:  Clock,
         color: 'text-[#8B6818]  dark:text-[#E8C96A]',
@@ -81,7 +81,7 @@ function toActivityItem(record: AttendanceRecord) {
       return {
         id:    record.id,
         title: 'Checked In',
-        time:  formatTime(record.timeIn),
+        time:  formatTime(record.timeIn ?? undefined),
         date:  formatDate(record.date),
         icon:  CheckCircle,
         color: 'text-emerald-600 dark:text-green-400',
@@ -105,7 +105,7 @@ function getTodayStatus(record: AttendanceRecord | null) {
   if (record.status === 'LATE') {
     return {
       label:     'Late',
-      sub:       `Checked in at ${formatTime(record.timeIn)}`,
+      sub:       `Checked in at ${formatTime(record.timeIn ?? undefined)}`,
       icon:      Clock,
       iconColor: 'text-[#C4972A]  dark:text-[#E8C96A]',
       iconBg:    'bg-[#C4972A]/15 dark:bg-[#C4972A]/10',
@@ -125,7 +125,7 @@ function getTodayStatus(record: AttendanceRecord | null) {
   // PRESENT
   return {
     label:     'Present',
-    sub:       `Checked in at ${formatTime(record.timeIn)}`,
+    sub:       `Checked in at ${formatTime(record.timeIn ?? undefined)}`,
     icon:      CheckCircle,
     iconColor: 'text-[#C4972A]  dark:text-[#E8C96A]',
     iconBg:    'bg-[#C4972A]/15 dark:bg-[#C4972A]/10',

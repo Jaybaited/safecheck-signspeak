@@ -64,7 +64,7 @@ export default function StudentAttendancePage() {
         api.getStudentAttendance(studentId),
       ]);
       setStats(statsData);
-      setAttendance(attendanceData);
+      setAttendance(attendanceData as AttendanceRecord[]);
     } catch (error) {
       console.error('Failed to fetch attendance data:', error);
     } finally {

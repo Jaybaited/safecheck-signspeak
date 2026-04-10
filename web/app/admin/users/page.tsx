@@ -326,7 +326,7 @@ export default function ManageUsersPage() {
 
                     {/* Grade */}
                     <td className="py-4 text-slate-500 dark:text-gray-400 text-sm">
-                      {formatGradeLevel(userData.gradeLevel)}
+                      {formatGradeLevel(userData.gradeLevel ?? null)}
                     </td>
 
                     {/* RFID */}
