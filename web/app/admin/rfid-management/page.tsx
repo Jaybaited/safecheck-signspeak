@@ -89,7 +89,7 @@ export default function RfidManagement() {
         studentName: `${s.firstName} ${s.lastName}`,
         gradeLevel: formatGradeLevel(s.gradeLevel ?? null),
         status: s.rfidCard ? 'active' : 'unassigned',
-        lastScanned: formatDate(s.updatedAt ?? s.createdAt),
+        lastScanned: formatDate(s.createdAt),
       }));
 
       setRfidCards(cards);
