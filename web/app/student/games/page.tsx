@@ -10,6 +10,7 @@ import StudentSidebar from '@/components/student/StudentSidebar';
 import ThemeToggle from '@/components/ThemeToggle';
 import FSLCamera from '@/components/fsl/FSLCamera';
 import type { FSLPrediction } from '@/types/fsl';
+import { studentStorage } from '@/lib/storage';
 
 interface User {
   id: string;
@@ -36,8 +37,8 @@ interface GameResult {
   timeUsed?: number;
 }
 
-const SPEED_DURATION = 60; // seconds
-const STREAK_TARGET  = 10; // letters to complete for streak mode
+const SPEED_DURATION = 60;
+const STREAK_TARGET  = 10;
 
 export default function FSLGamesPage() {
   const [user, setUser]             = useState<User | null>(null);
@@ -64,7 +65,8 @@ export default function FSLGamesPage() {
       const parsedUser = JSON.parse(userData) as User;
       if (parsedUser.role !== 'STUDENT') { router.push('/login'); return; }
       setUser(parsedUser);
-      const saved = localStorage.getItem('fsl_highscore');
+      // ✅ Student-scoped high score
+      const saved = studentStorage.get(parsedUser.id, 'fsl_highscore');
       if (saved) setHighScore(parseInt(saved));
     } catch { router.push('/login'); }
     finally { setAuthLoading(false); }
@@ -78,13 +80,14 @@ export default function FSLGamesPage() {
   const endGame = useCallback((finalScore: number, mode: string, completed: string[], time?: number) => {
     if (timerRef.current) clearInterval(timerRef.current);
     setIsActive(false);
-    if (finalScore > highScore) {
+    if (finalScore > highScore && user) {
       setHighScore(finalScore);
-      localStorage.setItem('fsl_highscore', String(finalScore));
+      // ✅ Student-scoped save
+      studentStorage.set(user.id, 'fsl_highscore', String(finalScore));
     }
     setResult({ score: finalScore, mode, lettersCompleted: completed, timeUsed: time });
     setGameMode('result');
-  }, [highScore]);
+  }, [highScore, user]);
 
   // Speed mode timer
   useEffect(() => {
@@ -126,8 +129,8 @@ export default function FSLGamesPage() {
     setFlash('correct');
     setTimeout(() => setFlash(null), 400);
 
-    const newScore  = score + Math.round(prediction.confidence * 100);
-    const newStreak = streak + 1;
+    const newScore     = score + Math.round(prediction.confidence * 100);
+    const newStreak    = streak + 1;
     const newCompleted = [...lettersCompleted, currentLetter];
 
     setScore(newScore);
@@ -258,9 +261,9 @@ export default function FSLGamesPage() {
               <h3 className="font-semibold text-slate-900 dark:text-white mb-4">How to Play</h3>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {[
-                  { step: '1', title: 'Pick a Game',    desc: 'Choose Speed Challenge or Letter Streak above' },
+                  { step: '1', title: 'Pick a Game',     desc: 'Choose Speed Challenge or Letter Streak above' },
                   { step: '2', title: 'Sign the Letter', desc: 'Show your hand to the camera and sign the displayed letter' },
-                  { step: '3', title: 'Score Points',   desc: 'Each correct sign earns points — higher confidence = more points' },
+                  { step: '3', title: 'Score Points',    desc: 'Each correct sign earns points — higher confidence = more points' },
                 ].map(({ step, title, desc }) => (
                   <div key={step} className="flex gap-3">
                     <div className="w-8 h-8 bg-purple-100 dark:bg-purple-500/10 rounded-full flex items-center justify-center text-purple-600 dark:text-purple-400 font-bold text-sm shrink-0">
@@ -293,15 +296,12 @@ export default function FSLGamesPage() {
               {/* Timer (speed mode only) */}
               {gameMode === 'speed' && (
                 <div className={`bg-white dark:bg-gray-900 border rounded-xl p-5 shadow-sm dark:shadow-none text-center transition-colors duration-200 ${
-                  timeLeft <= 10
-                    ? 'border-red-400 dark:border-red-500'
-                    : 'border-slate-200 dark:border-gray-800'
+                  timeLeft <= 10 ? 'border-red-400 dark:border-red-500' : 'border-slate-200 dark:border-gray-800'
                 }`}>
                   <p className="text-sm text-slate-500 dark:text-gray-400 mb-1">Time Left</p>
                   <p className={`text-4xl font-bold ${timeLeft <= 10 ? 'text-red-500 animate-pulse' : 'text-orange-500'}`}>
                     {timeLeft}s
                   </p>
-                  {/* Timer bar */}
                   <div className="w-full bg-slate-100 dark:bg-gray-800 rounded-full h-2 mt-3">
                     <div
                       className={`h-2 rounded-full transition-all duration-1000 ${timeLeft <= 10 ? 'bg-red-500' : 'bg-orange-500'}`}
@@ -311,7 +311,7 @@ export default function FSLGamesPage() {
                 </div>
               )}
 
-              {/* Streak (streak mode) */}
+              {/* Streak (streak mode only) */}
               {gameMode === 'streak' && (
                 <div className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 rounded-xl p-5 shadow-sm dark:shadow-none text-center transition-colors duration-200">
                   <p className="text-sm text-slate-500 dark:text-gray-400 mb-1">Progress</p>
@@ -372,7 +372,6 @@ export default function FSLGamesPage() {
         {/* RESULT SCREEN */}
         {gameMode === 'result' && result && (
           <div className="max-w-lg mx-auto space-y-6">
-            {/* Result Card */}
             <div className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 rounded-2xl p-8 shadow-sm dark:shadow-none text-center transition-colors duration-200">
               <Trophy className={`w-16 h-16 mx-auto mb-4 ${result.score >= highScore ? 'text-yellow-500' : 'text-slate-400 dark:text-gray-500'}`} />
 
@@ -423,7 +422,6 @@ export default function FSLGamesPage() {
               </div>
             </div>
 
-            {/* Letters completed list */}
             {result.lettersCompleted.length > 0 && (
               <div className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 rounded-xl p-5 shadow-sm dark:shadow-none transition-colors duration-200">
                 <p className="text-sm font-semibold text-slate-700 dark:text-gray-300 mb-3">
@@ -444,4 +442,3 @@ export default function FSLGamesPage() {
     </div>
   );
 }
-

@@ -3,21 +3,9 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { predictSign } from '@/lib/fsl/predict';
 import type { FSLPrediction } from '@/types/fsl';
 
-// MediaPipe types (avoids any)
-interface HandLandmark {
-  x: number;
-  y: number;
-  z: number;
-}
-
-interface HandsResults {
-  multiHandLandmarks?: HandLandmark[][];
-}
-
-interface MediaPipeCamera {
-  start: () => Promise<void>;
-  stop: () => void;
-}
+interface HandLandmark { x: number; y: number; z: number; }
+interface HandsResults { multiHandLandmarks?: HandLandmark[][]; }
+interface MediaPipeCamera { start: () => Promise<void>; stop: () => void; }
 
 interface FSLCameraProps {
   targetLetter?: string;
@@ -25,46 +13,125 @@ interface FSLCameraProps {
   isActive?: boolean;
 }
 
+// ─── Tuning constants ───────────────────────────────────────────
+const CONFIDENCE_THRESHOLD = 0.75;  // minimum to count as a match
+const INSTANT_THRESHOLD    = 0.85;  // fires immediately, no lock needed
+const POLL_INTERVAL_MS     = 150;   // how often to poll MediaPipe (ms)
+const LOCK_DURATION_MS     = 800;   // hold duration for 75–85% confidence
+const MAX_MISS_TOLERANCE   = 2;     // bad frames allowed before lock resets
+// ────────────────────────────────────────────────────────────────
+
 export default function FSLCamera({ targetLetter, onCorrect, isActive = true }: FSLCameraProps) {
   const videoRef        = useRef<HTMLVideoElement>(null);
   const cameraRef       = useRef<MediaPipeCamera | null>(null);
   const lastPredictTime = useRef(0);
 
-  const [prediction, setPrediction]   = useState<FSLPrediction | null>(null);
-  const [handVisible, setHandVisible] = useState(false);
-  const [isLoading, setIsLoading]     = useState(true);
+  // ── Stable refs — prevents MediaPipe from restarting on parent re-renders ──
+  const onCorrectRef    = useRef(onCorrect);
+  const targetLetterRef = useRef(targetLetter);
+  useEffect(() => { onCorrectRef.current    = onCorrect;     }, [onCorrect]);
+  useEffect(() => { targetLetterRef.current = targetLetter;  }, [targetLetter]);
+  // ──────────────────────────────────────────────────────────────────────────
+
+  // Lock tracking (only used for 75–85% range)
+  const lockStartTime = useRef<number | null>(null);
+  const lockLetter    = useRef<string | null>(null);
+  const firedRef      = useRef(false);
+  const missCountRef  = useRef(0);
+
+  const [prediction, setPrediction]     = useState<FSLPrediction | null>(null);
+  const [handVisible, setHandVisible]   = useState(false);
+  const [isLoading, setIsLoading]       = useState(true);
+  const [lockProgress, setLockProgress] = useState(0);
 
   const isCorrect = !!(
     prediction &&
     targetLetter &&
     prediction.sign === targetLetter &&
-    prediction.confidence >= 0.65
+    prediction.confidence >= CONFIDENCE_THRESHOLD
   );
 
+  // Reset lock when target letter changes
+  useEffect(() => {
+    lockStartTime.current = null;
+    lockLetter.current    = null;
+    firedRef.current      = false;
+    missCountRef.current  = 0;
+    setLockProgress(0);
+  }, [targetLetter]);
+
+  // Stable callback — reads props via refs, never recreated
   const onResults = useCallback(async (results: HandsResults) => {
     if (!results.multiHandLandmarks?.length) {
       setHandVisible(false);
+      lockStartTime.current = null;
+      lockLetter.current    = null;
+      firedRef.current      = false;
+      missCountRef.current  = 0;
+      setLockProgress(0);
       return;
     }
     setHandVisible(true);
 
     const now = Date.now();
-    if (now - lastPredictTime.current < 500) return;
+    if (now - lastPredictTime.current < POLL_INTERVAL_MS) return;
     lastPredictTime.current = now;
 
     const landmarks = results.multiHandLandmarks[0]
       .flatMap(({ x, y, z }) => [x, y, z]);
 
+    const currentTarget  = targetLetterRef.current;
+    const currentCorrect = onCorrectRef.current;
+
     try {
       const result = await predictSign(landmarks);
       setPrediction(result);
-      if (targetLetter && result.sign === targetLetter && result.confidence >= 0.65) {
-        onCorrect?.(result);
+
+      const isMatch = currentTarget &&
+        result.sign === currentTarget &&
+        result.confidence >= CONFIDENCE_THRESHOLD;
+
+      if (isMatch) {
+        missCountRef.current = 0;
+
+        // ── Instant recognition for high confidence ──
+        if (result.confidence >= INSTANT_THRESHOLD && !firedRef.current) {
+          firedRef.current = true;
+          setLockProgress(100);
+          currentCorrect?.(result);
+          return;
+        }
+
+        // ── Lock/hold for 75–85% confidence range ──
+        if (lockLetter.current !== currentTarget) {
+          lockStartTime.current = now;
+          lockLetter.current    = currentTarget!;
+          firedRef.current      = false;
+        }
+
+        const elapsed  = now - (lockStartTime.current ?? now);
+        const progress = Math.min((elapsed / LOCK_DURATION_MS) * 100, 100);
+        setLockProgress(progress);
+
+        if (elapsed >= LOCK_DURATION_MS && !firedRef.current) {
+          firedRef.current = true;
+          setLockProgress(100);
+          currentCorrect?.(result);
+        }
+      } else {
+        missCountRef.current += 1;
+        if (missCountRef.current >= MAX_MISS_TOLERANCE) {
+          lockStartTime.current = null;
+          lockLetter.current    = null;
+          firedRef.current      = false;
+          missCountRef.current  = 0;
+          setLockProgress(0);
+        }
       }
     } catch (err) {
       console.error('FSL prediction error:', err);
     }
-  }, [targetLetter, onCorrect]);
+  }, []); // ← empty deps — stable forever, reads props via refs
 
   useEffect(() => {
     if (!videoRef.current || !isActive) return;
@@ -100,11 +167,8 @@ export default function FSLCamera({ targetLetter, onCorrect, isActive = true }: 
     };
 
     initMediaPipe();
-
-    return () => {
-      cameraRef.current?.stop();
-    };
-  }, [isActive, onResults]);
+    return () => { cameraRef.current?.stop(); };
+  }, [isActive, onResults]); // onResults is stable — runs only once
 
   return (
     <div className="relative w-full max-w-lg mx-auto">
@@ -141,6 +205,16 @@ export default function FSLCamera({ targetLetter, onCorrect, isActive = true }: 
             Sign: {targetLetter}
           </div>
         )}
+
+        {/* Lock Progress Bar — only shown for 75–85% range */}
+        {lockProgress > 0 && lockProgress < 100 && (
+          <div className="absolute bottom-0 left-0 right-0 h-2 bg-black/30">
+            <div
+              className="h-2 bg-green-400 transition-all duration-150"
+              style={{ width: `${lockProgress}%` }}
+            />
+          </div>
+        )}
       </div>
 
       {/* Prediction Result */}
@@ -154,12 +228,20 @@ export default function FSLCamera({ targetLetter, onCorrect, isActive = true }: 
             <div className="text-left">
               <p className="text-sm text-gray-500">Confidence</p>
               <p className={`text-lg font-semibold
-                ${prediction.confidence >= 0.65 ? 'text-green-600' : 'text-orange-500'}`}>
+                ${prediction.confidence >= CONFIDENCE_THRESHOLD ? 'text-green-600' : 'text-orange-500'}`}>
                 {(prediction.confidence * 100).toFixed(1)}%
               </p>
             </div>
-            {isCorrect && <span className="text-3xl">✅</span>}
+            {isCorrect && lockProgress === 100 && <span className="text-3xl">✅</span>}
           </div>
+
+          {/* Hold it — only shown for 75–85% range */}
+          {isCorrect && lockProgress > 0 && lockProgress < 100 && (
+            <p className="text-xs text-green-600 mt-2 font-medium animate-pulse">
+              Hold it... {Math.round(lockProgress)}%
+            </p>
+          )}
+
           {targetLetter && !isCorrect && (
             <p className="text-xs text-gray-400 mt-2">
               Keep trying! Target:{' '}

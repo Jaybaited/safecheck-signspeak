@@ -7,6 +7,7 @@ import StudentSidebar from '@/components/student/StudentSidebar';
 import ThemeToggle from '@/components/ThemeToggle';
 import FSLCamera from '@/components/fsl/FSLCamera';
 import type { FSLPrediction } from '@/types/fsl';
+import { studentStorage } from '@/lib/storage'; // ✅ import
 
 interface User {
   id: string;
@@ -70,6 +71,13 @@ export default function FSLLearningPage() {
       const parsedUser = JSON.parse(userData) as User;
       if (parsedUser.role !== 'STUDENT') { router.push('/login'); return; }
       setUser(parsedUser);
+
+      // ✅ Load this student's completed letters from localStorage
+      const saved = studentStorage.get(parsedUser.id, 'fsl_completed');
+      if (saved) {
+        const letters = JSON.parse(saved) as string[];
+        setCompleted(new Set(letters));
+      }
     } catch { router.push('/login'); }
     finally { setLoading(false); }
   }, [router]);
@@ -80,11 +88,18 @@ export default function FSLLearningPage() {
     router.push('/login');
   };
 
-  const handleCorrect = (prediction: FSLPrediction) => {
-    if (!selectedLetter) return;
-    setLastResult(prediction);
-    setCompleted((prev) => new Set([...prev, selectedLetter]));
-  };
+ // Replace handleCorrect in fsl/page.tsx with this:
+const handleCorrect = (prediction: FSLPrediction) => {
+  if (!selectedLetter || !user) return;
+  setLastResult(prediction);
+  setCompleted((prev) => {
+    const next = new Set([...prev, selectedLetter]);
+    studentStorage.set(user.id, 'fsl_completed', JSON.stringify([...next]));
+    return next;
+  });
+  studentStorage.logFslActivity(user.id); // ✅ Log daily activity
+};
+
 
   const handleSelectLetter = (letter: string) => {
     setSelected(letter);
@@ -115,10 +130,8 @@ export default function FSLLearningPage() {
               Practice Filipino Sign Language alphabet with your camera
             </p>
           </div>
-
           <div className="flex items-center gap-3">
             <ThemeToggle />
-            {/* Mode Toggle */}
             <div className="flex gap-1 bg-white dark:bg-gray-800 border border-slate-200 dark:border-gray-700 rounded-lg p-1 shadow-sm dark:shadow-none">
               <button
                 onClick={() => setMode('lessons')}
@@ -182,13 +195,9 @@ export default function FSLLearningPage() {
                       : 'border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:border-purple-400 shadow-sm dark:shadow-none'
                   }`}
                 >
-                  {isDone && (
-                    <CheckCircle className="absolute top-2 right-2 w-4 h-4 text-emerald-500" />
-                  )}
+                  {isDone && <CheckCircle className="absolute top-2 right-2 w-4 h-4 text-emerald-500" />}
                   <div className={`text-3xl font-bold mb-1 ${
-                    isDone
-                      ? 'text-emerald-600 dark:text-emerald-400'
-                      : 'text-slate-900 dark:text-white'
+                    isDone ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-900 dark:text-white'
                   }`}>
                     {letter}
                   </div>
@@ -309,4 +318,3 @@ export default function FSLLearningPage() {
     </div>
   );
 }
-
