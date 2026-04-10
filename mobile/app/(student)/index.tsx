@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
-  View, Text, StyleSheet, ScrollView,
-  ActivityIndicator, RefreshControl, TouchableOpacity, Dimensions,
+  View, Text, StyleSheet, ScrollView, Animated,
+  RefreshControl, TouchableOpacity, Dimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
@@ -40,6 +40,130 @@ const getGreeting = () => {
 const getInitials = (first?: string, last?: string) =>
   `${first?.[0] ?? ""}${last?.[0] ?? ""}`.toUpperCase();
 
+// ── Skeleton Box Component ─────────────────────────────────────────
+function SkeletonBox({
+  width: w = "100%",
+  height = 16,
+  borderRadius = 8,
+  style,
+}: {
+  width?: number | string;
+  height?: number;
+  borderRadius?: number;
+  style?: any;
+}) {
+  const { resolvedTheme } = useThemeStore();
+  const C = getColors(resolvedTheme);
+  const shimmer = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmer, { toValue: 1, duration: 900, useNativeDriver: true }),
+        Animated.timing(shimmer, { toValue: 0, duration: 900, useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+
+  const opacity = shimmer.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.3, 0.8],
+  });
+
+  return (
+    <Animated.View
+      style={[{ width: w as any, height, borderRadius, backgroundColor: C.border, opacity }, style]}
+    />
+  );
+}
+
+// ── Skeleton Screen ────────────────────────────────────────────────
+function DashboardSkeleton() {
+  const { resolvedTheme } = useThemeStore();
+  const C = getColors(resolvedTheme);
+
+  return (
+    <ScrollView
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={{ paddingBottom: 32 }}
+    >
+      {/* Header skeleton */}
+      <View style={[s.header, { marginBottom: 8 }]}>
+        <View style={{ gap: 8 }}>
+          <SkeletonBox width={100} height={13} borderRadius={6} />
+          <SkeletonBox width={180} height={22} borderRadius={8} />
+        </View>
+        <SkeletonBox width={46} height={46} borderRadius={23} />
+      </View>
+
+      {/* Hero banner skeleton */}
+      <View style={[s.heroBanner, { backgroundColor: C.card }]}>
+        <View style={{ gap: 10, flex: 1 }}>
+          <SkeletonBox width={120} height={12} borderRadius={6} />
+          <SkeletonBox width={80} height={22} borderRadius={8} />
+          <SkeletonBox width={160} height={11} borderRadius={6} />
+        </View>
+        <View style={{ flexDirection: "row", gap: 12 }}>
+          <View style={{ alignItems: "center", gap: 6 }}>
+            <SkeletonBox width={24} height={10} borderRadius={4} />
+            <SkeletonBox width={50} height={18} borderRadius={6} />
+          </View>
+          <View style={{ alignItems: "center", gap: 6 }}>
+            <SkeletonBox width={24} height={10} borderRadius={4} />
+            <SkeletonBox width={50} height={18} borderRadius={6} />
+          </View>
+        </View>
+      </View>
+
+      {/* Quick actions skeleton */}
+      <SkeletonBox width={120} height={16} borderRadius={6} style={{ marginHorizontal: 20, marginBottom: 12 }} />
+      <View style={s.quickRow}>
+        {[1, 2, 3].map((i) => (
+          <View key={i} style={{ flex: 1, borderRadius: 20, overflow: "hidden" }}>
+            <SkeletonBox width="100%" height={90} borderRadius={20} />
+          </View>
+        ))}
+      </View>
+
+      {/* Feature banner skeleton */}
+      <View style={[s.featureBanner, { borderColor: C.border, marginBottom: 24 }]}>
+        <View style={{ gap: 8, flex: 1 }}>
+          <SkeletonBox width="60%" height={18} borderRadius={8} />
+          <SkeletonBox width="90%" height={12} borderRadius={6} />
+          <SkeletonBox width="80%" height={12} borderRadius={6} />
+          <SkeletonBox width={90} height={34} borderRadius={20} style={{ marginTop: 4 }} />
+        </View>
+        <SkeletonBox width={100} height={100} borderRadius={12} style={{ marginLeft: 8 }} />
+      </View>
+
+      {/* Recent attendance skeleton */}
+      <SkeletonBox width={160} height={16} borderRadius={6} style={{ marginHorizontal: 20, marginBottom: 12 }} />
+      <View style={[s.card, { backgroundColor: C.card, gap: 0 }]}>
+        {[1, 2, 3, 4, 5].map((i) => (
+          <View
+            key={i}
+            style={[
+              s.recordRow,
+              { borderBottomColor: C.border },
+              i === 5 && { borderBottomWidth: 0 },
+            ]}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <SkeletonBox width={8} height={8} borderRadius={4} />
+              <SkeletonBox width={110} height={13} borderRadius={6} />
+            </View>
+            <View style={{ alignItems: "flex-end", gap: 6 }}>
+              <SkeletonBox width={90} height={22} borderRadius={20} />
+              <SkeletonBox width={90} height={22} borderRadius={20} />
+            </View>
+          </View>
+        ))}
+      </View>
+    </ScrollView>
+  );
+}
+
+// ── Main Dashboard ─────────────────────────────────────────────────
 export default function StudentDashboard() {
   const { user, token } = useAuthStore();
   const router = useRouter();
@@ -90,11 +214,13 @@ export default function StudentDashboard() {
 
   const isPresent = today?.timeIn != null;
 
+  // ── Show skeleton while loading ──
   if (loading) {
     return (
-      <View style={[s.centered, { backgroundColor: C.background }]}>
-        <ActivityIndicator size="large" color={C.primary} />
-      </View>
+      <SafeAreaView style={[s.container, { backgroundColor: C.background }]}>
+        <StatusBar style={C.statusBar} />
+        <DashboardSkeleton />
+      </SafeAreaView>
     );
   }
 
@@ -184,37 +310,35 @@ export default function StudentDashboard() {
         </View>
 
         {/* ── FSL Feature Banner ── */}
-<TouchableOpacity
-  style={[s.featureBanner, {
-    backgroundColor: resolvedTheme === "dark" ? "#2D1A0A" : "#FFF0E6",
-    borderColor: resolvedTheme === "dark" ? "#4A2A0A" : "#F5C6A0",
-  }]}
-  onPress={() => router.push("/(student)/fsl-detection")}
-  activeOpacity={0.88}
->
-  <View style={s.featureLeft}>
-    <Text style={[s.featureTitle, {
-      color: resolvedTheme === "dark" ? "#FECACA" : "#7A2E0E",
-    }]}>
-      Sign Language
-    </Text>
-    <Text style={[s.featureSub, {
-      color: resolvedTheme === "dark" ? "#C4A0A0" : "#92400E",
-    }]}>
-      Practice FSL letters with your camera
-    </Text>
-    <View style={[s.featureBtn, { backgroundColor: C.primary }]}>
-      <Text style={s.featureBtnText}>Start Now</Text>
-    </View>
-  </View>
-
-  {/* ✅ Replace emoji with image */}
-  <Image
-    source={require("../../assets/images/fsl-feature.png")}  // 👈 change filename here
-    style={s.featureImage}
-    resizeMode="contain"
-  />
-</TouchableOpacity>
+        <TouchableOpacity
+          style={[s.featureBanner, {
+            backgroundColor: resolvedTheme === "dark" ? "#2D1A0A" : "#FFF0E6",
+            borderColor: resolvedTheme === "dark" ? "#4A2A0A" : "#F5C6A0",
+          }]}
+          onPress={() => router.push("/(student)/fsl-detection")}
+          activeOpacity={0.88}
+        >
+          <View style={s.featureLeft}>
+            <Text style={[s.featureTitle, {
+              color: resolvedTheme === "dark" ? "#FECACA" : "#7A2E0E",
+            }]}>
+              Sign Language
+            </Text>
+            <Text style={[s.featureSub, {
+              color: resolvedTheme === "dark" ? "#C4A0A0" : "#92400E",
+            }]}>
+              Practice FSL letters with your camera
+            </Text>
+            <View style={[s.featureBtn, { backgroundColor: C.primary }]}>
+              <Text style={s.featureBtnText}>Start Now</Text>
+            </View>
+          </View>
+          <Image
+            source={require("../../assets/images/fsl-feature.png")}
+            style={s.featureImage}
+            resizeMode="contain"
+          />
+        </TouchableOpacity>
 
         {/* ── Recent Attendance ── */}
         <View style={s.sectionHeader}>
@@ -269,16 +393,12 @@ export default function StudentDashboard() {
 const s = StyleSheet.create({
   container:       { flex: 1 },
   centered:        { flex: 1, alignItems: "center", justifyContent: "center" },
-
-  // Header
   header:          { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 },
   headerLeft:      { gap: 2 },
   greeting:        { fontSize: 13 },
   name:            { fontSize: 22, fontWeight: "800" },
   avatar:          { width: 46, height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center" },
   avatarText:      { color: "#fff", fontWeight: "800", fontSize: 16 },
-
-  // Hero Banner — always maroon, no theme needed
   heroBanner:      {
     marginHorizontal: 20, marginTop: 12, marginBottom: 20,
     backgroundColor: "#8B1A1A", borderRadius: 24, padding: 20,
@@ -296,27 +416,19 @@ const s = StyleSheet.create({
   heroTimeLabel:   { color: "#FECACA", fontSize: 10, fontWeight: "700" },
   heroTimeVal:     { color: "#fff", fontSize: 15, fontWeight: "800" },
   heroTimeDivider: { width: 1, height: 36, backgroundColor: "rgba(255,255,255,0.25)" },
-
-  // Quick Actions
   sectionTitle:    { fontSize: 16, fontWeight: "700", paddingHorizontal: 20, marginBottom: 12 },
   sectionHeader:   { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, marginBottom: 12 },
   quickRow:        { flexDirection: "row", paddingHorizontal: 20, gap: 12, marginBottom: 20 },
   quickCard:       { flex: 1, borderRadius: 20, paddingVertical: 18, alignItems: "center", gap: 10, shadowOpacity: 0.2, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 6 },
   quickLabel:      { color: "#fff", fontSize: 12, fontWeight: "700", textAlign: "center", lineHeight: 17 },
-
-  // Feature Banner
   featureBanner:   { marginHorizontal: 20, marginBottom: 24, borderRadius: 22, padding: 20, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderWidth: 1.5 },
   featureLeft:     { gap: 6, flex: 1 },
   featureTitle:    { fontSize: 18, fontWeight: "800" },
   featureSub:      { fontSize: 12, lineHeight: 18 },
   featureBtn:      { marginTop: 8, alignSelf: "flex-start", paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
   featureBtnText:  { color: "#fff", fontWeight: "700", fontSize: 13 },
-  featureImage: { width: 100, height: 100, marginLeft: 8 },
-
-  // Card
+  featureImage:    { width: 100, height: 100, marginLeft: 8 },
   card:            { borderRadius: 20, marginHorizontal: 20, padding: 16, shadowOpacity: 0.06, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
-
-  // Records
   recordRow:       { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 12, borderBottomWidth: 1 },
   recordLeft:      { flexDirection: "row", alignItems: "center", gap: 10 },
   recordDot:       { width: 8, height: 8, borderRadius: 4 },
