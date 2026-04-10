@@ -7,8 +7,11 @@ import os
 import base64
 import cv2
 import mediapipe as mp
+from mediapipe.python.solutions import hands as mp_hands_module
+
 
 app = FastAPI(title="SafeCheck FSL Mobile Inference API")
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -17,18 +20,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 MODEL_PATH  = "./models/fsl_svm.pkl"
 LABELS_PATH = "./models/fsl_labels.pkl"
+
 
 model = None
 le    = None
 
-mp_hands = mp.solutions.hands
-hands    = mp_hands.Hands(
+
+hands = mp_hands_module.Hands(
     static_image_mode=True,
     max_num_hands=1,
     min_detection_confidence=0.5
 )
+
 
 @app.on_event("startup")
 def load_model():
@@ -40,8 +46,10 @@ def load_model():
     else:
         print("⚠️  No model found. Run train_model.py first.")
 
+
 class ImageInput(BaseModel):
     image: str  # base64 encoded image
+
 
 @app.post("/predict-image")
 def predict_image(data: ImageInput):
@@ -76,6 +84,7 @@ def predict_image(data: ImageInput):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/health")
 def health():
