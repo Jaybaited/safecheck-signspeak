@@ -10,7 +10,8 @@ import { useThemeStore } from "../../store/themeStore";
 import { getColors } from "../../lib/theme";
 import { ArrowLeft, CheckCircle, Scan } from "lucide-react-native";
 
-const MOBILE_ML_URL = "http://192.168.1.59:8001";
+// ← UPDATE THIS IP to match your PC's IPv4 (run `ipconfig` in PowerShell to check)
+const MOBILE_ML_URL = "http://192.168.1.30:8001";
 
 const FSL_LETTERS = [
   "A","B","C","D","E","F","G","H","I",
@@ -56,6 +57,7 @@ export default function FSLDetectionScreen() {
   const [lastConfidence, setLastConf]   = useState<number | null>(null);
   const [isCorrect, setIsCorrect]       = useState(false);
   const [isActive, setIsActive]         = useState(false);
+  const [connectionError, setConnectionError] = useState(false); // ← ADDED
   const [liveResult, setLiveResult]     = useState<{
     sign: string | null; confidence: number; detected: boolean;
   } | null>(null);
@@ -69,6 +71,7 @@ export default function FSLDetectionScreen() {
 
   const startDetection = () => {
     setIsActive(true);
+    setConnectionError(false); // ← ADDED: clear error on new start
     intervalRef.current = setInterval(async () => {
       await captureAndCheck();
     }, 1500);
@@ -81,6 +84,7 @@ export default function FSLDetectionScreen() {
     setLastConf(null);
     setIsCorrect(false);
     setLiveResult(null);
+    setConnectionError(false); // ← ADDED
     setTimeout(() => startDetection(), 500);
   };
 
@@ -97,6 +101,7 @@ export default function FSLDetectionScreen() {
         body: JSON.stringify({ image: photo.base64 }),
       });
       const data = await response.json();
+      setConnectionError(false); // ← ADDED: clear error on success
       setLiveResult(data);
       if (data.detected && data.sign === selectedLetterRef.current && data.confidence >= 0.7) {
         stopDetection();
@@ -107,6 +112,8 @@ export default function FSLDetectionScreen() {
       }
     } catch (err) {
       console.error(err);
+      setConnectionError(true); // ← ADDED: show connection error
+      stopDetection();           // ← ADDED: stop spamming failed requests
     }
   };
 
@@ -228,9 +235,25 @@ export default function FSLDetectionScreen() {
               </View>
             </View>
 
+            {/* ── Connection Error Banner ── ADDED */}
+            {connectionError && (
+              <View style={s.errorBanner}>
+                <Text style={s.errorBannerTitle}>⚠️ Cannot connect to ML server</Text>
+                <Text style={s.errorBannerSub}>
+                  Make sure the server is running at:{"\n"}{MOBILE_ML_URL}
+                </Text>
+                <TouchableOpacity
+                  style={s.retryBtn}
+                  onPress={() => selectLetter(selectedLetter)}
+                >
+                  <Text style={s.retryBtnText}>Retry</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
             {/* ── Camera ── */}
             <View style={[s.cameraWrap, { borderColor: isCorrect ? "#10B981" : C.border }]}>
-              <CameraView ref={cameraRef} style={s.camera} facing="front" />
+              <CameraView ref={cameraRef} style={s.camera} facing="front" mute />
 
               {/* Frame guide */}
               <View style={[
@@ -367,6 +390,13 @@ const s = StyleSheet.create({
   tipIconText:    { color: "#fff", fontWeight: "900", fontSize: 22 },
   tipTitle:       { fontWeight: "700", fontSize: 14, marginBottom: 4 },
   tipDesc:        { fontSize: 12, lineHeight: 18 },
+
+  // Error banner — ADDED
+  errorBanner:    { backgroundColor: "#FEE2E2", borderColor: "#EF4444", borderWidth: 1, borderRadius: 14, padding: 16, marginBottom: 16, alignItems: "center", gap: 6 },
+  errorBannerTitle: { color: "#DC2626", fontWeight: "700", fontSize: 14 },
+  errorBannerSub: { color: "#DC2626", fontSize: 12, textAlign: "center", lineHeight: 18 },
+  retryBtn:       { backgroundColor: "#EF4444", paddingVertical: 8, paddingHorizontal: 24, borderRadius: 10, marginTop: 4 },
+  retryBtnText:   { color: "#fff", fontWeight: "700", fontSize: 13 },
 
   // Camera
   cameraWrap:     { borderRadius: 20, overflow: "hidden", height: 300, marginBottom: 16, borderWidth: 2, position: "relative" },

@@ -7,6 +7,7 @@ import { Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useThemeStore } from "../../store/themeStore";
 import { getColors } from "../../lib/theme";
+import Constants from "expo-constants"; // ← ADDED
 
 export default function ParentLayout() {
   const router = useRouter();
@@ -18,6 +19,9 @@ export default function ParentLayout() {
   const responseListener = useRef<any>(null);
 
   useEffect(() => {
+    // Skip in Expo Go — push notifications removed from Expo Go SDK 53+
+   if (Constants.executionEnvironment === "storeClient") return;
+
     notificationListener.current =
       Notifications.addNotificationReceivedListener((notification) => {
         console.log("Notification received:", notification);
