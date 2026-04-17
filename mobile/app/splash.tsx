@@ -60,7 +60,7 @@ export default function SplashScreen() {
     <View style={styles.container}>
       <Animated.View style={{ transform: [{ scale }], opacity }}>
         <Image
-          source={require("../assets/icon.png")}
+          source={require("../assets/logo2.png")}
           style={styles.logo}
           resizeMode="contain"
         />
@@ -72,7 +72,7 @@ export default function SplashScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0F0F23",
+    backgroundColor: "#ffffff",
     alignItems: "center",
     justifyContent: "center",
   },

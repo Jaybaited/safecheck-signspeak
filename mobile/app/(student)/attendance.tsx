@@ -218,32 +218,54 @@ export default function AttendanceScreen() {
     <SafeAreaView style={[s.container, { backgroundColor: C.background }]}>
       <StatusBar style={C.statusBar} />
 
-      {/* ── Header ── */}
-      <View style={s.header}>
-        <Text style={[s.title, { color: C.text }]}>Attendance History</Text>
-        <Text style={[s.subtitle, { color: C.muted }]}>
-          {records.length} total records
-        </Text>
-      </View>
+     {/* ── Header ── */}
+<View style={s.header}>
+  <Text style={[s.title, { color: C.primary }]}>  {/* ← change C.text to C.primary */}
+    Attendance History
+  </Text>
+  <Text style={[s.subtitle, { color: C.textSecondary }]}>
+    {records.length} total records
+  </Text>
+</View>
 
       {/* ── Summary Row ── */}
-      <View style={s.summaryRow}>
-        <View style={[s.summaryCard, { backgroundColor: "#8B1A1A", borderColor: "#8B1A1A" }]}>
-          <TrendingUp size={18} color="#FECACA" />
-          <Text style={[s.summaryVal, { color: "#fff" }]}>{records.length}</Text>
-          <Text style={[s.summaryLabel, { color: "#FECACA" }]}>Total</Text>
-        </View>
-        <View style={[s.summaryCard, { backgroundColor: "#065F46", borderColor: "#065F46" }]}>
-          <CheckCircle size={18} color="#6EE7B7" />
-          <Text style={[s.summaryVal, { color: "#fff" }]}>{presentCount}</Text>
-          <Text style={[s.summaryLabel, { color: "#6EE7B7" }]}>Present</Text>
-        </View>
-        <View style={[s.summaryCard, { backgroundColor: "#991B1B", borderColor: "#991B1B" }]}>
-          <XCircle size={18} color="#FCA5A5" />
-          <Text style={[s.summaryVal, { color: "#fff" }]}>{records.length - presentCount}</Text>
-          <Text style={[s.summaryLabel, { color: "#FCA5A5" }]}>Absent</Text>
-        </View>
-      </View>
+<View style={s.summaryRow}>
+
+  {/* Total — full maroon card */}
+<View style={[s.summaryCard, { 
+  backgroundColor: "#8B1A1A",   // ← full maroon background
+  borderColor: "#8B1A1A",
+  shadowColor: "#8B1A1A",
+  shadowOpacity: 0.4,
+  shadowRadius: 10,
+  elevation: 8,
+}]}>
+  <View style={[s.summaryIconWrap, { backgroundColor: "rgba(255,255,255,0.2)" }]}>
+    <CalendarDays size={18} color="#fff" />
+  </View>
+  <Text style={[s.summaryVal, { color: "#fff" }]}>{records.length}</Text>
+  <Text style={[s.summaryLabel, { color: "#FECACA" }]}>Total</Text>
+</View>
+
+  {/* Present */}
+  <View style={[s.summaryCard, { backgroundColor: C.card, borderColor: C.border }]}>
+    <View style={[s.summaryIconWrap, { backgroundColor: "#DCFCE7" }]}>
+      <CheckCircle size={18} color="#16A34A" />
+    </View>
+    <Text style={[s.summaryVal, { color: C.text }]}>{presentCount}</Text>
+    <Text style={[s.summaryLabel, { color: C.textSecondary }]}>Present</Text>
+  </View>
+
+  {/* Absent */}
+  <View style={[s.summaryCard, { backgroundColor: C.card, borderColor: C.border }]}>
+    <View style={[s.summaryIconWrap, { backgroundColor: "#FEE2E2" }]}>
+      <XCircle size={18} color="#DC2626" />
+    </View>
+    <Text style={[s.summaryVal, { color: C.text }]}>{records.length - presentCount}</Text>
+    <Text style={[s.summaryLabel, { color: C.textSecondary }]}>Absent</Text>
+  </View>
+
+</View>
 
       {/* ── List ── */}
       <FlatList
@@ -263,47 +285,56 @@ export default function AttendanceScreen() {
             No attendance records found.
           </Text>
         }
-        renderItem={({ item }) => {
-          const present = !!item.timeIn;
-          return (
-            <TouchableOpacity
-              style={[s.card, { backgroundColor: C.card, borderColor: C.border }]}
-              onPress={() => openSheet(item)}
-              activeOpacity={0.75}
-            >
-              <View style={s.cardBody}>
-                <View style={s.cardTop}>
-                  <View style={s.cardIconRow}>
-                    {present
-                      ? <CheckCircle size={16} color="#10B981" />
-                      : <XCircle size={16} color="#EF4444" />}
-                    <Text style={[s.cardStatus, { color: present ? "#10B981" : "#EF4444" }]}>
-                      {present ? "Present" : "Absent"}
-                    </Text>
-                  </View>
-                  <Text style={[s.cardDate, { color: C.text }]}>
-                    {formatShortDate(item.date)}
-                  </Text>
-                </View>
-                <View style={s.cardBottom}>
-                  <View style={[s.timePill, { backgroundColor: C.border }]}>
-                    <Clock size={11} color={C.primary} />
-                    <Text style={[s.timePillText, { color: C.primary }]}>
-                      In: {formatTime(item.timeIn)}
-                    </Text>
-                  </View>
-                  <View style={[s.timePill, { backgroundColor: C.inputBg }]}>
-                    <Clock size={11} color={C.subtext} />
-                    <Text style={[s.timePillText, { color: C.subtext }]}>
-                      Out: {formatTime(item.timeOut)}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-              <Text style={[s.tapHint, { color: C.muted }]}>›</Text>
-            </TouchableOpacity>
-          );
-        }}
+        renderItem={({ item, index }) => {
+  const present = !!item.timeIn;
+
+  // Day and month from date
+  const dateObj = new Date(item.date);
+  const day = dateObj.toLocaleDateString("en-PH", { day: "2-digit" });
+  const month = dateObj.toLocaleDateString("en-PH", { month: "short" }).toUpperCase();
+
+  return (
+    <TouchableOpacity
+      style={[s.card, {
+        backgroundColor: C.card,
+        borderColor: C.border,
+      }]}
+      onPress={() => openSheet(item)}
+      activeOpacity={0.75}
+    >
+      {/* LEFT — Date badge */}
+      <View style={[s.dateBadge, { backgroundColor: C.background }]}>
+        <Text style={[s.dateBadgeDay, { color: C.text }]}>{day}</Text>
+        <Text style={[s.dateBadgeMonth, { color: C.textSecondary }]}>{month}</Text>
+      </View>
+
+      {/* MIDDLE — Title + subtitle */}
+      <View style={s.cardMiddle}>
+        <Text style={[s.cardTitle, { color: C.text }]}>
+          Daily Attendance
+        </Text>
+        <Text style={[s.cardSub, { color: C.textSecondary }]}>
+          {present
+            ? `${formatTime(item.timeIn)} • ${formatTime(item.timeOut)}`
+            : "No Record Found"}
+        </Text>
+      </View>
+
+      {/* RIGHT — Status badge */}
+      <View style={[
+        s.statusBadge,
+        { backgroundColor: present ? "#DCFCE7" : "#FEE2E2" }
+      ]}>
+        <Text style={[
+          s.statusBadgeText,
+          { color: present ? "#16A34A" : "#DC2626" }
+        ]}>
+          {present ? "PRESENT" : "ABSENT"}
+        </Text>
+      </View>
+    </TouchableOpacity>
+  );
+}}
       />
 
       {/* ── Detail Modal ── */}
@@ -416,12 +447,74 @@ const s = StyleSheet.create({
   title:             { fontSize: 24, fontWeight: "800" },
   subtitle:          { fontSize: 13, marginTop: 2 },
   summaryRow:        { flexDirection: "row", paddingHorizontal: 20, gap: 12, marginBottom: 16 },
-  summaryCard:       { flex: 1, borderRadius: 16, borderWidth: 1, paddingVertical: 14, alignItems: "center", gap: 4 },
+  summaryCard:       { flex: 1, borderRadius: 16, borderWidth: 1, paddingVertical: 14, alignItems: "center", gap: 6 },
+  summaryIconWrap: {             // ← add this new style
+  width: 36,
+  height: 36,
+  borderRadius: 10,
+  alignItems: "center",
+  justifyContent: "center",
+  marginBottom: 2,
+},
   summaryVal:        { fontSize: 20, fontWeight: "800" },
   summaryLabel:      { fontSize: 11, fontWeight: "600" },
   list:              { paddingHorizontal: 20, paddingBottom: 24 },
   emptyText:         { textAlign: "center", marginTop: 40, fontSize: 14 },
-  card:              { borderRadius: 18, borderWidth: 1, marginBottom: 10, flexDirection: "row", alignItems: "center", overflow: "hidden" },
+  // Records List
+
+card: {
+  flexDirection: "row",
+  alignItems: "center",
+  borderRadius: 16,
+  borderWidth: 1,
+  marginBottom: 10,
+  paddingVertical: 14,
+  paddingHorizontal: 14,
+  gap: 12,
+  shadowColor: "#000",
+  shadowOpacity: 0.05,
+  shadowRadius: 6,
+  shadowOffset: { width: 0, height: 2 },
+  elevation: 2,
+},
+dateBadge: {
+  width: 44,
+  alignItems: "center",
+  justifyContent: "center",
+  borderRadius: 10,
+  paddingVertical: 6,
+},
+dateBadgeDay: {
+  fontSize: 18,
+  fontWeight: "800",
+  lineHeight: 22,
+},
+dateBadgeMonth: {
+  fontSize: 10,
+  fontWeight: "700",
+  letterSpacing: 0.5,
+},
+cardMiddle: {
+  flex: 1,
+  gap: 3,
+},
+cardTitle: {
+  fontSize: 14,
+  fontWeight: "700",
+},
+cardSub: {
+  fontSize: 12,
+  fontWeight: "500",
+},
+statusBadge: {
+  paddingHorizontal: 10,
+  paddingVertical: 5,
+  borderRadius: 20,
+},
+statusBadgeText: {
+  fontSize: 10,
+  fontWeight: "700",
+},
   cardBody:          { flex: 1, padding: 14, gap: 8 },
   cardTop:           { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   cardIconRow:       { flexDirection: "row", alignItems: "center", gap: 6 },

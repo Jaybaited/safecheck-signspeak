@@ -4,14 +4,15 @@
     "slug": "safecheck-signspeak",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/logo2.png",
     "userInterfaceStyle": "dark",
     "scheme": "safecheck",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/logo2.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0F0F23"
+      "backgroundColor": "#0F0F23",
+      "fontColor": "#8B1A1A"
     },
     "ios": {
       "supportsTablet": true,
@@ -23,7 +24,7 @@
     "android": {
       "package": "com.retes.safechecksignspeak",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/logo2.png",
         "backgroundColor": "#0F0F23"
       },
       "edgeToEdgeEnabled": true,

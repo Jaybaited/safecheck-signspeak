@@ -11,7 +11,7 @@ import { ArrowLeft, CheckCircle, Scan } from "lucide-react-native";
 import { FSLCamera } from "../../components/camera/FSLCamera";
 import { capturePhoto } from "../../components/camera/capturePhoto";
 
-const MOBILE_ML_URL = "http://192.168.1.24:8001";
+const MOBILE_ML_URL = "http://192.168.1.8:8001";
 
 const FSL_LETTERS = [
   "A","B","C","D","E","F","G","H","I",

@@ -13,14 +13,17 @@ interface ThemeStore {
 
 const getResolved = (mode: ThemeMode): "light" | "dark" => {
   if (mode === "device") {
-    return Appearance.getColorScheme() === "dark" ? "dark" : "light";
+    // ✅ Add ?? "light" fallback — getColorScheme() can return null
+    //    during app boot before the system theme is ready
+    return (Appearance.getColorScheme() ?? "light") === "dark" ? "dark" : "light";
   }
   return mode;
 };
 
 export const useThemeStore = create<ThemeStore>((set) => ({
   mode: "device",
-  resolvedTheme: getResolved("device"),
+  // ✅ Same fix here — null-safe fallback at initialization
+  resolvedTheme: (Appearance.getColorScheme() ?? "light") === "dark" ? "dark" : "light",
 
   setMode: async (mode) => {
     await SecureStore.setItemAsync("theme_mode", mode);
@@ -30,6 +33,7 @@ export const useThemeStore = create<ThemeStore>((set) => ({
   loadMode: async () => {
     const saved = await SecureStore.getItemAsync("theme_mode");
     const mode = (saved as ThemeMode) ?? "device";
+    // ✅ getResolved now has the null-safe fallback, so this is fine
     set({ mode, resolvedTheme: getResolved(mode) });
   },
 }));

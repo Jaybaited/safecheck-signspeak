@@ -1,8 +1,7 @@
 import { Tabs } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
-  LayoutDashboard, ClipboardList, BookOpen,
-  Megaphone, User,
+  LayoutDashboard, ClipboardList, BookOpen, User,
 } from "lucide-react-native";
 import { useThemeStore } from "../../store/themeStore";
 import { getColors } from "../../lib/theme";
@@ -50,13 +49,13 @@ export default function TeacherLayout() {
           tabBarIcon: ({ color, size }) => <BookOpen color={color} size={size} />,
         }}
       />
+
+      {/* Hidden from tab bar — accessible via router.push from dashboard & profile */}
       <Tabs.Screen
         name="announcements"
-        options={{
-          title: "Announce",
-          tabBarIcon: ({ color, size }) => <Megaphone color={color} size={size} />,
-        }}
+        options={{ href: null }}
       />
+
       <Tabs.Screen
         name="profile"
         options={{

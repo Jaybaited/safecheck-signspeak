@@ -56,11 +56,9 @@ export default function TeacherProfileScreen() {
     ]);
   };
 
-  const menuItems = [
-    { icon: ClipboardList, label: "Mark Attendance",  sub: "Record today's attendance",    onPress: () => router.push("/(teacher)/attendance")    },
-    { icon: BookOpen,      label: "FSL Progress",     sub: "Monitor student FSL scores",   onPress: () => router.push("/(teacher)/fsl")           },
-    { icon: Megaphone,     label: "Announcements",    sub: "Send class announcements",     onPress: () => router.push("/(teacher)/announcements") },
-  ];
+ const menuItems = [
+  { icon: Megaphone, label: "Announcements", sub: "Send class announcements", onPress: () => router.push("/(teacher)/announcements?from=profile") },
+];
 
   return (
     <SafeAreaView style={[s.container, { backgroundColor: C.background }]}>
