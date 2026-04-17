@@ -12,7 +12,7 @@ import { getColors } from "../../lib/theme";
 import { api } from "../../lib/api";
 import {
   ClipboardList, BookOpen, Megaphone,
-  Users, UserCheck, UserX, Clock,
+  Users, UserCheck, UserX, Clock, ChevronRight, Radio,
 } from "lucide-react-native";
 
 interface TeacherStats {
@@ -27,9 +27,10 @@ export default function TeacherDashboard() {
   const { resolvedTheme } = useThemeStore();
   const C = getColors(resolvedTheme);
   const router = useRouter();
+  const isDark = resolvedTheme === "dark";
 
-  const [stats, setStats]           = useState<TeacherStats | null>(null);
-  const [loading, setLoading]       = useState(true);
+  const [stats, setStats] = useState<TeacherStats | null>(null);
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const getGreeting = () => {
@@ -59,195 +60,274 @@ export default function TeacherDashboard() {
     {
       label: "Mark\nAttendance",
       icon: ClipboardList,
-      color: "#8B1A1A",
+      bgColor: "#C85A17",
+      textColor: "#fff",
+      iconColor: "#fff",
       onPress: () => router.push("/(teacher)/attendance"),
     },
     {
       label: "FSL\nProgress",
       icon: BookOpen,
-      color: "#B45309",
+      bgColor: isDark ? "#2a2a2a" : "#ffffff",
+      textColor: isDark ? "#ffffff" : "#1a1a1a",
+      iconColor: "#C85A17",
       onPress: () => router.push("/(teacher)/fsl"),
     },
     {
       label: "Send\nAnnouncement",
       icon: Megaphone,
-      color: "#8B1A1A",
+      bgColor: isDark ? "#2a2a2a" : "#ffffff",
+      textColor: isDark ? "#ffffff" : "#1a1a1a",
+      iconColor: "#C85A17",
       onPress: () => router.push("/(teacher)/announcements"),
     },
   ];
 
   if (loading) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: C.background }}>
-        <StatusBar style={resolvedTheme === "dark" ? "light" : "dark"} />
-        <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-          <ActivityIndicator size="large" color={C.primary} />
-        </View>
+      <SafeAreaView style={[s.flex, { backgroundColor: C.background, justifyContent: "center", alignItems: "center" }]}>
+        <ActivityIndicator size="large" color="#C85A17" />
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: C.background }}>
-      <StatusBar style={resolvedTheme === "dark" ? "light" : "dark"} />
-
+    <SafeAreaView style={[s.flex, { backgroundColor: C.background }]}>
+      <StatusBar style={isDark ? "light" : "dark"} />
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 32 }}
+        contentContainerStyle={s.scroll}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={() => { setRefreshing(true); fetchStats(); }}
-            tintColor="#8B1A1A"
-            colors={["#8B1A1A"]}
+            tintColor="#C85A17"
+            colors={["#C85A17"]}
           />
         }
       >
         {/* ── Header ── */}
-        <View style={s.headerRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={[s.greeting, { color: C.muted }]}>{getGreeting()} 👋</Text>
-            <Text style={[s.name, { color: C.text }]}>
-              {user?.firstName} {user?.lastName}
-            </Text>
-          </View>
-          <View style={[s.avatarCircle, { backgroundColor: "#8B1A1A" }]}>
-            <Text style={s.avatarText}>
-              {user?.firstName?.[0]}{user?.lastName?.[0]}
-            </Text>
-          </View>
-        </View>
+<View style={s.headerRow}>
+  <View style={s.flex}>
+    <Text style={[s.greeting, { color: C.muted }]}>{getGreeting()},</Text>
+    <Text style={[s.headerName, { color: "#8B1A1A" }]}>
+      {user?.firstName} {user?.lastName}
+    </Text>
+    <Text style={[s.headerSub, { color: C.muted }]}>Ready to explore FSL today?</Text>
+  </View>
+  <View style={[s.avatarCircle, { backgroundColor: "#8B1A1A" }]}>
+    <Text style={s.avatarText}>
+      {user?.firstName?.[0]}{user?.lastName?.[0]}
+    </Text>
+  </View>
+</View>
 
-        {/* ── Today's Summary Card ── */}
-        <View style={{ paddingHorizontal: 20, marginBottom: 24 }}>
-          <View style={[s.summaryCard, { backgroundColor: "#8B1A1A" }]}>
-            <View style={{ flex: 1 }}>
-              <Text style={s.summaryCardLabel}>Today's Attendance</Text>
-              <Text style={s.summaryCardValue}>{stats?.presentToday ?? 0}</Text>
-              <Text style={s.summaryCardSub}>students present</Text>
-            </View>
-            <View style={s.summaryDivider} />
-            <View style={s.summaryRight}>
-              <View style={s.summaryStatRow}>
-                <Text style={s.summaryStatVal}>{stats?.totalStudents ?? 0}</Text>
-                <Text style={s.summaryStatLabel}>Total</Text>
-              </View>
-              <View style={s.summaryStatRow}>
-                <Text style={s.summaryStatVal}>{stats?.lateToday ?? 0}</Text>
-                <Text style={s.summaryStatLabel}>Late</Text>
-              </View>
-              <View style={s.summaryStatRow}>
-                <Text style={s.summaryStatVal}>{stats?.absentToday ?? 0}</Text>
-                <Text style={s.summaryStatLabel}>Absent</Text>
-              </View>
-            </View>
-          </View>
-        </View>
+        {/* ── Top Row: Attendance Card LEFT + Quick Access RIGHT ── */}
+        <View style={s.topRow}>
 
-        {/* ── Quick Access ── */}
-        <View style={{ paddingHorizontal: 20, marginBottom: 24 }}>
-          <Text style={[s.sectionTitle, { color: C.text }]}>Quick Access</Text>
-          <View style={s.quickRow}>
+          {/* Today's Attendance Card */}
+<View style={[s.attendanceCard, { backgroundColor: "#8B1A1A" }]}>
+  {/* Top: title only */}
+<View style={s.attendanceCardHeader}>
+  <Text style={s.attendanceTitle}>Today's Attendance</Text>
+</View>
+
+  {/* Session label */}
+  <Text style={s.sessionText}>Session: Morning Academic Period</Text>
+
+  {/* Big number */}
+  <Text style={s.bigNumber}>{stats?.presentToday ?? 0}</Text>
+  <Text style={s.bigNumberLabel}>Students Present</Text>
+
+  {/* Bottom stats row */}
+  <View style={s.attendanceStatsRow}>
+    <View>
+      <Text style={s.attendanceStatLabel}>TOTAL</Text>
+      <Text style={s.attendanceStatValue}>{stats?.totalStudents ?? 0}</Text>
+    </View>
+    <View>
+      <Text style={s.attendanceStatLabel}>LATE</Text>
+      <Text style={s.attendanceStatValue}>{stats?.lateToday ?? 0}</Text>
+    </View>
+    <View>
+      <Text style={s.attendanceStatLabel}>ABSENT</Text>
+      <Text style={s.attendanceStatValue}>{stats?.absentToday ?? 0}</Text>
+    </View>
+  </View>
+</View>
+
+          {/* Quick Access Column */}
+          <View style={s.quickColumn}>
+            <Text style={[s.quickTitle, { color: C.muted }]}>QUICK ACCESS</Text>
             {quickActions.map((item, i) => {
               const Icon = item.icon;
+              const isAccent = item.bgColor === "#C85A17";
               return (
                 <TouchableOpacity
                   key={i}
-                  style={[s.quickCard, { backgroundColor: item.color }]}
+                  style={[
+                    s.quickBtn,
+                    {
+                      backgroundColor: item.bgColor,
+                      borderWidth: isAccent ? 0 : 1,
+                      borderColor: isDark ? "#333" : "#ebebeb",
+                      shadowColor: isAccent ? "#C85A17" : "#000",
+                      shadowOpacity: isAccent ? 0.3 : 0.06,
+                    },
+                  ]}
                   onPress={item.onPress}
-                  activeOpacity={0.85}
+                  activeOpacity={0.8}
                 >
-                  <Icon size={26} color="#fff" />
-                  <Text style={s.quickLabel}>{item.label}</Text>
+                  <Icon size={17} color={item.iconColor} />
+                  <Text style={[s.quickBtnLabel, { color: item.textColor }]}>
+                    {item.label}
+                  </Text>
+                  <ChevronRight size={13} color={isAccent ? "#ffffff99" : "#C85A17"} />
                 </TouchableOpacity>
               );
             })}
           </View>
         </View>
 
-        {/* ── Stat Cards ── */}
-        <View style={{ paddingHorizontal: 20, marginBottom: 24 }}>
+        {/* ── Class Overview ── */}
+        <View style={s.sectionHeader}>
           <Text style={[s.sectionTitle, { color: C.text }]}>Class Overview</Text>
-          <View style={s.statsGrid}>
-            {[
-              { label: "Total Students", value: stats?.totalStudents ?? 0, icon: Users,     color: C.primary  },
-              { label: "Present",        value: stats?.presentToday  ?? 0, icon: UserCheck,  color: "#10B981"  },
-              { label: "Late",           value: stats?.lateToday     ?? 0, icon: Clock,      color: "#F59E0B"  },
-              { label: "Absent",         value: stats?.absentToday   ?? 0, icon: UserX,      color: "#EF4444"  },
-            ].map((card, i) => {
-              const Icon = card.icon;
-              return (
-                <View
-                  key={i}
-                  style={[s.statCard, { backgroundColor: C.card, borderColor: C.border }]}
-                >
-                  <View style={[s.statIconBox, { backgroundColor: card.color + "22" }]}>
-                    <Icon size={20} color={card.color} />
-                  </View>
-                  <Text style={[s.statValue, { color: C.text }]}>{card.value}</Text>
-                  <Text style={[s.statLabel, { color: C.muted }]}>{card.label}</Text>
-                </View>
-              );
-            })}
-          </View>
+          <TouchableOpacity onPress={() => router.push("/(teacher)/attendance")}>
+            <Text style={s.viewAll}>View All Rosters</Text>
+          </TouchableOpacity>
         </View>
 
-        {/* ── About Card ── */}
-        <View style={{ paddingHorizontal: 20 }}>
-          <View style={[s.aboutCard, { backgroundColor: C.card, borderColor: C.border }]}>
-            <View style={[s.aboutIconBox, { backgroundColor: "#8B1A1A22" }]}>
-              <ClipboardList size={20} color="#8B1A1A" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[s.aboutTitle, { color: C.text }]}>SafeCheck – SignSpeak</Text>
-              <Text style={[s.aboutSub, { color: C.muted }]}>
-                RFID-Based Attendance & FSL Recognition System for Philippine School for the Deaf
-              </Text>
-            </View>
-          </View>
+        <View style={s.statsGrid}>
+          {[
+            { label: "TOTAL STUDENTS", value: stats?.totalStudents ?? 0, icon: Users,     color: "#C85A17" },
+            { label: "PRESENT",        value: stats?.presentToday  ?? 0, icon: UserCheck, color: "#10B981" },
+            { label: "LATE",           value: stats?.lateToday     ?? 0, icon: Clock,     color: "#F59E0B" },
+            { label: "ABSENT",         value: stats?.absentToday   ?? 0, icon: UserX,     color: "#EF4444" },
+          ].map((card, i) => {
+            const Icon = card.icon;
+            return (
+              <View
+                key={i}
+                style={[
+                  s.statCard,
+                  {
+                    backgroundColor: isDark ? "#1e1e1e" : "#ffffff",
+                    borderColor: isDark ? "#2a2a2a" : "#f0f0f0",
+                  },
+                ]}
+              >
+                <View style={s.statIconRow}>
+                  <Icon size={17} color={card.color} />
+                  <Text style={[s.statLabel, { color: C.muted }]}>{card.label}</Text>
+                </View>
+                <Text style={[s.statValue, { color: C.text }]}>{card.value}</Text>
+              </View>
+            );
+          })}
         </View>
+
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const s = StyleSheet.create({
+  flex: { flex: 1 },
+  scroll: { paddingBottom: 32 },
+
   // Header
-  headerRow:   { flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingTop: 16, paddingBottom: 20, gap: 12 },
-  greeting:    { fontSize: 13, fontWeight: "500" },
-  name:        { fontSize: 22, fontWeight: "800", marginTop: 2 },
-  avatarCircle:{ width: 46, height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center" },
-  avatarText:  { color: "#fff", fontSize: 16, fontWeight: "800" },
+  headerRow: {
+  flexDirection: "row",
+  alignItems: "center",
+  paddingHorizontal: 16,
+  paddingTop: 16,
+  paddingBottom: 18,
+  gap: 12,
+},
+greeting:    { fontSize: 14, fontWeight: "500" },
+headerName:  { fontSize: 22, fontWeight: "800", marginTop: 2, marginBottom: 2 },
+headerSub:   { fontSize: 12, fontWeight: "400" },
+avatarCircle:{ width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
+avatarText:  { color: "#fff", fontSize: 15, fontWeight: "800" },
 
-  // Summary card
-  summaryCard:     { borderRadius: 20, padding: 20, flexDirection: "row", alignItems: "center", gap: 16 },
-  summaryCardLabel:{ color: "#ffffff99", fontSize: 12, fontWeight: "600", marginBottom: 4 },
-  summaryCardValue:{ color: "#fff", fontSize: 36, fontWeight: "800", lineHeight: 40 },
-  summaryCardSub:  { color: "#ffffff99", fontSize: 12, marginTop: 2 },
-  summaryDivider:  { width: 1, height: "100%", backgroundColor: "#ffffff30" },
-  summaryRight:    { gap: 8 },
-  summaryStatRow:  { alignItems: "flex-end" },
-  summaryStatVal:  { color: "#fff", fontSize: 18, fontWeight: "800" },
-  summaryStatLabel:{ color: "#ffffff99", fontSize: 11 },
+  // Top row
+  topRow: {
+    flexDirection: "row",
+    gap: 10,
+    alignItems: "flex-start",
+    paddingHorizontal: 16,
+  },
 
-  // Section title
-  sectionTitle: { fontSize: 16, fontWeight: "700", marginBottom: 12 },
+  // Attendance card
+ attendanceCard: {
+  flex: 1.1,
+  borderRadius: 18,
+  padding: 14,
+  minHeight: 215,
+},
+attendanceCardHeader: {
+  flexDirection: "row",
+  justifyContent: "space-between",
+  alignItems: "center",
+  marginBottom: 4,
+},
+attendanceTitle:     { color: "#fff", fontSize: 13, fontWeight: "700" },
+
+sessionText:         { color: "#ffffff70", fontSize: 10, marginBottom: 10 },
+bigNumber:           { color: "#fff", fontSize: 48, fontWeight: "900", lineHeight: 52 },
+bigNumberLabel:      { color: "#ffffff70", fontSize: 11, marginTop: 2, marginBottom: 14 },
+attendanceStatsRow:  { flexDirection: "row", gap: 14 },
+attendanceStatLabel: { color: "#ffffff60", fontSize: 9, fontWeight: "600", letterSpacing: 0.5 },
+attendanceStatValue: { color: "#fff", fontSize: 16, fontWeight: "800", marginTop: 2 },
 
   // Quick access
-  quickRow: { flexDirection: "row", gap: 10 },
-  quickCard:{ flex: 1, borderRadius: 18, paddingVertical: 20, alignItems: "center", justifyContent: "center", gap: 10 },
-  quickLabel:{ color: "#fff", fontSize: 12, fontWeight: "700", textAlign: "center" },
+  quickColumn: { flex: 1, gap: 8 },
+  quickTitle: { fontSize: 10, fontWeight: "700", letterSpacing: 0.8, marginBottom: 2 },
+  quickBtn: {
+    borderRadius: 14,
+    paddingVertical: 13,
+    paddingHorizontal: 11,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  quickBtnLabel: { flex: 1, fontSize: 11, fontWeight: "700", lineHeight: 15 },
+
+  // Section header
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    marginTop: 20,
+    marginBottom: 10,
+  },
+  sectionTitle: { fontSize: 15, fontWeight: "700" },
+  viewAll: { fontSize: 12, color: "#C85A17", fontWeight: "600" },
 
   // Stats grid
-  statsGrid:   { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  statCard:    { width: "47.5%", borderRadius: 16, borderWidth: 1, padding: 16, alignItems: "center", gap: 8 },
-  statIconBox: { width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  statsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    paddingHorizontal: 16,
+  },
+  statCard: {
+    width: "47.5%",
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 14,
+    gap: 8,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  statIconRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  statLabel:   { fontSize: 10, fontWeight: "600", letterSpacing: 0.5, flex: 1 },
   statValue:   { fontSize: 28, fontWeight: "800" },
-  statLabel:   { fontSize: 12, fontWeight: "500", textAlign: "center" },
-
-  // About card
-  aboutCard:   { borderRadius: 16, borderWidth: 1, padding: 16, flexDirection: "row", alignItems: "flex-start", gap: 12 },
-  aboutIconBox:{ width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  aboutTitle:  { fontSize: 14, fontWeight: "700", marginBottom: 4 },
-  aboutSub:    { fontSize: 12, lineHeight: 18 },
 });

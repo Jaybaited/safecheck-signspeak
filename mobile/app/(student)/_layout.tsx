@@ -1,5 +1,5 @@
 import { Tabs } from "expo-router";
-import { Home, CalendarDays, HandMetal, User } from "lucide-react-native";
+import { House, CalendarFold, HandFist, User } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useThemeStore } from "../../store/themeStore";
 import { getColors } from "../../lib/theme";
@@ -33,7 +33,7 @@ export default function StudentLayout() {
         name="index"
         options={{
           title: "Home",
-          tabBarIcon: ({ color, size }) => <Home color={color} size={size} />,
+          tabBarIcon: ({ color, size }) => <House color={color} size={size} />,
         }}
       />
       <Tabs.Screen
@@ -41,7 +41,7 @@ export default function StudentLayout() {
         options={{
           title: "Attendance",
           tabBarIcon: ({ color, size }) => (
-            <CalendarDays color={color} size={size} />
+            <CalendarFold color={color} size={size} />
           ),
         }}
       />
@@ -50,7 +50,7 @@ export default function StudentLayout() {
         options={{
           title: "FSL Learning",
           tabBarIcon: ({ color, size }) => (
-            <HandMetal color={color} size={size} />
+            <HandFist color={color} size={size} />
           ),
         }}
       />

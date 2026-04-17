@@ -17,9 +17,9 @@ export default function LoginScreen() {
   const router = useRouter();
   const setAuth = useAuthStore((state) => state.setAuth);
 
-  const [username, setUsername]       = useState("");
-  const [password, setPassword]       = useState("");
-  const [loading, setLoading]         = useState(false);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = async () => {
@@ -39,18 +39,10 @@ export default function LoginScreen() {
       }
 
       switch (user.role) {
-        case "STUDENT":
-          router.replace("/(student)");
-          break;
-        case "PARENT":
-          router.replace("/(parent)");
-          break;
-        case "TEACHER":
-           router.replace("/(teacher)");   
-          break;
-        case "ADMIN":
-          router.replace("/(admin)");
-          break;
+        case "STUDENT":  router.replace("/(student)");  break;
+        case "PARENT":   router.replace("/(parent)");   break;
+        case "TEACHER":  router.replace("/(teacher)");  break;
+        case "ADMIN":    router.replace("/(admin)");    break;
         default:
           Alert.alert("Error", "Unknown role. Contact administrator.");
       }
@@ -70,11 +62,20 @@ export default function LoginScreen() {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <ScrollView
-          contentContainerStyle={{ flexGrow: 1 }}
+          contentContainerStyle={s.scroll}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Top illustration area */}
+          {/* ── Logo ── */}
+          <View style={s.logoWrap}>
+            <Image
+              source={require("../assets/images/SignSpeak-removebg-preview.png")}
+              style={s.logo}
+              resizeMode="contain"
+            />
+          </View>
+
+          {/* ── Illustration ── */}
           <View style={s.illustrationWrap}>
             <Image
               source={require("../assets/images/login-illustration.png")}
@@ -83,7 +84,7 @@ export default function LoginScreen() {
             />
           </View>
 
-          {/* Bottom white card */}
+          {/* ── Card ── */}
           <View style={s.card}>
             {/* Header */}
             <Text style={s.title}>Welcome Back!</Text>
@@ -96,7 +97,7 @@ export default function LoginScreen() {
                 <Ionicons
                   name="person-outline"
                   size={18}
-                  color="#8B1A1A"
+                  color="#C4A0A0"
                   style={s.inputIcon}
                 />
                 <TextInput
@@ -118,11 +119,11 @@ export default function LoginScreen() {
                 <Ionicons
                   name="lock-closed-outline"
                   size={18}
-                  color="#8B1A1A"
+                  color="#C4A0A0"
                   style={s.inputIcon}
                 />
                 <TextInput
-                  style={[s.input, { flex: 1 }]}
+                  style={s.input}
                   placeholder="Enter your password"
                   placeholderTextColor="#C4A0A0"
                   value={password}
@@ -135,9 +136,9 @@ export default function LoginScreen() {
                   style={s.eyeBtn}
                 >
                   <Ionicons
-                    name={showPassword ? "eye-off-outline" : "eye-outline"}
-                    size={18}
-                    color="#8B1A1A"
+                    name={showPassword ? "eye-outline" : "eye-off-outline"}
+                    size={20}
+                    color="#C4A0A0"
                   />
                 </TouchableOpacity>
               </View>
@@ -145,10 +146,10 @@ export default function LoginScreen() {
 
             {/* Sign In Button */}
             <TouchableOpacity
-              style={[s.signInBtn, loading && { opacity: 0.7 }]}
+              style={s.signInBtn}
               onPress={handleLogin}
-              disabled={loading}
               activeOpacity={0.85}
+              disabled={loading}
             >
               {loading ? (
                 <ActivityIndicator color="#fff" />
@@ -167,21 +168,33 @@ export default function LoginScreen() {
 }
 
 const s = StyleSheet.create({
-  container:        { flex: 1, backgroundColor: "#FDF4F4" },
+  container: { flex: 1, backgroundColor: "#FDF4F4" },
+  scroll: { flexGrow: 1 },
 
-  // Illustration
+  // Logo — top center like the reference image
+  logoWrap: {
+    alignItems: "center",
+    paddingTop: 24,
+    paddingBottom: 4,
+  },
+  logo: {
+    width: 140,
+    height: 48,
+  },
+
+  // Illustration — smaller, centered, like the reference
   illustrationWrap: {
-    width,
-    height: height * 0.42,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#FDF4F4",
-    paddingTop: 10,
+    paddingVertical: 8,
   },
-  illustration:     { width: width * 0.82, height: height * 0.38 },
+  illustration: {
+    width: width * 0.55,   // smaller than before (was 0.82)
+    height: height * 0.22, // shorter than before (was 0.38)
+  },
 
-  // Card
-  card:             {
+  // Card — white rounded top card (same as before)
+  card: {
     flex: 1,
     backgroundColor: "#fff",
     borderTopLeftRadius: 40,
@@ -196,27 +209,27 @@ const s = StyleSheet.create({
     elevation: 10,
   },
 
-  title:            {
+  title: {
     color: "#1A0505",
     fontSize: 26,
     fontWeight: "800",
     marginBottom: 6,
   },
-  subtitle:         {
+  subtitle: {
     color: "#7A4040",
     fontSize: 14,
     marginBottom: 24,
   },
 
   // Inputs
-  inputGroup:       { marginBottom: 16 },
-  label:            {
+  inputGroup: { marginBottom: 16 },
+  label: {
     color: "#4A1A1A",
     fontSize: 13,
     fontWeight: "600",
     marginBottom: 6,
   },
-  inputWrapper:     {
+  inputWrapper: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#FDF4F4",
@@ -225,17 +238,17 @@ const s = StyleSheet.create({
     borderRadius: 14,
     paddingHorizontal: 14,
   },
-  inputIcon:        { marginRight: 8 },
-  input:            {
+  inputIcon: { marginRight: 8 },
+  input: {
     flex: 1,
     paddingVertical: 14,
     color: "#1A0505",
     fontSize: 15,
   },
-  eyeBtn:           { paddingLeft: 8, paddingVertical: 4 },
+  eyeBtn: { paddingLeft: 8, paddingVertical: 4 },
 
   // Button
-  signInBtn:        {
+  signInBtn: {
     width: "100%",
     backgroundColor: "#8B1A1A",
     paddingVertical: 16,
@@ -248,10 +261,10 @@ const s = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     elevation: 8,
   },
-  signInText:       { color: "#fff", fontWeight: "800", fontSize: 16 },
+  signInText: { color: "#fff", fontWeight: "800", fontSize: 16 },
 
   // Footer
-  footer:           {
+  footer: {
     textAlign: "center",
     color: "#C4A0A0",
     fontSize: 12,

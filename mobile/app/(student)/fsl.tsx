@@ -98,12 +98,14 @@ export default function FSLScreen() {
         contentContainerStyle={{ paddingBottom: 32 }}
       >
         {/* ── Header ── */}
-        <Animated.View style={[s.header, headerStyle]}>
-          <Text style={[s.title, { color: C.text }]}>FSL Learning</Text>
-          <Text style={[s.subtitle, { color: C.muted }]}>
-            Choose a mode to get started
-          </Text>
-        </Animated.View>
+<Animated.View style={[s.header, headerStyle]}>
+  <Text style={[s.title, { color: C.primary }]}>  {/* ← C.text → C.primary */}
+    FSL Learning
+  </Text>
+  <Text style={[s.subtitle, { color: C.textSecondary }]}>
+    Choose a mode to get started
+  </Text>
+</Animated.View>
 
         {/* ── Top Banner Card ── */}
         <Animated.View style={bannerStyle}>
@@ -145,57 +147,57 @@ export default function FSLScreen() {
           Learning Modes
         </Animated.Text>
 
-        {/* ── Mode Cards Grid ── */}
-        <View style={s.grid}>
-          {MODES.map((mode, index) => {
-            const cardStyle = {
-              opacity: cardAnims[index],
-              transform: [{
-                translateY: cardAnims[index].interpolate({
-                  inputRange: [0, 1], outputRange: [24, 0],
-                }),
-              }],
-            };
-            return (
-              <Animated.View key={index} style={[{ width: CARD_SIZE }, cardStyle]}>
-                <TouchableOpacity
-                  style={[s.modeCard, {
-                    backgroundColor: C.card,
-                    borderColor: C.border,
-                  }]}
-                  onPress={() => router.push(mode.route as any)}
-                  activeOpacity={0.8}
-                >
-                  {/* Illustration */}
-                  <View style={[s.modeImageWrap, { backgroundColor: mode.lightColor }]}>
-                    <Image
-                      source={mode.image}
-                      style={s.modeImage}
-                      resizeMode="contain"
-                    />
-                    <View style={[s.modeBadge, { backgroundColor: mode.color }]}>
-                      <mode.icon size={14} color="#fff" />
-                    </View>
-                  </View>
+       {/* ── Mode Cards Grid ── */}
+<View style={s.grid}>
+  {MODES.map((mode, index) => {
+    const cardStyle = {
+      opacity: cardAnims[index],
+      transform: [{
+        translateY: cardAnims[index].interpolate({
+          inputRange: [0, 1], outputRange: [24, 0],
+        }),
+      }],
+    };
+    const Icon = mode.icon;
+    return (
+      <Animated.View key={mode.label} style={[{ width: "100%" }, cardStyle]}>
+        <TouchableOpacity
+          style={[s.modeCard, { backgroundColor: C.card, borderColor: C.border }]}
+          onPress={() => router.push(mode.route as any)}
+          activeOpacity={0.8}
+        >
+          {/* LEFT — white image area */}
+          <View style={s.modeImageWrap}>
+            <Image
+              source={mode.image}
+              style={s.modeImage}
+              resizeMode="contain"
+            />
+          </View>
 
-                  {/* Text */}
-                  <View style={s.modeBody}>
-                    <Text style={[s.modeTitle, { color: C.text }]}>{mode.label}</Text>
-                    <Text style={[s.modeDesc, { color: C.muted }]} numberOfLines={3}>
-                      {mode.description}
-                    </Text>
-                  </View>
-
-                  {/* Bottom CTA */}
-                  <View style={[s.modeCta, { borderTopColor: C.border }]}>
-                    <Text style={[s.modeCtaText, { color: mode.color }]}>Start</Text>
-                    <ArrowRight size={13} color={mode.color} />
-                  </View>
-                </TouchableOpacity>
-              </Animated.View>
-            );
-          })}
-        </View>
+          {/* RIGHT — text content */}
+          <View style={s.modeBody}>
+            {/* Icon badge + title row */}
+            <View style={s.modeTitleRow}>
+              <View style={[s.modeBadge, { backgroundColor: mode.lightColor }]}>
+                <Icon size={14} color={mode.color} />
+              </View>
+              <Text style={[s.modeTitle, { color: C.text }]}>{mode.label}</Text>
+            </View>
+            <Text style={[s.modeDesc, { color: C.textSecondary }]}>
+              {mode.description}
+            </Text>
+            {/* CTA row */}
+            <View style={s.modeCta}>
+              <Text style={[s.modeCtaText, { color: mode.color }]}>Start</Text>
+              <ArrowRight size={13} color={mode.color} />
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Animated.View>
+    );
+  })}
+</View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -228,14 +230,70 @@ const s = StyleSheet.create({
   bannerBtnText:  { color: "#8B1A1A", fontWeight: "700", fontSize: 13 },
   bannerImage:    { width: 110, height: 110, marginLeft: 8 },
   sectionLabel:   { fontSize: 16, fontWeight: "700", paddingHorizontal: 20, marginBottom: 14 },
-  grid:           { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 20, gap: 12 },
-  modeCard:       { borderRadius: 20, borderWidth: 1, overflow: "hidden", width: "100%" },
-  modeImageWrap:  { width: "100%", height: 130, alignItems: "center", justifyContent: "center", position: "relative" },
-  modeImage:      { width: "85%", height: "85%" },
-  modeBadge:      { position: "absolute", bottom: 10, right: 10, width: 30, height: 30, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  modeBody:       { padding: 12, gap: 4 },
-  modeTitle:      { fontSize: 14, fontWeight: "800" },
-  modeDesc:       { fontSize: 11, lineHeight: 16 },
-  modeCta:        { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 4, paddingHorizontal: 12, paddingVertical: 10, borderTopWidth: 1 },
-  modeCtaText:    { fontSize: 13, fontWeight: "700" },
+  grid: {
+  flexDirection: "column",       // ← stacked vertically
+  paddingHorizontal: 20,
+  gap: 12,
+},
+modeCard: {
+  borderRadius: 20,
+  borderWidth: 1,
+  overflow: "hidden",
+  width: "100%",
+  flexDirection: "row",          // ← horizontal rectangle
+  alignItems: "center",
+  shadowColor: "#000",
+  shadowOpacity: 0.05,
+  shadowRadius: 8,
+  shadowOffset: { width: 0, height: 3 },
+  elevation: 3,
+},
+modeImageWrap: {
+  width: 110,                    // ← fixed width left column
+  height: 110,
+  backgroundColor: "#FFFFFF",    // ← always white
+  alignItems: "center",
+  justifyContent: "center",
+  borderRightWidth: 1,
+  borderRightColor: "#EEEEEE",
+},
+modeImage: {
+  width: "80%",
+  height: "80%",
+},
+modeBody: {
+  flex: 1,
+  padding: 14,
+  gap: 6,
+},
+modeTitleRow: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 8,
+},
+modeBadge: {
+  width: 28,
+  height: 28,
+  borderRadius: 8,
+  alignItems: "center",
+  justifyContent: "center",
+},
+modeTitle: {
+  fontSize: 15,
+  fontWeight: "800",
+},
+modeDesc: {
+  fontSize: 12,
+  lineHeight: 17,
+},
+modeCta: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 4,
+  marginTop: 4,
+},
+modeCtaText: {
+  fontSize: 13,
+  fontWeight: "700",
+},
 });
