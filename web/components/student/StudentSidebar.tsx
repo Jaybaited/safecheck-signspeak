@@ -96,23 +96,7 @@ export default function StudentSidebar({ onLogout, student }: StudentSidebarProp
         </div>
       </div>
 
-      {/* ── Student Info ───────────────────────────────────────────────── */}
-      <div className="p-4 border-b border-gray-200 dark:border-gray-800">
-        <div className="flex items-center gap-3">
-          {/* Avatar: maroon gradient instead of purple-pink */}
-          <div className="w-12 h-12 bg-gradient-to-br from-[#9B2020] to-[#7B1113] rounded-full flex items-center justify-center font-bold text-lg text-white select-none shrink-0">
-            {student.firstName[0]}{student.lastName[0]}
-          </div>
-          <div className="min-w-0">
-            <p className="font-medium text-gray-900 dark:text-white truncate">
-              {student.firstName} {student.lastName}
-            </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              {formatGradeLevel(student.gradeLevel)}
-            </p>
-          </div>
-        </div>
-      </div>
+    
 
       {/* ── Navigation ────────────────────────────────────────────────── */}
       <nav
