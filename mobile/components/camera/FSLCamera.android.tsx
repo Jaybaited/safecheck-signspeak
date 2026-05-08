@@ -1,12 +1,16 @@
-import React, { forwardRef, useState } from "react";
+import React, { forwardRef } from "react";
 import { Camera, useCameraDevice, useCameraPermission } from "react-native-vision-camera";
 
-export const FSLCamera = forwardRef((props: any, ref: any) => {
+interface FSLCameraProps {
+  style?: any;
+  onReady?: () => void;
+}
+
+export const FSLCamera = forwardRef<Camera, FSLCameraProps>((props, ref) => {
+  const { onReady, ...rest } = props;
   const device = useCameraDevice("front");
   const { hasPermission, requestPermission } = useCameraPermission();
-  const [isCameraReady, setIsCameraReady] = useState(false);
 
-  // Request permission if not granted
   React.useEffect(() => {
     if (!hasPermission) {
       requestPermission();
@@ -23,9 +27,9 @@ export const FSLCamera = forwardRef((props: any, ref: any) => {
       device={device}
       isActive={true}
       photo={true}
-      onInitialized={() => setIsCameraReady(true)}
+      onInitialized={() => onReady?.()}
       onError={(error) => console.error("Camera error:", error)}
-      {...props}
+      {...rest}
     />
   );
 });
