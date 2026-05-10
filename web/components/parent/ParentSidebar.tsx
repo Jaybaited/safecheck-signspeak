@@ -5,8 +5,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Calendar, BookOpen,
-  FileBarChart, Bell, LogOut, Wifi,
-  ChevronRight, User, GraduationCap,
+  FileBarChart, Bell, LogOut, GraduationCap,
+  ChevronRight, User,
 } from 'lucide-react';
 
 interface ParentUser {
@@ -28,19 +28,27 @@ interface Props {
   onLogout: () => void;
   parent: ParentUser;
   child?: Child | null;
+  unreadCount?: number; // passed from parent page so bell badge stays in sync
 }
 
 const navigation = [
-  { name: 'Dashboard',       href: '/parent/dashboard',    icon: LayoutDashboard },
-  { name: 'Attendance',      href: '/parent/attendance',   icon: Calendar },
-  { name: 'FSL Progress',    href: '/parent/fsl-progress', icon: BookOpen },
-  { name: 'Reports',         href: '/parent/reports',      icon: FileBarChart },
-  { name: 'Notifications',   href: '/parent/notifications',icon: Bell },
+  { name: 'Dashboard',     href: '/parent/dashboard',    icon: LayoutDashboard },
+  { name: 'Attendance',    href: '/parent/attendance',   icon: Calendar },
+  { name: 'FSL Progress',  href: '/parent/fsl-progress', icon: BookOpen },
+  { name: 'Reports',       href: '/parent/reports',      icon: FileBarChart },
+  {
+    name: 'Notifications',
+    href: '/parent/notifications',
+    icon: Bell,
+    badge: true, // flag so we can render the unread dot
+  },
+  { name: 'Profile',       href: '/parent/profile',      icon: User },
 ];
 
-const formatGrade = (gl: string | null) => gl ? gl.replace('GRADE_', 'Grade ') : 'N/A';
+const formatGrade = (gl: string | null) =>
+  gl ? gl.replace('GRADE_', 'Grade ') : 'N/A';
 
-export default function ParentSidebar({ onLogout, parent, child }: Props) {
+export default function ParentSidebar({ onLogout, parent, child, unreadCount = 0 }: Props) {
   const pathname = usePathname();
   const [time, setTime] = useState(new Date());
 
@@ -51,25 +59,27 @@ export default function ParentSidebar({ onLogout, parent, child }: Props) {
 
   return (
     <aside className="fixed left-0 top-0 h-full w-64 bg-white dark:bg-gray-900 border-r border-slate-200 dark:border-gray-800 flex flex-col z-40 transition-colors duration-200 shadow-sm dark:shadow-none">
-      {/* Logo */}
-      <div className="p-6 border-b border-slate-200 dark:border-gray-800">
+      {/* Logo Block */}
+      <div className="p-6 border-b border-gray-200 dark:border-gray-800">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center shadow-md shadow-emerald-500/20">
-            <Wifi className="w-5 h-5 text-white" />
+          <div className="w-10 h-10 bg-gradient-to-br from-[#9B2020] to-[#5A0A0A] rounded-lg flex items-center justify-center">
+            <GraduationCap className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h1 className="text-sm font-bold text-slate-900 dark:text-white">SafeCheck</h1>
-            <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">Parent Portal</p>
+            <h2 className="font-bold text-gray-900 dark:text-white">
+              Safe<span className="text-[#7B1113] dark:text-[#E8C96A]">Check</span>
+            </h2>
+            <p className="text-xs text-gray-500 dark:text-gray-400">Parent Portal</p>
           </div>
         </div>
       </div>
 
       {/* Child Card */}
       {child && (
-        <div className="mx-4 mt-4 p-3 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 rounded-xl">
-          <p className="text-xs text-emerald-600 dark:text-emerald-500 font-medium mb-1.5">Viewing child:</p>
+        <div className="mx-4 mt-4 p-3 bg-[#7B1113]/5 dark:bg-[#7B1113]/10 border border-[#7B1113]/20 dark:border-[#7B1113]/30 rounded-xl">
+          <p className="text-xs text-[#7B1113] dark:text-[#E8C96A] font-medium mb-1.5">Viewing child:</p>
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0">
+            <div className="w-8 h-8 bg-gradient-to-br from-[#9B2020] to-[#5A0A0A] rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0">
               {child.firstName[0]}{child.lastName[0]}
             </div>
             <div>
@@ -87,18 +97,40 @@ export default function ParentSidebar({ onLogout, parent, child }: Props) {
 
       {/* Nav */}
       <nav className="flex-1 p-4 space-y-1 overflow-y-auto mt-2">
-        {navigation.map(({ name, href, icon: Icon }) => {
+        {navigation.map(({ name, href, icon: Icon, badge }) => {
           const active = pathname === href;
+          const showBadge = badge && unreadCount > 0;
           return (
-            <Link key={href} href={href}
+            <Link
+              key={href}
+              href={href}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors group ${
                 active
-                  ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
-                  : 'text-slate-600 dark:text-gray-400 hover:bg-slate-100 dark:hover:bg-gray-800 hover:text-slate-900 dark:hover:text-white'
-              }`}>
-              <Icon className={`w-5 h-5 shrink-0 ${active ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-gray-500 group-hover:text-slate-600 dark:group-hover:text-gray-300'}`} />
+                  ? 'bg-[#7B1113]/10 dark:bg-[#7B1113]/20 text-[#7B1113] dark:text-[#E8C96A] font-medium'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'
+              }`}
+            >
+              <div className="relative shrink-0">
+                <Icon
+                  className={`w-5 h-5 ${
+                    active
+                      ? 'text-[#7B1113] dark:text-[#E8C96A]'
+                      : 'text-slate-400 dark:text-gray-500 group-hover:text-slate-600 dark:group-hover:text-gray-300'
+                  }`}
+                />
+                {/* Unread dot on the bell icon in the sidebar */}
+                {showBadge && (
+                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white dark:border-gray-900" />
+                )}
+              </div>
               <span className="flex-1">{name}</span>
-              {active && <ChevronRight className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />}
+              {/* Badge count next to label */}
+              {showBadge && (
+                <span className="px-1.5 py-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full leading-none">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+              {active && !showBadge && <ChevronRight className="w-4 h-4 text-[#7B1113] dark:text-[#E8C96A]" />}
             </Link>
           );
         })}
@@ -116,9 +148,9 @@ export default function ParentSidebar({ onLogout, parent, child }: Props) {
           </p>
         </div>
 
-        {/* Parent Info */}
+        {/* Parent info row */}
         <div className="flex items-center gap-3 px-3 py-2">
-          <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-full flex items-center justify-center font-bold text-white text-xs shrink-0">
+          <div className="w-8 h-8 bg-gradient-to-br from-[#9B2020] to-[#7B1113] rounded-full flex items-center justify-center font-bold text-white text-xs shrink-0">
             {parent.firstName[0]}{parent.lastName[0]}
           </div>
           <div className="flex-1 min-w-0">
@@ -127,14 +159,12 @@ export default function ParentSidebar({ onLogout, parent, child }: Props) {
             </p>
             <p className="text-xs text-slate-500 dark:text-gray-400">Parent</p>
           </div>
-          <Link href="/parent/profile"
-            className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors">
-            <User className="w-4 h-4 text-slate-400 dark:text-gray-500" />
-          </Link>
         </div>
 
-        <button onClick={onLogout}
-          className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors">
+        <button
+          onClick={onLogout}
+          className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors"
+        >
           <LogOut className="w-5 h-5" />
           Sign Out
         </button>

@@ -1,239 +1,192 @@
-'use client';
+// 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import {
-  Bell, Users, CheckCircle, TrendingUp,
-  BookOpen, AlertTriangle, XCircle, Clock,
-  ClipboardCheck, Megaphone, FileBarChart,
-} from 'lucide-react';
-import TeacherSidebar from '@/components/teacher/TeacherSidebar';
-import ThemeToggle from '@/components/ThemeToggle';
+// import { useState, useEffect, useCallback } from 'react';
+// import { useRouter } from 'next/navigation';
+// import { Users, CheckCircle, XCircle, TrendingUp, Calendar, Megaphone, FileText, RefreshCw } from 'lucide-react';
+// import TeacherSidebar from '@/components/teacher/TeacherSidebar';
+// import ThemeToggle from '@/components/ThemeToggle';
 
-interface User {
-  id: string;
-  username: string;
-  role: string;
-  firstName: string;
-  lastName: string;
-  section: string | null;
-}
+// interface TeacherUser { id: string; username: string; role: string; firstName: string; lastName: string; }
+// interface DashboardStats { totalStudents: number; presentToday: number; absentToday: number; attendanceRate: number; }
 
-// Sample data — replace with real API calls
-const stats = {
-  totalStudents:   38,
-  presentToday:    34,
-  absentToday:     4,
-  avgFSLProgress:  62,
-};
+// function SkeletonCard() {
+//   return (
+//     <div className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 rounded-xl p-6 shadow-sm dark:shadow-none animate-pulse">
+//       <div className="flex items-center justify-between mb-4">
+//         <div className="w-12 h-12 bg-slate-200 dark:bg-gray-700 rounded-lg" />
+//         <div className="w-5 h-5 bg-slate-200 dark:bg-gray-700 rounded" />
+//       </div>
+//       <div className="w-24 h-3 bg-slate-200 dark:bg-gray-700 rounded mb-3" />
+//       <div className="w-16 h-8 bg-slate-200 dark:bg-gray-700 rounded mb-2" />
+//       <div className="w-32 h-3 bg-slate-200 dark:bg-gray-700 rounded" />
+//     </div>
+//   );
+// }
 
-const recentAttendance = [
-  { id: 1, name: 'Ana Reyes',      status: 'present', time: '7:42 AM' },
-  { id: 2, name: 'Carlo Santos',   status: 'late',    time: '8:15 AM' },
-  { id: 3, name: 'Diana Cruz',     status: 'present', time: '7:55 AM' },
-  { id: 4, name: 'Enzo Villanueva',status: 'absent',  time: '—' },
-  { id: 5, name: 'Faith Lim',      status: 'present', time: '7:48 AM' },
-];
+// export default function TeacherDashboardPage() {
+//   const router = useRouter();
+//   const [teacher,     setTeacher]     = useState<TeacherUser | null>(null);
+//   const [authLoading, setAuthLoading] = useState(true);
+//   const [stats,       setStats]       = useState<DashboardStats | null>(null);
+//   const [dataLoading, setDataLoading] = useState(true);
+//   const [dataError,   setDataError]   = useState<string | null>(null);
 
-const fslTop = [
-  { name: 'Ana Reyes',       pct: 92 },
-  { name: 'Diana Cruz',      pct: 88 },
-  { name: 'Faith Lim',       pct: 81 },
-  { name: 'Carlo Santos',    pct: 74 },
-  { name: 'Marco Bautista',  pct: 68 },
-];
+//   useEffect(() => {
+//     const token = localStorage.getItem('token');
+//     const userData = localStorage.getItem('user');
+//     if (!token || !userData) { router.push('/login'); return; }
+//     try {
+//       const parsed = JSON.parse(userData) as TeacherUser;
+//       if (parsed.role !== 'TEACHER') { router.push('/login'); return; }
+//       setTeacher(parsed);
+//     } catch { router.push('/login'); }
+//     finally { setAuthLoading(false); }
+//   }, [router]);
 
-const statusCfg = {
-  present: { color: 'text-emerald-600 dark:text-green-400',  bg: 'bg-emerald-100 dark:bg-green-500/10',  icon: CheckCircle, badge: 'bg-emerald-100 dark:bg-green-500/10 text-emerald-700 dark:text-green-400 border-emerald-300 dark:border-green-500/30' },
-  late:    { color: 'text-yellow-600 dark:text-yellow-400', bg: 'bg-yellow-100 dark:bg-yellow-500/10', icon: Clock,        badge: 'bg-yellow-100 dark:bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-300 dark:border-yellow-500/30' },
-  absent:  { color: 'text-red-600 dark:text-red-400',       bg: 'bg-red-100 dark:bg-red-500/10',       icon: XCircle,      badge: 'bg-red-100 dark:bg-red-500/10 text-red-700 dark:text-red-400 border-red-300 dark:border-red-500/30' },
-};
+//   const fetchStats = useCallback(async (token: string) => {
+//     setDataLoading(true); setDataError(null);
+//     try {
+//       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/users`, {
+//         headers: { Authorization: `Bearer ${token}` },
+//       });
+//       if (!res.ok) throw new Error('Failed to fetch data');
+//       const users = (await res.json()) as { role: string }[];
+//       const students = users.filter((u) => u.role === 'STUDENT');
+//       setStats({ totalStudents: students.length, presentToday: 0, absentToday: 0, attendanceRate: 0 });
+//     } catch (err) {
+//       setDataError(err instanceof Error ? err.message : 'Failed to load dashboard data.');
+//     } finally { setDataLoading(false); }
+//   }, []);
 
-export default function TeacherDashboardPage() {
-  const [user, setUser]           = useState<User | null>(null);
-  const [loading, setLoading]     = useState(true);
-  const router                    = useRouter();
+//   useEffect(() => {
+//     if (!teacher) return;
+//     fetchStats(localStorage.getItem('token') ?? '');
+//   }, [teacher, fetchStats]);
 
-  useEffect(() => {
-    const token    = localStorage.getItem('token');
-    const userData = localStorage.getItem('user');
-    if (!token || !userData) { router.push('/login'); return; }
-    try {
-      const parsedUser = JSON.parse(userData) as User;
-      if (parsedUser.role !== 'TEACHER') { router.push('/login'); return; }
-      setUser(parsedUser);
-    } catch { router.push('/login'); }
-    finally { setLoading(false); }
-  }, [router]);
+//   const handleLogout = () => {
+//     localStorage.removeItem('token');
+//     localStorage.removeItem('user');
+//     router.push('/login');
+//   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    router.push('/login');
-  };
+//   if (authLoading || !teacher) {
+//     return (
+//       <div className="min-h-screen bg-slate-50 dark:bg-gray-950 flex items-center justify-center">
+//         <div className="w-8 h-8 border-4 border-[#7B1113] border-t-transparent rounded-full animate-spin" />
+//       </div>
+//     );
+//   }
 
-  if (loading || !user) {
-    return (
-      <div className="min-h-screen bg-slate-50 dark:bg-gray-950 flex items-center justify-center transition-colors duration-200">
-        <div className="w-8 h-8 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
+//   const statCards = [
+//     { label: 'Total Students', value: stats?.totalStudents ?? '—', sub: 'enrolled in your class',
+//       icon: Users, iconBg: 'bg-[#7B1113]/10 dark:bg-[#7B1113]/20', iconColor: 'text-[#7B1113] dark:text-[#E8C96A]',
+//       trend: <TrendingUp className="w-5 h-5 text-emerald-500" /> },
+//     { label: 'Present Today', value: stats?.presentToday ?? '—', sub: 'checked in today',
+//       icon: CheckCircle, iconBg: 'bg-emerald-100 dark:bg-green-500/10', iconColor: 'text-emerald-600 dark:text-green-400',
+//       trend: <TrendingUp className="w-5 h-5 text-emerald-500" /> },
+//     { label: 'Absent Today', value: stats?.absentToday ?? '—', sub: 'not yet checked in',
+//       icon: XCircle, iconBg: 'bg-red-100 dark:bg-red-500/10', iconColor: 'text-red-500 dark:text-red-400',
+//       trend: <XCircle className="w-5 h-5 text-red-400" /> },
+//     { label: 'Attendance Rate', value: `${stats?.attendanceRate ?? 0}%`, sub: "today's rate",
+//       icon: TrendingUp, iconBg: 'bg-[#C4972A]/10', iconColor: 'text-[#8B6818] dark:text-[#E8C96A]',
+//       trend: <CheckCircle className="w-5 h-5 text-emerald-500" /> },
+//   ];
 
-  const attendancePct = Math.round((stats.presentToday / stats.totalStudents) * 100);
+//   return (
+//     <div className="min-h-screen bg-slate-50 dark:bg-gray-950 text-slate-900 dark:text-white transition-colors duration-200">
+//       <TeacherSidebar onLogout={handleLogout} />
+//       <main className="ml-64 p-8">
 
-  return (
-    <div className="min-h-screen bg-slate-50 dark:bg-gray-950 text-slate-900 dark:text-white transition-colors duration-200">
-      <TeacherSidebar onLogout={handleLogout} teacher={user} />
+//         <div className="flex justify-between items-center mb-8">
+//           <div>
+//             <h1 className="text-3xl font-bold mb-1">Welcome back, {teacher.firstName}!</h1>
+//             <p className="text-slate-500 dark:text-gray-400 text-sm">Here&apos;s your class overview for today.</p>
+//           </div>
+//           <div className="flex items-center gap-3">
+//             <ThemeToggle />
+//             <button onClick={() => router.push('/teacher/profile')} aria-label="View profile"
+//               className="w-10 h-10 bg-gradient-to-br from-[#9B2020] to-[#7B1113] rounded-full flex items-center justify-center font-bold text-white shadow-md select-none hover:brightness-110 transition-all active:scale-95">
+//               {teacher.firstName?.[0]}{teacher.lastName?.[0]}
+//             </button>
+//           </div>
+//         </div>
 
-      <main className="ml-64 p-8">
-        {/* Header */}
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-3xl font-bold mb-2">
-              Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, {user.firstName}!
-            </h1>
-            <p className="text-slate-500 dark:text-gray-400">
-              {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
-            </p>
-          </div>
+//         {dataError && (
+//           <div className="mb-6 flex items-center justify-between gap-4 p-4 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-xl text-sm">
+//             <div className="flex items-center gap-3">
+//               <XCircle className="w-5 h-5 text-red-500 shrink-0" />
+//               <span className="text-red-700 dark:text-red-400">{dataError}</span>
+//             </div>
+//             <button onClick={() => fetchStats(localStorage.getItem('token') ?? '')}
+//               className="flex items-center gap-1.5 text-red-600 dark:text-red-400 hover:text-red-800 font-medium shrink-0 transition-colors">
+//               <RefreshCw className="w-4 h-4" /> Retry
+//             </button>
+//           </div>
+//         )}
 
-          <div className="flex items-center gap-4">
-            <ThemeToggle />
-            <button className="relative p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-gray-800 transition-colors">
-              <Bell className="w-6 h-6 text-slate-600 dark:text-gray-400" />
-              <div className="absolute top-1 right-1 w-4 h-4 bg-red-500 rounded-full text-[10px] font-bold text-white flex items-center justify-center border-2 border-slate-50 dark:border-gray-950">2</div>
-            </button>
-            <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-full flex items-center justify-center font-bold text-white shadow-md">
-              {user.firstName[0]}{user.lastName[0]}
-            </div>
-          </div>
-        </div>
+//         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
+//           {dataLoading
+//             ? [...Array(4)].map((_, i) => <SkeletonCard key={i} />)
+//             : statCards.map((card) => (
+//                 <div key={card.label} className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 rounded-xl p-6 shadow-sm dark:shadow-none transition-colors duration-200">
+//                   <div className="flex items-center justify-between mb-4">
+//                     <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${card.iconBg}`}>
+//                       <card.icon className={`w-6 h-6 ${card.iconColor}`} />
+//                     </div>
+//                     {card.trend}
+//                   </div>
+//                   <p className="text-slate-500 dark:text-gray-400 text-sm mb-1">{card.label}</p>
+//                   <h3 className="text-3xl font-bold">{card.value}</h3>
+//                   <p className="text-sm text-slate-400 dark:text-gray-500 mt-2">{card.sub}</p>
+//                 </div>
+//               ))}
+//         </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          {[
-            { icon: Users,      label: 'Total Students',   value: stats.totalStudents,  sub: `Section ${user.section ?? 'N/A'}`,       color: 'text-slate-900 dark:text-white',      iconCls: 'text-cyan-600 dark:text-cyan-400',    bg: 'bg-cyan-100 dark:bg-cyan-500/10',    trend: <TrendingUp className="w-5 h-5 text-emerald-500" /> },
-            { icon: CheckCircle,label: 'Present Today',    value: stats.presentToday,   sub: `${attendancePct}% attendance rate`,      color: 'text-emerald-600 dark:text-green-400',iconCls: 'text-emerald-600 dark:text-green-400',bg: 'bg-emerald-100 dark:bg-green-500/10', trend: <TrendingUp className="w-5 h-5 text-emerald-500" /> },
-            { icon: AlertTriangle,label:'Absent Today',    value: stats.absentToday,    sub: 'Needs follow-up',                        color: 'text-red-600 dark:text-red-400',      iconCls: 'text-red-600 dark:text-red-400',      bg: 'bg-red-100 dark:bg-red-500/10',      trend: <AlertTriangle className="w-5 h-5 text-red-500" /> },
-            { icon: BookOpen,   label: 'Avg FSL Progress', value: `${stats.avgFSLProgress}%`, sub: 'Class average',                    color: 'text-purple-600 dark:text-purple-400',iconCls: 'text-purple-600 dark:text-purple-400',bg: 'bg-purple-100 dark:bg-purple-500/10',trend: <TrendingUp className="w-5 h-5 text-emerald-500" /> },
-          ].map(({ icon: Icon, label, value, sub, color, iconCls, bg, trend }) => (
-            <div key={label} className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 rounded-xl p-6 shadow-sm dark:shadow-none transition-colors duration-200">
-              <div className="flex items-center justify-between mb-4">
-                <div className={`w-12 h-12 ${bg} rounded-lg flex items-center justify-center`}>
-                  <Icon className={`w-6 h-6 ${iconCls}`} />
-                </div>
-                {trend}
-              </div>
-              <p className="text-slate-500 dark:text-gray-400 text-sm mb-1">{label}</p>
-              <h3 className={`text-3xl font-bold ${color}`}>{value}</h3>
-              <p className="text-sm text-slate-500 dark:text-gray-400 mt-2">{sub}</p>
-            </div>
-          ))}
-        </div>
+//         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+//           <div className="lg:col-span-2 bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 rounded-xl p-6 shadow-sm dark:shadow-none transition-colors duration-200">
+//             <h2 className="text-xl font-bold mb-6">Recent Activity</h2>
+//             <div className="text-center py-12">
+//               <Calendar className="w-10 h-10 text-slate-300 dark:text-gray-600 mx-auto mb-3" />
+//               <p className="text-slate-400 dark:text-gray-500 text-sm">No recent activity</p>
+//               <p className="text-slate-400 dark:text-gray-500 text-xs mt-1">Activity will appear once students start tapping in.</p>
+//             </div>
+//           </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Today's Attendance */}
-          <div className="lg:col-span-2 bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 rounded-xl p-6 shadow-sm dark:shadow-none transition-colors duration-200">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-slate-900 dark:text-white">Today&apos;s Attendance</h2>
-              <button onClick={() => router.push('/teacher/attendance')}
-                className="text-cyan-600 dark:text-cyan-400 hover:text-cyan-700 dark:hover:text-cyan-300 text-sm font-medium transition-colors">
-                View All
-              </button>
-            </div>
+//           <div className="flex flex-col gap-6">
+//             <div className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 rounded-xl p-6 shadow-sm dark:shadow-none transition-colors duration-200">
+//               <h2 className="text-xl font-bold mb-5">Quick Actions</h2>
+//               <div className="space-y-3">
+//                 <button onClick={() => router.push('/teacher/announcements')}
+//                   className="w-full flex items-center gap-3 p-4 bg-[#7B1113] hover:bg-[#9B2020] text-white rounded-lg transition-colors shadow-sm">
+//                   <Megaphone className="w-5 h-5 shrink-0" />
+//                   <span className="font-medium">Send Announcement</span>
+//                 </button>
+//                 <button onClick={() => router.push('/teacher/reports')}
+//                   className="w-full flex items-center gap-3 p-4 bg-slate-100 hover:bg-slate-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-slate-700 dark:text-gray-200 rounded-lg transition-colors">
+//                   <FileText className="w-5 h-5 text-slate-500 dark:text-gray-400 shrink-0" />
+//                   <span className="font-medium">View Reports</span>
+//                 </button>
+//               </div>
+//             </div>
 
-            {/* Attendance bar */}
-            <div className="mb-6">
-              <div className="flex justify-between text-sm mb-2">
-                <span className="text-slate-500 dark:text-gray-400">
-                  <span className="font-semibold text-emerald-600 dark:text-green-400">{stats.presentToday}</span> present
-                </span>
-                <span className="text-slate-500 dark:text-gray-400">
-                  <span className="font-semibold text-red-600 dark:text-red-400">{stats.absentToday}</span> absent
-                </span>
-              </div>
-              <div className="w-full h-3 bg-slate-100 dark:bg-gray-800 rounded-full overflow-hidden flex">
-                <div className="h-full bg-emerald-500 transition-all duration-700" style={{ width: `${attendancePct}%` }} />
-                <div className="h-full bg-red-400 transition-all duration-700 flex-1" />
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              {recentAttendance.map((s) => {
-                const cfg = statusCfg[s.status as keyof typeof statusCfg];
-                const Icon = cfg.icon;
-                return (
-                  <div key={s.id} className="flex items-center gap-4 p-3 bg-slate-50 dark:bg-gray-800/50 rounded-lg hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors">
-                    <div className={`w-9 h-9 rounded-full flex items-center justify-center ${cfg.bg}`}>
-                      <Icon className={`w-4 h-4 ${cfg.color}`} />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-slate-900 dark:text-white">{s.name}</p>
-                    </div>
-                    <span className="text-xs text-slate-400 dark:text-gray-500">{s.time}</span>
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${cfg.badge}`}>
-                      {s.status.charAt(0).toUpperCase() + s.status.slice(1)}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Right Column */}
-          <div className="space-y-6">
-            {/* Quick Actions */}
-            <div className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 rounded-xl p-6 shadow-sm dark:shadow-none transition-colors duration-200">
-              <h2 className="text-xl font-bold mb-4 text-slate-900 dark:text-white">Quick Actions</h2>
-              <div className="space-y-3">
-                <button onClick={() => router.push('/teacher/mark-attendance')}
-                  className="w-full flex items-center gap-3 p-3.5 bg-cyan-600 hover:bg-cyan-700 dark:bg-cyan-500 dark:hover:bg-cyan-600 text-white rounded-lg transition-colors shadow-sm">
-                  <ClipboardCheck className="w-5 h-5" />
-                  <span className="font-medium text-sm">Mark Attendance</span>
-                </button>
-                <button onClick={() => router.push('/teacher/announcements')}
-                  className="w-full flex items-center gap-3 p-3.5 bg-slate-100 hover:bg-slate-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-slate-700 dark:text-gray-200 rounded-lg transition-colors">
-                  <Megaphone className="w-5 h-5 text-slate-500 dark:text-gray-400" />
-                  <span className="font-medium text-sm">Send Announcement</span>
-                </button>
-                <button onClick={() => router.push('/teacher/reports')}
-                  className="w-full flex items-center gap-3 p-3.5 bg-slate-100 hover:bg-slate-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-slate-700 dark:text-gray-200 rounded-lg transition-colors">
-                  <FileBarChart className="w-5 h-5 text-slate-500 dark:text-gray-400" />
-                  <span className="font-medium text-sm">Generate Report</span>
-                </button>
-                <button onClick={() => router.push('/teacher/fsl-progress')}
-                  className="w-full flex items-center gap-3 p-3.5 bg-slate-100 hover:bg-slate-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-slate-700 dark:text-gray-200 rounded-lg transition-colors">
-                  <BookOpen className="w-5 h-5 text-slate-500 dark:text-gray-400" />
-                  <span className="font-medium text-sm">View FSL Progress</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Top FSL Students */}
-            <div className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 rounded-xl p-6 shadow-sm dark:shadow-none transition-colors duration-200">
-              <h2 className="text-lg font-bold mb-4 text-slate-900 dark:text-white">Top FSL Students</h2>
-              <div className="space-y-3">
-                {fslTop.map((s, i) => (
-                  <div key={s.name} className="flex items-center gap-3">
-                    <span className={`text-xs font-bold w-5 ${i === 0 ? 'text-yellow-500' : i === 1 ? 'text-slate-400' : i === 2 ? 'text-orange-500' : 'text-slate-400 dark:text-gray-500'}`}>
-                      #{i + 1}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-slate-800 dark:text-white truncate">{s.name}</p>
-                      <div className="w-full h-1.5 bg-slate-100 dark:bg-gray-800 rounded-full mt-1">
-                        <div className="h-full bg-purple-500 rounded-full" style={{ width: `${s.pct}%` }} />
-                      </div>
-                    </div>
-                    <span className="text-xs font-bold text-purple-600 dark:text-purple-400 shrink-0">{s.pct}%</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </main>
-    </div>
-  );
-}
-
+//             {!dataLoading && stats && (
+//               <div className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 rounded-xl p-6 shadow-sm dark:shadow-none transition-colors duration-200">
+//                 <h2 className="text-xl font-bold mb-5">Class Summary</h2>
+//                 <div className="grid grid-cols-2 gap-2 text-center">
+//                   <div className="p-3 bg-emerald-50 dark:bg-green-500/10 rounded-lg">
+//                     <p className="text-2xl font-bold text-emerald-600 dark:text-green-400">{stats.presentToday}</p>
+//                     <p className="text-xs text-slate-500 dark:text-gray-400 mt-1">Present</p>
+//                   </div>
+//                   <div className="p-3 bg-red-50 dark:bg-red-500/10 rounded-lg">
+//                     <p className="text-2xl font-bold text-red-500 dark:text-red-400">{stats.absentToday}</p>
+//                     <p className="text-xs text-slate-500 dark:text-gray-400 mt-1">Absent</p>
+//                   </div>
+//                 </div>
+//               </div>
+//             )}
+//           </div>
+//         </div>
+//       </main>
+//     </div>
+//   );
+// }
