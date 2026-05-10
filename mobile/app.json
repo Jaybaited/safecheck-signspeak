@@ -23,6 +23,7 @@
     },
     "android": {
       "package": "com.retes.safechecksignspeak",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/logo2.png",
         "backgroundColor": "#0F0F23"
@@ -52,8 +53,20 @@
           "cameraPermissionText": "Camera is used to detect FSL hand signs.",
           "enableFrameProcessors": false
         }
-      ]
-      
+      ],
+      "@react-native-firebase/app",
+      "@react-native-firebase/messaging",
+      "@notifee/react-native",
+      [
+  "expo-build-properties",
+  {
+    "android": {
+      "compileSdkVersion": 35,
+      "targetSdkVersion": 35,
+      "buildToolsVersion": "35.0.0"
+    }
+  }
+]
     ],
     "extra": {
       "router": {},
