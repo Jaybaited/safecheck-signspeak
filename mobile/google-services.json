@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "36583044800",
+    "project_id": "safecheck-signspeak",
+    "storage_bucket": "safecheck-signspeak.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:36583044800:android:9324ac50176877cc209f25",
+        "android_client_info": {
+          "package_name": "com.retes.safechecksignspeak"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDHdxSV5edJF59UuQx6jv5nVTW5ex3ANDQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

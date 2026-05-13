@@ -1,6 +1,6 @@
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import {
-  View, Text, TouchableOpacity, StyleSheet, ScrollView,
+  View, Text, TouchableOpacity, StyleSheet, ScrollView, AppState,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
@@ -11,7 +11,7 @@ import { ArrowLeft, CheckCircle, Scan } from "lucide-react-native";
 import { FSLCamera } from "../../components/camera/FSLCamera";
 import { capturePhoto } from "../../components/camera/capturePhoto";
 
-const MOBILE_ML_URL = "http://192.168.1.8:8001";
+const MOBILE_ML_URL = "http://192.168.100.21:8001";
 
 const FSL_LETTERS = [
   "A","B","C","D","E","F","G","H","I",
@@ -65,6 +65,27 @@ export default function FSLDetectionScreen() {
   const selectedLetterRef = useRef<string | null>(null);
   const isBusyRef = useRef(false);
   const isActiveRef = useRef(false);
+  const isCameraReadyRef = useRef(false); // ✅ added
+
+  // ✅ cleanup on unmount
+  useEffect(() => {
+    return () => {
+      isCameraReadyRef.current = false;
+      isActiveRef.current = false;
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, []);
+
+  // ✅ reset camera ready when app goes to background
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "background" || nextState === "inactive") {
+        stopDetection();
+        isCameraReadyRef.current = false;
+      }
+    });
+    return () => subscription.remove();
+  }, []);
 
   const stopDetection = useCallback(() => {
     isActiveRef.current = false;
@@ -74,19 +95,43 @@ export default function FSLDetectionScreen() {
   }, []);
 
   const captureAndCheck = async () => {
-    if (!isActiveRef.current || !cameraRef.current || !selectedLetterRef.current || isBusyRef.current) return;
+    if (
+      !isActiveRef.current ||
+      !cameraRef.current ||
+      !selectedLetterRef.current ||
+      isBusyRef.current ||
+      !isCameraReadyRef.current // ✅ added
+    ) return;
+
     isBusyRef.current = true;
 
     try {
       const base64 = await capturePhoto(cameraRef);
       if (!base64 || !isActiveRef.current) return;
 
-      const response = await fetch(`${MOBILE_ML_URL}/predict-image`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: base64 }),
-      });
-      const data = await response.json();
+      // ✅ 5s timeout to prevent hanging network requests
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+      let data;
+      try {
+        const response = await fetch(`${MOBILE_ML_URL}/predict-image`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ image: base64 }),
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+        data = await response.json();
+      } catch (fetchErr: any) {
+        clearTimeout(timeoutId);
+        if (fetchErr.name === "AbortError") {
+          console.warn("[FSL] Request timed out");
+        } else {
+          console.warn("[FSL] Network error:", fetchErr.message);
+        }
+        return; // skip this cycle, loop continues below
+      }
 
       if (!isActiveRef.current) return;
 
@@ -105,7 +150,7 @@ export default function FSLDetectionScreen() {
         return;
       }
     } catch (err) {
-      console.error("Capture error:", err);
+      console.warn("[FSL] Capture skipped:", err);
     } finally {
       isBusyRef.current = false;
     }
@@ -116,10 +161,11 @@ export default function FSLDetectionScreen() {
   };
 
   const startDetection = useCallback(() => {
+    if (!isCameraReadyRef.current) return; // ✅ added
     isActiveRef.current = true;
     setIsActive(true);
     isBusyRef.current = false;
-    timeoutRef.current = setTimeout(captureAndCheck, 200);
+    timeoutRef.current = setTimeout(captureAndCheck, 800); // ✅ 200 → 800ms
   }, []);
 
   const selectLetter = (letter: string) => {
@@ -129,7 +175,18 @@ export default function FSLDetectionScreen() {
     setLastConf(null);
     setIsCorrect(false);
     setLiveResult(null);
-    setTimeout(() => startDetection(), 600);
+
+    // ✅ retry until camera is ready
+    let attempts = 0;
+    const tryStart = () => {
+      if (isCameraReadyRef.current) {
+        startDetection();
+      } else if (attempts < 10) {
+        attempts++;
+        setTimeout(tryStart, 300);
+      }
+    };
+    setTimeout(tryStart, 300);
   };
 
   const goToNext = () => {
@@ -142,139 +199,165 @@ export default function FSLDetectionScreen() {
   const progressPct = Math.round((completed.size / FSL_LETTERS.length) * 100);
 
   return (
-    <SafeAreaView style={[s.container, { backgroundColor: C.background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: C.background }]}>
       <StatusBar style={resolvedTheme === "dark" ? "light" : "dark"} />
 
       {/* ── Header ── */}
-      <View style={s.header}>
+      <View style={styles.header}>
         <TouchableOpacity
-          style={[s.backBtn, { borderColor: C.border, backgroundColor: C.card }]}
+          style={[styles.backBtn, { borderColor: C.border }]}
           onPress={() => { stopDetection(); router.replace("/(student)/fsl" as any); }}
         >
-          <ArrowLeft size={18} color={C.text} />
+          <ArrowLeft size={20} color={C.text} />
         </TouchableOpacity>
-        <Text style={[s.headerTitle, { color: C.text }]}>FSL Practice</Text>
-        <View style={[s.countBadge, { backgroundColor: C.primary + "22", borderColor: C.primary + "44" }]}>
-          <Text style={[s.countBadgeText, { color: C.primary }]}>
+        <Text style={[styles.headerTitle, { color: C.text }]}>FSL Practice</Text>
+        <View style={[styles.countBadge, { backgroundColor: C.card, borderColor: C.border }]}>
+          <Text style={[styles.countBadgeText, { color: C.primary }]}>
             {completed.size}/{FSL_LETTERS.length}
           </Text>
         </View>
       </View>
 
       {/* ── Progress Bar ── */}
-      <View style={s.progressRow}>
-        <View style={[s.progressBg, { backgroundColor: C.border }]}>
-          <View style={[s.progressFill, { width: `${progressPct}%` as any, backgroundColor: C.primary }]} />
+      <View style={styles.progressRow}>
+        <View style={[styles.progressBg, { backgroundColor: C.border }]}>
+          <View style={[styles.progressFill, { width: `${progressPct}%`, backgroundColor: C.primary }]} />
         </View>
-        <Text style={[s.progressPct, { color: C.primary }]}>{progressPct}%</Text>
+        <Text style={[styles.progressPct, { color: C.muted }]}>{progressPct}%</Text>
       </View>
 
-      <ScrollView style={s.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* ── Letter Selector ── */}
-        <Text style={[s.sectionLabel, { color: C.muted }]}>Choose a Letter</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.letterRow}>
+        <Text style={[styles.sectionLabel, { color: C.muted }]}>Choose a Letter</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.letterRow}>
           {FSL_LETTERS.map((letter) => {
-            const isDone = completed.has(letter);
-            const isSel = selectedLetter === letter;
-            return (
-              <TouchableOpacity
-                key={letter}
-                style={[s.letterBtn, {
-                  backgroundColor: isDone ? C.primary : isSel ? C.primary + "22" : C.card,
-                  borderColor: isDone ? C.primary : isSel ? C.primary : C.border,
-                }]}
-                onPress={() => selectLetter(letter)}
-              >
-                <Text style={[s.letterBtnText, { color: isDone ? "#fff" : isSel ? C.primary : C.text }]}>
-                  {letter}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
+  const isDone = completed.has(letter);
+  const isSel = selectedLetter === letter;
+  return (
+    <TouchableOpacity
+      key={letter}
+      style={[
+        styles.letterBtn,
+        {
+          backgroundColor: isDone
+            ? C.primary + "33"  // ✅ light tint for done, not full primary
+            : isSel
+            ? C.primary + "33"
+            : C.card,
+          borderColor: isDone ? C.primary : isSel ? C.primary : C.border,
+        },
+      ]}
+      onPress={() => selectLetter(letter)}
+    >
+      <Text style={[
+        styles.letterBtnText,
+        {
+          color: isDone
+            ? C.primary   // ✅ always visible
+            : isSel
+            ? C.primary
+            : C.text,
+        }
+      ]}>
+        {letter}
+      </Text>
+    </TouchableOpacity>
+  );
+})}
         </ScrollView>
 
         {selectedLetter ? (
           <>
             {/* ── Tip Card ── */}
-            <View style={[s.tipCard, { backgroundColor: C.card, borderColor: C.border }]}>
-              <View style={[s.tipIcon, { backgroundColor: C.primary }]}>
-                <Text style={s.tipIconText}>{selectedLetter}</Text>
+            <View style={[styles.tipCard, { backgroundColor: C.card, borderColor: C.border }]}>
+              <View style={[styles.tipIcon, { backgroundColor: C.primary }]}>
+                <Text style={styles.tipIconText}>{selectedLetter}</Text>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[s.tipTitle, { color: C.text }]}>How to sign "{selectedLetter}"</Text>
-                <Text style={[s.tipDesc, { color: C.muted }]}>{TIPS[selectedLetter]}</Text>
+                <Text style={[styles.tipTitle, { color: C.text }]}>How to sign "{selectedLetter}"</Text>
+                <Text style={[styles.tipDesc, { color: C.muted }]}>{TIPS[selectedLetter]}</Text>
               </View>
             </View>
 
             {/* ── Camera ── */}
-            <View style={[s.cameraWrap, { borderColor: isCorrect ? "#10B981" : C.border }]}>
-              <FSLCamera ref={cameraRef} />
-
-              <View style={[s.frameGuide, { borderColor: C.primary + "88" }]} />
+            <View style={[styles.cameraWrap, { borderColor: isCorrect ? "#10B981" : C.border }]}>
+              <FSLCamera
+                ref={cameraRef}
+                style={styles.camera}
+                onReady={() => {
+                  isCameraReadyRef.current = true;
+                }}
+              />
+              <View style={[styles.frameGuide, { borderColor: C.primary + "80" }]} />
 
               {liveResult?.detected && !isCorrect && (
-                <View style={[s.camBadge, { top: 12, left: 12, backgroundColor: C.primary }]}>
-                  <Text style={s.camBadgeText}>Sign: {liveResult.sign}</Text>
+                <View style={[styles.camBadge, { backgroundColor: "#3B82F6", bottom: 12, left: 12 }]}>
+                  <Text style={styles.camBadgeText}>Sign: {liveResult.sign}</Text>
                 </View>
               )}
               {liveResult?.detected && !isCorrect && (
-                <View style={[s.camBadge, { bottom: 12, right: 12, backgroundColor: "#10B981" }]}>
-                  <Text style={s.camBadgeText}>● Hand Detected</Text>
+                <View style={[styles.camBadge, { backgroundColor: "#10B981", top: 12, right: 12 }]}>
+                  <Text style={styles.camBadgeText}>● Hand Detected</Text>
                 </View>
               )}
               {isActive && !isCorrect && !liveResult?.detected && (
-                <View style={[s.camBadge, { bottom: 12, right: 12, backgroundColor: "#6B7280" }]}>
-                  <Text style={s.camBadgeText}>🔍 Scanning...</Text>
+                <View style={[styles.camBadge, { backgroundColor: "#6B7280", top: 12, right: 12 }]}>
+                  <Text style={styles.camBadgeText}>🔍 Scanning...</Text>
                 </View>
               )}
               {isCorrect && (
-                <View style={s.correctOverlay}>
-                  <Text style={s.correctEmoji}>✅</Text>
-                  <Text style={s.correctText}>Correct!</Text>
+                <View style={styles.correctOverlay}>
+                  <Text style={styles.correctEmoji}>✅</Text>
+                  <Text style={styles.correctText}>Correct!</Text>
                 </View>
               )}
             </View>
 
             {/* ── Live Result Card ── */}
             {liveResult?.detected && !isCorrect && (
-              <View style={[s.liveCard, { backgroundColor: C.card, borderColor: C.border }]}>
-                <View style={s.liveRow}>
-                  <Text style={[s.liveSignBig, { color: C.text }]}>{liveResult.sign}</Text>
-                  <View style={[s.liveDivider, { backgroundColor: C.border }]} />
-                  <View style={s.liveConfCol}>
-                    <Text style={[s.liveConfLabel, { color: C.muted }]}>Confidence</Text>
-                    <Text style={[s.liveConf, { color: liveResult.confidence >= 0.7 ? "#10B981" : "#F59E0B" }]}>
+              <View style={[styles.liveCard, { backgroundColor: C.card, borderColor: C.border }]}>
+                <View style={styles.liveRow}>
+                  <Text style={[styles.liveSignBig, { color: C.text }]}>{liveResult.sign}</Text>
+                  <View style={[styles.liveDivider, { backgroundColor: C.border }]} />
+                  <View style={styles.liveConfCol}>
+                    <Text style={[styles.liveConfLabel, { color: C.muted }]}>Confidence</Text>
+                    <Text style={[styles.liveConf, { color: liveResult.confidence >= 0.7 ? "#10B981" : "#F59E0B" }]}>
                       {(liveResult.confidence * 100).toFixed(1)}%
                     </Text>
                   </View>
-                  <View style={[s.liveDivider, { backgroundColor: C.border }]} />
-                  <View style={s.liveConfCol}>
-                    <Text style={[s.liveConfLabel, { color: C.muted }]}>Target</Text>
-                    <Text style={[s.liveConf, { color: C.primary }]}>{selectedLetter}</Text>
+                  <View style={[styles.liveDivider, { backgroundColor: C.border }]} />
+                  <View style={styles.liveConfCol}>
+                    <Text style={[styles.liveConfLabel, { color: C.muted }]}>Target</Text>
+                    <Text style={[styles.liveConf, { color: C.primary }]}>{selectedLetter}</Text>
                   </View>
                 </View>
-                <Text style={[s.liveHint, { color: C.muted }]}>Keep trying! Match the target letter above.</Text>
+                <Text style={[styles.liveHint, { color: C.muted }]}>
+                  Keep trying! Match the target letter above.
+                </Text>
               </View>
             )}
 
             {/* ── Success Card ── */}
             {isCorrect && lastConfidence !== null && (
-              <View style={s.successCard}>
-                <CheckCircle size={32} color="#10B981" />
-                <Text style={s.successTitle}>Great job! You signed "{selectedLetter}" correctly!</Text>
-                <Text style={s.successConf}>Confidence: {(lastConfidence * 100).toFixed(1)}%</Text>
+              <View style={styles.successCard}>
+                <Text style={styles.successTitle}>
+                  Great job! You signed "{selectedLetter}" correctly!
+                </Text>
+                <Text style={styles.successConf}>
+                  Confidence: {(lastConfidence * 100).toFixed(1)}%
+                </Text>
                 {FSL_LETTERS.indexOf(selectedLetter) < FSL_LETTERS.length - 1 && (
-                  <TouchableOpacity style={s.nextBtn} onPress={goToNext}>
-                    <Text style={s.nextBtnText}>Next Letter →</Text>
+                  <TouchableOpacity style={styles.nextBtn} onPress={goToNext}>
+                    <Text style={styles.nextBtnText}>Next Letter →</Text>
                   </TouchableOpacity>
                 )}
               </View>
             )}
           </>
         ) : (
-          <View style={s.emptyState}>
-            <Text style={{ fontSize: 40 }}>👆</Text>
-            <Text style={[s.emptyText, { color: C.muted }]}>
+          <View style={styles.emptyState}>
+            <Text style={{ fontSize: 48 }}>👆</Text>
+            <Text style={[styles.emptyText, { color: C.muted }]}>
               Select a letter above to start practicing
             </Text>
           </View>
@@ -284,7 +367,7 @@ export default function FSLDetectionScreen() {
   );
 }
 
-const s = StyleSheet.create({
+const styles = StyleSheet.create({
   container: { flex: 1 },
   centered: { flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 16 },
   permIcon: { width: 80, height: 80, borderRadius: 24, alignItems: "center", justifyContent: "center", marginBottom: 8 },
