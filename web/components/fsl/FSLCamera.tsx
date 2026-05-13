@@ -1,4 +1,5 @@
 'use client';
+
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { predictSign } from '@/lib/fsl/predict';
 import type { FSLPrediction } from '@/types/fsl';
@@ -10,68 +11,71 @@ interface MediaPipeCamera { start: () => Promise<void>; stop: () => void; }
 interface FSLCameraProps {
   targetLetter?: string;
   onCorrect?: (prediction: FSLPrediction) => void;
+  onPrediction?: (prediction: FSLPrediction | null) => void;
+  onHandVisible?: (visible: boolean) => void;
   isActive?: boolean;
 }
 
-// ─── Tuning constants ───────────────────────────────────────────
-const CONFIDENCE_THRESHOLD = 0.75;  // minimum to count as a match
-const INSTANT_THRESHOLD    = 0.85;  // fires immediately, no lock needed
-const POLL_INTERVAL_MS     = 150;   // how often to poll MediaPipe (ms)
-const LOCK_DURATION_MS     = 800;   // hold duration for 75–85% confidence
-const MAX_MISS_TOLERANCE   = 2;     // bad frames allowed before lock resets
-// ────────────────────────────────────────────────────────────────
+const CONFIDENCE_THRESHOLD = 0.75;
+const INSTANT_THRESHOLD    = 0.85;
+const POLL_INTERVAL_MS     = 150;
+const LOCK_DURATION_MS     = 800;
+const MAX_MISS_TOLERANCE   = 2;
 
-export default function FSLCamera({ targetLetter, onCorrect, isActive = true }: FSLCameraProps) {
+export default function FSLCamera({
+  targetLetter,
+  onCorrect,
+  onPrediction,
+  onHandVisible,
+  isActive = true,
+}: FSLCameraProps) {
   const videoRef        = useRef<HTMLVideoElement>(null);
   const cameraRef       = useRef<MediaPipeCamera | null>(null);
   const lastPredictTime = useRef(0);
 
-  // ── Stable refs — prevents MediaPipe from restarting on parent re-renders ──
-  const onCorrectRef    = useRef(onCorrect);
-  const targetLetterRef = useRef(targetLetter);
-  useEffect(() => { onCorrectRef.current    = onCorrect;     }, [onCorrect]);
-  useEffect(() => { targetLetterRef.current = targetLetter;  }, [targetLetter]);
-  // ──────────────────────────────────────────────────────────────────────────
+  const onCorrectRef     = useRef(onCorrect);
+  const onPredictionRef  = useRef(onPrediction);
+  const onHandVisibleRef = useRef(onHandVisible);
+  const targetLetterRef  = useRef(targetLetter);
+  useEffect(() => { onCorrectRef.current     = onCorrect;     }, [onCorrect]);
+  useEffect(() => { onPredictionRef.current  = onPrediction;  }, [onPrediction]);
+  useEffect(() => { onHandVisibleRef.current = onHandVisible; }, [onHandVisible]);
+  useEffect(() => { targetLetterRef.current  = targetLetter;  }, [targetLetter]);
 
-  // Lock tracking (only used for 75–85% range)
   const lockStartTime = useRef<number | null>(null);
   const lockLetter    = useRef<string | null>(null);
   const firedRef      = useRef(false);
   const missCountRef  = useRef(0);
 
-  const [prediction, setPrediction]     = useState<FSLPrediction | null>(null);
-  const [handVisible, setHandVisible]   = useState(false);
-  const [isLoading, setIsLoading]       = useState(true);
-  const [lockProgress, setLockProgress] = useState(0);
+  const [handVisible,   setHandVisible]   = useState(false);
+  const [isLoading,     setIsLoading]     = useState(true);
+  const [lockProgress,  setLockProgress]  = useState(0);
 
-  const isCorrect = !!(
-    prediction &&
-    targetLetter &&
-    prediction.sign === targetLetter &&
-    prediction.confidence >= CONFIDENCE_THRESHOLD
-  );
-
-  // Reset lock when target letter changes
+  // Reset lock state on letter/active change
   useEffect(() => {
     lockStartTime.current = null;
     lockLetter.current    = null;
     firedRef.current      = false;
     missCountRef.current  = 0;
     setLockProgress(0);
-  }, [targetLetter]);
+    onPredictionRef.current?.(null);
+  }, [targetLetter, isActive]);
 
-  // Stable callback — reads props via refs, never recreated
   const onResults = useCallback(async (results: HandsResults) => {
     if (!results.multiHandLandmarks?.length) {
       setHandVisible(false);
+      onHandVisibleRef.current?.(false);
       lockStartTime.current = null;
       lockLetter.current    = null;
       firedRef.current      = false;
       missCountRef.current  = 0;
       setLockProgress(0);
+      onPredictionRef.current?.(null);
       return;
     }
+
     setHandVisible(true);
+    onHandVisibleRef.current?.(true);
 
     const now = Date.now();
     if (now - lastPredictTime.current < POLL_INTERVAL_MS) return;
@@ -85,16 +89,17 @@ export default function FSLCamera({ targetLetter, onCorrect, isActive = true }: 
 
     try {
       const result = await predictSign(landmarks);
-      setPrediction(result);
+      onPredictionRef.current?.(result);
 
-      const isMatch = currentTarget &&
+      const isMatch =
+        currentTarget &&
         result.sign === currentTarget &&
         result.confidence >= CONFIDENCE_THRESHOLD;
 
       if (isMatch) {
         missCountRef.current = 0;
 
-        // ── Instant recognition for high confidence ──
+        // Instant fire on very high confidence
         if (result.confidence >= INSTANT_THRESHOLD && !firedRef.current) {
           firedRef.current = true;
           setLockProgress(100);
@@ -102,7 +107,6 @@ export default function FSLCamera({ targetLetter, onCorrect, isActive = true }: 
           return;
         }
 
-        // ── Lock/hold for 75–85% confidence range ──
         if (lockLetter.current !== currentTarget) {
           lockStartTime.current = now;
           lockLetter.current    = currentTarget!;
@@ -131,17 +135,37 @@ export default function FSLCamera({ targetLetter, onCorrect, isActive = true }: 
     } catch (err) {
       console.error('FSL prediction error:', err);
     }
-  }, []); // ← empty deps — stable forever, reads props via refs
+  }, []);
 
+  // ── Camera init — guarded against race conditions ──
   useEffect(() => {
-    if (!videoRef.current || !isActive) return;
+    if (!isActive) return;
+
+    let stopped = false;
 
     const initMediaPipe = async () => {
+      // Wait for videoRef to be attached to the DOM
+      if (!videoRef.current) {
+        await new Promise<void>((resolve) => {
+          const interval = setInterval(() => {
+            if (videoRef.current || stopped) {
+              clearInterval(interval);
+              resolve();
+            }
+          }, 50);
+        });
+      }
+
+      if (stopped || !videoRef.current) return;
+
       const { Hands }  = await import('@mediapipe/hands');
       const { Camera } = await import('@mediapipe/camera_utils');
 
+      if (stopped || !videoRef.current) return;
+
       const hands = new Hands({
-        locateFile: (f: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`,
+        locateFile: (f: string) =>
+          `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${f}`,
       });
 
       hands.setOptions({
@@ -153,102 +177,104 @@ export default function FSLCamera({ targetLetter, onCorrect, isActive = true }: 
 
       hands.onResults(onResults);
 
-      const camera = new Camera(videoRef.current!, {
+      if (stopped || !videoRef.current) return;
+
+      const camera = new Camera(videoRef.current, {
         onFrame: async () => {
-          if (videoRef.current) await hands.send({ image: videoRef.current });
+          if (videoRef.current && !stopped) {
+            await hands.send({ image: videoRef.current });
+          }
         },
-        width: 640,
+        width:  640,
         height: 480,
       }) as MediaPipeCamera;
 
       await camera.start();
+
+      if (stopped) {
+        camera.stop();
+        return;
+      }
+
       cameraRef.current = camera;
       setIsLoading(false);
     };
 
-    initMediaPipe();
-    return () => { cameraRef.current?.stop(); };
-  }, [isActive, onResults]); // onResults is stable — runs only once
+    initMediaPipe().catch((err) => {
+      if (!stopped) console.error('FSLCamera init error:', err);
+    });
+
+    return () => {
+      stopped = true;
+      cameraRef.current?.stop();
+      cameraRef.current = null;
+      setIsLoading(true);
+      setHandVisible(false);
+      setLockProgress(0);
+    };
+  }, [isActive, onResults]);
 
   return (
-    <div className="relative w-full max-w-lg mx-auto">
-      {/* Camera Feed */}
-      <div className="relative rounded-2xl overflow-hidden bg-gray-900 aspect-video">
-        <video
-          ref={videoRef}
-          className="w-full h-full object-cover scale-x-[-1]"
-          autoPlay
-          muted
-          playsInline
-        />
+    <div className="relative w-full h-full min-h-[480px] bg-black rounded-lg overflow-hidden">
+      <video
+        ref={videoRef}
+        className="absolute inset-0 w-full h-full object-cover scale-x-[-1]"
+        autoPlay
+        muted
+        playsInline
+      />
 
-        {/* Loading Overlay */}
-        {isLoading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
-            <div className="text-center text-white">
-              <div className="w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-              <p className="text-sm">Loading camera...</p>
-            </div>
+      {/* Loading overlay */}
+      {isLoading && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-gray-950">
+          <div className="text-center text-white">
+            <div className="w-10 h-10 border-4 border-purple-500 border-t-transparent
+              rounded-full animate-spin mx-auto mb-3" />
+            <p className="text-sm text-gray-400">Initializing camera...</p>
           </div>
-        )}
-
-        {/* Hand Detection Indicator */}
-        <div className={`absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium
-          ${handVisible ? 'bg-green-500/80 text-white' : 'bg-gray-700/80 text-gray-300'}`}>
-          <div className={`w-2 h-2 rounded-full ${handVisible ? 'bg-white animate-pulse' : 'bg-gray-400'}`} />
-          {handVisible ? 'Hand Detected' : 'No Hand'}
         </div>
+      )}
 
-        {/* Target Letter Badge */}
-        {targetLetter && (
-          <div className="absolute top-3 left-3 bg-purple-600/80 text-white px-3 py-1 rounded-full text-sm font-bold">
+      {/* Top bar — Sign badge LEFT, Hand indicator RIGHT */}
+      <div className="absolute top-4 left-4 right-4 z-30 flex items-center justify-between
+        pointer-events-none">
+
+        {/* Sign badge */}
+        {targetLetter ? (
+          <div className="bg-purple-600 text-white px-4 py-1.5 rounded-full text-sm
+            font-bold shadow-lg">
             Sign: {targetLetter}
           </div>
-        )}
+        ) : <div />}
 
-        {/* Lock Progress Bar — only shown for 75–85% range */}
-        {lockProgress > 0 && lockProgress < 100 && (
-          <div className="absolute bottom-0 left-0 right-0 h-2 bg-black/30">
-            <div
-              className="h-2 bg-green-400 transition-all duration-150"
-              style={{ width: `${lockProgress}%` }}
-            />
-          </div>
-        )}
+        {/* Hand indicator */}
+        <div className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold
+          shadow-lg border-2 transition-all duration-300 ${
+          handVisible
+            ? 'bg-emerald-500 border-emerald-400 text-white'
+            : 'bg-gray-800 border-gray-600 text-gray-300'
+        }`}>
+          <div className={`w-2 h-2 rounded-full shrink-0 ${
+            handVisible ? 'bg-white animate-pulse' : 'bg-gray-500'
+          }`} />
+          {handVisible ? 'Hand Detected' : 'No Hand'}
+        </div>
       </div>
 
-      {/* Prediction Result */}
-      {prediction && (
-        <div className={`mt-3 p-4 rounded-xl text-center transition-all border-2
-          ${isCorrect ? 'bg-green-50 border-green-400' : 'bg-gray-50 border-gray-200'}`}>
-          <div className="flex items-center justify-center gap-3">
-            <span className="text-4xl font-bold text-purple-600">
-              {prediction.sign}
-            </span>
-            <div className="text-left">
-              <p className="text-sm text-gray-500">Confidence</p>
-              <p className={`text-lg font-semibold
-                ${prediction.confidence >= CONFIDENCE_THRESHOLD ? 'text-green-600' : 'text-orange-500'}`}>
-                {(prediction.confidence * 100).toFixed(1)}%
-              </p>
-            </div>
-            {isCorrect && lockProgress === 100 && <span className="text-3xl">✅</span>}
-          </div>
-
-          {/* Hold it — only shown for 75–85% range */}
-          {isCorrect && lockProgress > 0 && lockProgress < 100 && (
-            <p className="text-xs text-green-600 mt-2 font-medium animate-pulse">
-              Hold it... {Math.round(lockProgress)}%
-            </p>
-          )}
-
-          {targetLetter && !isCorrect && (
-            <p className="text-xs text-gray-400 mt-2">
-              Keep trying! Target:{' '}
-              <span className="font-bold text-purple-500">{targetLetter}</span>
-            </p>
-          )}
+      {/* Lock progress bar */}
+      {lockProgress > 0 && lockProgress < 100 && (
+        <div className="absolute bottom-0 left-0 right-0 z-30 h-1.5 bg-black/40">
+          <div
+            className="h-1.5 bg-emerald-400 transition-all duration-100"
+            style={{ width: `${lockProgress}%` }}
+          />
         </div>
+      )}
+
+      {/* Correct flash border */}
+      {lockProgress === 100 && (
+        <div className="absolute inset-0 z-30 border-4 border-emerald-400
+          pointer-events-none rounded-lg" />
       )}
     </div>
   );

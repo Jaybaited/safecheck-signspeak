@@ -32,7 +32,7 @@ export default function LoginPage() {
       const role = res.user.role
       if      (role === 'ADMIN')   router.push('/admin/dashboard')
       else if (role === 'STUDENT') router.push('/student/dashboard')
-      else if (role === 'TEACHER') router.push('/teacher/dashboard')
+      else if (role === 'TEACHER') router.push('/teacher/assessment')
       else if (role === 'PARENT')  router.push('/parent/dashboard')
       else                         router.push('/admin/dashboard')
 
