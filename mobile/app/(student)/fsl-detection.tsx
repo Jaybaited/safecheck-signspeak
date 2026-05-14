@@ -1,17 +1,18 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView, AppState,
+  Modal, Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
 import { useThemeStore } from "../../store/themeStore";
 import { getColors } from "../../lib/theme";
-import { ArrowLeft, CheckCircle, Scan } from "lucide-react-native";
+import { ArrowLeft } from "lucide-react-native";
 import { FSLCamera } from "../../components/camera/FSLCamera";
 import { capturePhoto } from "../../components/camera/capturePhoto";
 
-const MOBILE_ML_URL = "http://192.168.100.21:8001";
+const MOBILE_ML_URL = "http://192.168.1.114:8001";
 
 const FSL_LETTERS = [
   "A","B","C","D","E","F","G","H","I",
@@ -46,28 +47,58 @@ const TIPS: Record<string, string> = {
   Y: "Thumb and pinky extended, other fingers curled.",
 };
 
+// ─── Hardcoded local guide images ─────────────────────────────────────────────
+const FSL_IMAGES: Record<string, any> = {
+  A: require("../../assets/guide/A.png"),
+  B: require("../../assets/guide/B.png"),
+  C: require("../../assets/guide/C.png"),
+  D: require("../../assets/guide/D.png"),
+  E: require("../../assets/guide/E.png"),
+  F: require("../../assets/guide/F.png"),
+  G: require("../../assets/guide/G.png"),
+  H: require("../../assets/guide/H.png"),
+  I: require("../../assets/guide/I.png"),
+  K: require("../../assets/guide/K.png"),
+  L: require("../../assets/guide/L.png"),
+  M: require("../../assets/guide/M.png"),
+  N: require("../../assets/guide/N.png"),
+  O: require("../../assets/guide/O.png"),
+  P: require("../../assets/guide/P.png"),
+  Q: require("../../assets/guide/Q.png"),
+  R: require("../../assets/guide/R.png"),
+  S: require("../../assets/guide/S.png"),
+  T: require("../../assets/guide/T.png"),
+  U: require("../../assets/guide/U.png"),
+  V: require("../../assets/guide/V.png"),
+  W: require("../../assets/guide/W.png"),
+  X: require("../../assets/guide/X.png"),
+  Y: require("../../assets/guide/Y.png"),
+};
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default function FSLDetectionScreen() {
   const router = useRouter();
   const { resolvedTheme } = useThemeStore();
   const C = getColors(resolvedTheme);
   const cameraRef = useRef<any>(null);
 
-  const [selectedLetter, setSelected] = useState<string | null>(null);
-  const [completed, setCompleted] = useState<Set<string>>(new Set());
-  const [lastConfidence, setLastConf] = useState<number | null>(null);
-  const [isCorrect, setIsCorrect] = useState(false);
-  const [isActive, setIsActive] = useState(false);
-  const [liveResult, setLiveResult] = useState<{
+  const [selectedLetter, setSelected]   = useState<string | null>(null);
+  const [completed, setCompleted]       = useState<Set<string>>(new Set());
+  const [lastConfidence, setLastConf]   = useState<number | null>(null);
+  const [isCorrect, setIsCorrect]       = useState(false);
+  const [isActive, setIsActive]         = useState(false);
+  const [guideVisible, setGuideVisible] = useState(false);
+  const [liveResult, setLiveResult]     = useState<{
     sign: string | null; confidence: number; detected: boolean;
   } | null>(null);
 
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const timeoutRef        = useRef<ReturnType<typeof setTimeout> | null>(null);
   const selectedLetterRef = useRef<string | null>(null);
-  const isBusyRef = useRef(false);
-  const isActiveRef = useRef(false);
-  const isCameraReadyRef = useRef(false); // ✅ added
+  const isBusyRef         = useRef(false);
+  const isActiveRef       = useRef(false);
+  const isCameraReadyRef  = useRef(false);
 
-  // ✅ cleanup on unmount
+  // cleanup on unmount
   useEffect(() => {
     return () => {
       isCameraReadyRef.current = false;
@@ -76,7 +107,7 @@ export default function FSLDetectionScreen() {
     };
   }, []);
 
-  // ✅ reset camera ready when app goes to background
+  // reset camera ready when app goes to background
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (nextState) => {
       if (nextState === "background" || nextState === "inactive") {
@@ -100,7 +131,7 @@ export default function FSLDetectionScreen() {
       !cameraRef.current ||
       !selectedLetterRef.current ||
       isBusyRef.current ||
-      !isCameraReadyRef.current // ✅ added
+      !isCameraReadyRef.current
     ) return;
 
     isBusyRef.current = true;
@@ -109,17 +140,16 @@ export default function FSLDetectionScreen() {
       const base64 = await capturePhoto(cameraRef);
       if (!base64 || !isActiveRef.current) return;
 
-      // ✅ 5s timeout to prevent hanging network requests
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      const timeoutId  = setTimeout(() => controller.abort(), 5000);
 
       let data;
       try {
         const response = await fetch(`${MOBILE_ML_URL}/predict-image`, {
-          method: "POST",
+          method:  "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ image: base64 }),
-          signal: controller.signal,
+          body:    JSON.stringify({ image: base64 }),
+          signal:  controller.signal,
         });
         clearTimeout(timeoutId);
         data = await response.json();
@@ -130,7 +160,7 @@ export default function FSLDetectionScreen() {
         } else {
           console.warn("[FSL] Network error:", fetchErr.message);
         }
-        return; // skip this cycle, loop continues below
+        return;
       }
 
       if (!isActiveRef.current) return;
@@ -161,11 +191,11 @@ export default function FSLDetectionScreen() {
   };
 
   const startDetection = useCallback(() => {
-    if (!isCameraReadyRef.current) return; // ✅ added
+    if (!isCameraReadyRef.current) return;
     isActiveRef.current = true;
     setIsActive(true);
-    isBusyRef.current = false;
-    timeoutRef.current = setTimeout(captureAndCheck, 800); // ✅ 200 → 800ms
+    isBusyRef.current   = false;
+    timeoutRef.current  = setTimeout(captureAndCheck, 800);
   }, []);
 
   const selectLetter = (letter: string) => {
@@ -176,7 +206,6 @@ export default function FSLDetectionScreen() {
     setIsCorrect(false);
     setLiveResult(null);
 
-    // ✅ retry until camera is ready
     let attempts = 0;
     const tryStart = () => {
       if (isCameraReadyRef.current) {
@@ -191,7 +220,7 @@ export default function FSLDetectionScreen() {
 
   const goToNext = () => {
     if (!selectedLetterRef.current) return;
-    const idx = FSL_LETTERS.indexOf(selectedLetterRef.current);
+    const idx  = FSL_LETTERS.indexOf(selectedLetterRef.current);
     const next = FSL_LETTERS[idx + 1];
     if (next) selectLetter(next);
   };
@@ -205,10 +234,10 @@ export default function FSLDetectionScreen() {
       {/* ── Header ── */}
       <View style={styles.header}>
         <TouchableOpacity
-          style={[styles.backBtn, { borderColor: C.border }]}
+          style={[styles.backBtn, { borderColor: C.border, backgroundColor: C.card }]}
           onPress={() => { stopDetection(); router.replace("/(student)/fsl" as any); }}
         >
-          <ArrowLeft size={20} color={C.text} />
+          <ArrowLeft size={18} color={C.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: C.text }]}>FSL Practice</Text>
         <View style={[styles.countBadge, { backgroundColor: C.card, borderColor: C.border }]}>
@@ -221,87 +250,87 @@ export default function FSLDetectionScreen() {
       {/* ── Progress Bar ── */}
       <View style={styles.progressRow}>
         <View style={[styles.progressBg, { backgroundColor: C.border }]}>
-          <View style={[styles.progressFill, { width: `${progressPct}%`, backgroundColor: C.primary }]} />
+          <View style={[styles.progressFill, { width: `${progressPct}%` as any, backgroundColor: C.primary }]} />
         </View>
-        <Text style={[styles.progressPct, { color: C.muted }]}>{progressPct}%</Text>
+        <Text style={[styles.progressPct, { color: C.primary }]}>{progressPct}%</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+
         {/* ── Letter Selector ── */}
         <Text style={[styles.sectionLabel, { color: C.muted }]}>Choose a Letter</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.letterRow}>
           {FSL_LETTERS.map((letter) => {
-  const isDone = completed.has(letter);
-  const isSel = selectedLetter === letter;
-  return (
-    <TouchableOpacity
-      key={letter}
-      style={[
-        styles.letterBtn,
-        {
-          backgroundColor: isDone
-            ? C.primary + "33"  // ✅ light tint for done, not full primary
-            : isSel
-            ? C.primary + "33"
-            : C.card,
-          borderColor: isDone ? C.primary : isSel ? C.primary : C.border,
-        },
-      ]}
-      onPress={() => selectLetter(letter)}
-    >
-      <Text style={[
-        styles.letterBtnText,
-        {
-          color: isDone
-            ? C.primary   // ✅ always visible
-            : isSel
-            ? C.primary
-            : C.text,
-        }
-      ]}>
-        {letter}
-      </Text>
-    </TouchableOpacity>
-  );
-})}
+            const isDone = completed.has(letter);
+            const isSel  = selectedLetter === letter;
+            return (
+              <TouchableOpacity
+                key={letter}
+                style={[
+                  styles.letterBtn,
+                  {
+                    backgroundColor: isSel ? C.primary : isDone ? C.primary + "20" : C.card,
+                    borderColor:     isSel ? C.primary : isDone ? C.primary + "60" : C.border,
+                  },
+                ]}
+                onPress={() => selectLetter(letter)}
+              >
+                <Text style={[
+                  styles.letterBtnText,
+                  { color: isSel ? "#fff" : isDone ? C.primary : C.text },
+                ]}>
+                  {letter}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
 
         {selectedLetter ? (
           <>
-            {/* ── Tip Card ── */}
-            <View style={[styles.tipCard, { backgroundColor: C.card, borderColor: C.border }]}>
+            {/* ── Tip Card — tappable to open guide modal ── */}
+            <TouchableOpacity
+              style={[styles.tipCard, { backgroundColor: C.card, borderColor: C.border }]}
+              onPress={() => setGuideVisible(true)}
+              activeOpacity={0.75}
+            >
               <View style={[styles.tipIcon, { backgroundColor: C.primary }]}>
                 <Text style={styles.tipIconText}>{selectedLetter}</Text>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.tipTitle, { color: C.text }]}>How to sign "{selectedLetter}"</Text>
-                <Text style={[styles.tipDesc, { color: C.muted }]}>{TIPS[selectedLetter]}</Text>
+                <Text style={[styles.tipTitle, { color: C.text }]}>
+                  How to sign "{selectedLetter}"
+                </Text>
+                <Text style={[styles.tipDesc, { color: C.muted }]}>
+                  {TIPS[selectedLetter]}
+                </Text>
               </View>
-            </View>
+              <View style={[styles.guideBadge, { backgroundColor: C.primary }]}>
+                <Text style={styles.guideBadgeText}>View Guide</Text>
+              </View>
+            </TouchableOpacity>
 
             {/* ── Camera ── */}
-            <View style={[styles.cameraWrap, { borderColor: isCorrect ? "#10B981" : C.border }]}>
+            <View style={[styles.cameraWrap, { borderColor: isCorrect ? "#10B981" : C.primary }]}>
               <FSLCamera
                 ref={cameraRef}
                 style={styles.camera}
-                onReady={() => {
-                  isCameraReadyRef.current = true;
-                }}
+                onReady={() => { isCameraReadyRef.current = true; }}
               />
-              <View style={[styles.frameGuide, { borderColor: C.primary + "80" }]} />
+              <View style={[styles.frameGuide, { borderColor: isCorrect ? "#10B981" : C.primary + "80" }]} />
 
               {liveResult?.detected && !isCorrect && (
-                <View style={[styles.camBadge, { backgroundColor: "#3B82F6", bottom: 12, left: 12 }]}>
+                <View style={[styles.camBadge, { bottom: 12, left: 12, backgroundColor: "#3B82F6" }]}>
                   <Text style={styles.camBadgeText}>Sign: {liveResult.sign}</Text>
                 </View>
               )}
               {liveResult?.detected && !isCorrect && (
-                <View style={[styles.camBadge, { backgroundColor: "#10B981", top: 12, right: 12 }]}>
+                <View style={[styles.camBadge, { top: 12, right: 12, backgroundColor: "#10B981" }]}>
                   <Text style={styles.camBadgeText}>● Hand Detected</Text>
                 </View>
               )}
               {isActive && !isCorrect && !liveResult?.detected && (
-                <View style={[styles.camBadge, { backgroundColor: "#6B7280", top: 12, right: 12 }]}>
+                <View style={[styles.camBadge, { top: 12, right: 12, backgroundColor: "#6B7280" }]}>
                   <Text style={styles.camBadgeText}>🔍 Scanning...</Text>
                 </View>
               )}
@@ -363,58 +392,113 @@ export default function FSLDetectionScreen() {
           </View>
         )}
       </ScrollView>
+
+      {/* ── Guide Modal ── */}
+      <Modal
+        visible={guideVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setGuideVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            {/* Header */}
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                How to sign "{selectedLetter}"
+              </Text>
+              <TouchableOpacity onPress={() => setGuideVisible(false)}>
+                <Text style={styles.modalClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Guide image */}
+            {selectedLetter && FSL_IMAGES[selectedLetter] ? (
+              <Image
+                source={FSL_IMAGES[selectedLetter]}
+                style={styles.modalImage}
+                resizeMode="contain"
+              />
+            ) : (
+              <View style={styles.modalImagePlaceholder}>
+                <Text style={{ color: "#888", fontSize: 13 }}>No guide available</Text>
+              </View>
+            )}
+
+            {/* Hint */}
+            <Text style={styles.modalHint}>
+              {selectedLetter ? TIPS[selectedLetter] : ""}
+            </Text>
+
+            {/* Got it button */}
+            <TouchableOpacity
+              style={styles.modalBtn}
+              onPress={() => setGuideVisible(false)}
+            >
+              <Text style={styles.modalBtnText}>Got it!</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  centered: { flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 16 },
-  permIcon: { width: 80, height: 80, borderRadius: 24, alignItems: "center", justifyContent: "center", marginBottom: 8 },
-  permTitle: { fontSize: 20, fontWeight: "800", textAlign: "center" },
-  permSub: { fontSize: 13, textAlign: "center", lineHeight: 20 },
-  permBtn: { paddingVertical: 14, paddingHorizontal: 32, borderRadius: 16, marginTop: 8 },
-  permBtnText: { color: "#fff", fontWeight: "700", fontSize: 15 },
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 14 },
-  backBtn: { width: 40, height: 40, borderRadius: 12, borderWidth: 1, alignItems: "center", justifyContent: "center" },
-  headerTitle: { fontSize: 18, fontWeight: "800" },
-  countBadge: { borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4, borderWidth: 1 },
-  countBadgeText: { fontWeight: "700", fontSize: 13 },
-  progressRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 20, gap: 10, marginBottom: 16 },
-  progressBg: { flex: 1, borderRadius: 99, height: 8 },
-  progressFill: { height: 8, borderRadius: 99 },
-  progressPct: { fontWeight: "700", fontSize: 13 },
-  scroll: { paddingHorizontal: 20, paddingBottom: 40 },
-  sectionLabel: { fontSize: 13, fontWeight: "600", marginBottom: 10 },
-  letterRow: { marginBottom: 16 },
-  letterBtn: { width: 42, height: 42, borderRadius: 12, alignItems: "center", justifyContent: "center", marginRight: 8, borderWidth: 1 },
-  letterBtnText: { fontWeight: "700", fontSize: 14 },
-  tipCard: { flexDirection: "row", alignItems: "flex-start", gap: 14, borderRadius: 18, padding: 16, marginBottom: 16, borderWidth: 1 },
-  tipIcon: { width: 50, height: 50, borderRadius: 14, alignItems: "center", justifyContent: "center" },
-  tipIconText: { color: "#fff", fontWeight: "900", fontSize: 22 },
-  tipTitle: { fontWeight: "700", fontSize: 14, marginBottom: 4 },
-  tipDesc: { fontSize: 12, lineHeight: 18 },
-  cameraWrap: { borderRadius: 20, overflow: "hidden", height: 300, marginBottom: 16, borderWidth: 2, position: "relative" },
-  camera: { flex: 1 },
-  frameGuide: { position: "absolute", top: "10%", left: "10%", width: "80%", height: "80%", borderWidth: 2, borderRadius: 14 },
-  camBadge: { position: "absolute", paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20 },
-  camBadgeText: { color: "#fff", fontWeight: "700", fontSize: 12 },
-  correctOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(16,185,129,0.6)", alignItems: "center", justifyContent: "center" },
-  correctEmoji: { fontSize: 48 },
-  correctText: { fontSize: 22, fontWeight: "800", color: "#fff", marginTop: 8 },
-  liveCard: { borderRadius: 18, padding: 16, marginBottom: 16, borderWidth: 1 },
-  liveRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-around", marginBottom: 10 },
-  liveSignBig: { fontSize: 48, fontWeight: "900" },
-  liveDivider: { width: 1, height: 40 },
-  liveConfCol: { alignItems: "center", gap: 4 },
-  liveConfLabel: { fontSize: 11 },
-  liveConf: { fontSize: 22, fontWeight: "800" },
-  liveHint: { fontSize: 12, textAlign: "center" },
-  successCard: { backgroundColor: "#D1FAE5", borderRadius: 20, padding: 24, alignItems: "center", borderWidth: 1, borderColor: "#10B981", marginBottom: 16, gap: 6 },
-  successTitle: { color: "#065F46", fontWeight: "700", fontSize: 15, textAlign: "center" },
-  successConf: { color: "#059669", fontSize: 13 },
-  nextBtn: { backgroundColor: "#10B981", paddingVertical: 14, paddingHorizontal: 32, borderRadius: 16, marginTop: 8 },
-  nextBtnText: { color: "#fff", fontWeight: "700", fontSize: 15 },
-  emptyState: { alignItems: "center", justifyContent: "center", paddingVertical: 60, gap: 12 },
-  emptyText: { fontSize: 14, textAlign: "center" },
+  container:            { flex: 1 },
+  header:               { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 14 },
+  backBtn:              { width: 40, height: 40, borderRadius: 12, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  headerTitle:          { fontSize: 18, fontWeight: "800" },
+  countBadge:           { borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4, borderWidth: 1 },
+  countBadgeText:       { fontWeight: "700", fontSize: 13 },
+  progressRow:          { flexDirection: "row", alignItems: "center", paddingHorizontal: 20, gap: 10, marginBottom: 16 },
+  progressBg:           { flex: 1, borderRadius: 99, height: 8 },
+  progressFill:         { height: 8, borderRadius: 99 },
+  progressPct:          { fontWeight: "700", fontSize: 13 },
+  scroll:               { paddingHorizontal: 20, paddingBottom: 40 },
+  sectionLabel:         { fontSize: 13, fontWeight: "600", marginBottom: 10 },
+  letterRow:            { marginBottom: 16 },
+  letterBtn:            { width: 42, height: 42, borderRadius: 12, alignItems: "center", justifyContent: "center", marginRight: 8, borderWidth: 1 },
+  letterBtnText:        { fontWeight: "700", fontSize: 14 },
+  tipCard:              { flexDirection: "row", alignItems: "center", gap: 14, borderRadius: 18, padding: 16, marginBottom: 16, borderWidth: 1 },
+  tipIcon:              { width: 50, height: 50, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  tipIconText:          { color: "#fff", fontWeight: "900", fontSize: 22 },
+  tipTitle:             { fontWeight: "700", fontSize: 14, marginBottom: 4 },
+  tipDesc:              { fontSize: 12, lineHeight: 18 },
+  guideBadge:           { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
+  guideBadgeText:       { color: "#fff", fontSize: 11, fontWeight: "700" },
+  cameraWrap:           { borderRadius: 20, overflow: "hidden", height: 300, marginBottom: 16, borderWidth: 2, position: "relative" },
+  camera:               { flex: 1 },
+  frameGuide:           { position: "absolute", top: "10%", left: "10%", width: "80%", height: "80%", borderWidth: 2, borderRadius: 14 },
+  camBadge:             { position: "absolute", paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20 },
+  camBadgeText:         { color: "#fff", fontWeight: "700", fontSize: 12 },
+  correctOverlay:       { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(16,185,129,0.6)", alignItems: "center", justifyContent: "center" },
+  correctEmoji:         { fontSize: 48 },
+  correctText:          { fontSize: 22, fontWeight: "800", color: "#fff", marginTop: 8 },
+  liveCard:             { borderRadius: 18, padding: 16, marginBottom: 16, borderWidth: 1 },
+  liveRow:              { flexDirection: "row", alignItems: "center", justifyContent: "space-around", marginBottom: 10 },
+  liveSignBig:          { fontSize: 48, fontWeight: "900" },
+  liveDivider:          { width: 1, height: 40 },
+  liveConfCol:          { alignItems: "center", gap: 4 },
+  liveConfLabel:        { fontSize: 11 },
+  liveConf:             { fontSize: 22, fontWeight: "800" },
+  liveHint:             { fontSize: 12, textAlign: "center" },
+  successCard:          { backgroundColor: "#D1FAE5", borderRadius: 20, padding: 24, alignItems: "center", borderWidth: 1, borderColor: "#10B981", marginBottom: 16, gap: 6 },
+  successTitle:         { color: "#065F46", fontWeight: "700", fontSize: 15, textAlign: "center" },
+  successConf:          { color: "#059669", fontSize: 13 },
+  nextBtn:              { backgroundColor: "#10B981", paddingVertical: 14, paddingHorizontal: 32, borderRadius: 16, marginTop: 8 },
+  nextBtnText:          { color: "#fff", fontWeight: "700", fontSize: 15 },
+  emptyState:           { alignItems: "center", justifyContent: "center", paddingVertical: 60, gap: 12 },
+  emptyText:            { fontSize: 14, textAlign: "center" },
+  // ── Modal ──
+  modalOverlay:         { flex: 1, backgroundColor: "rgba(0,0,0,0.7)", alignItems: "center", justifyContent: "center" },
+  modalCard:            { backgroundColor: "#fff", borderRadius: 24, padding: 24, alignItems: "center", width: 308, shadowColor: "#000", shadowOpacity: 0.3, shadowRadius: 20, elevation: 10 },
+  modalHeader:          { flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%", marginBottom: 16 },
+  modalTitle:           { fontSize: 17, fontWeight: "700", color: "#1a1a1a" },
+  modalClose:           { fontSize: 22, color: "#888", paddingHorizontal: 4 },
+  modalImage:           { width: 260, height: 260, borderRadius: 16, backgroundColor: "#f5f5f5" },
+  modalImagePlaceholder:{ width: 260, height: 260, borderRadius: 16, backgroundColor: "#f5f5f5", alignItems: "center", justifyContent: "center" },
+  modalHint:            { marginTop: 16, fontSize: 13, color: "#555", textAlign: "center", paddingHorizontal: 8, lineHeight: 20 },
+  modalBtn:             { marginTop: 20, backgroundColor: "#7B1113", borderRadius: 14, paddingVertical: 13, paddingHorizontal: 44 },
+  modalBtnText:         { color: "#fff", fontWeight: "700", fontSize: 15 },
 });

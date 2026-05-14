@@ -1,26 +1,35 @@
-﻿node_modules/
-.expo/
-dist/
-web-build/
-expo-env.d.ts
-.kotlin/
-*.orig.*
-*.jks
-*.p8
-*.p12
-*.key
-*.mobileprovision
-.metro-health-check*
-npm-debug.*
-yarn-debug.*
-yarn-error.*
-.DS_Store
-*.pem
-.env*.local
-*.tsbuildinfo
-/ios
-/android
-.git/
-coverage/
-build/
-*.log
+﻿# ─── Python virtual environment (HUGE — TensorFlow, etc.) ─────────────────
+machine-learning/fsl_env/
+machine-learning/venv/
+machine-learning/env/
+machine-learning/.venv/
+
+# ─── ML dataset images ────────────────────────────────────────────────────
+machine-learning/dataset/
+machine-learning/datasets/
+
+# ─── ML model/weight files ────────────────────────────────────────────────
+machine-learning/**/*.h5
+machine-learning/**/*.pt
+machine-learning/**/*.pth
+machine-learning/**/*.pkl
+machine-learning/**/*.tflite
+machine-learning/**/*.onnx
+machine-learning/**/*.pb
+
+# ─── Entire ML folder (nuclear option) ────────────────────────────────────
+machine-learning/
+
+# ─── Other monorepo folders not needed for mobile build ───────────────────
+web/
+backend/node_modules/
+
+# ─── Node modules everywhere ──────────────────────────────────────────────
+**/node_modules/
+
+# ─── General large files ──────────────────────────────────────────────────
+**/*.jpg
+**/*.jpeg
+**/*.mp4
+**/*.zip
+**/*.log

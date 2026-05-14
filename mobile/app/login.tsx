@@ -46,11 +46,17 @@ export default function LoginScreen() {
         default:
           Alert.alert("Error", "Unknown role. Contact administrator.");
       }
-    } catch (error: any) {
-      const message =
-        error?.response?.data?.message || "Invalid username or password.";
-      Alert.alert("Login Failed", message);
-    } finally {
+   } catch (error: any) {
+  console.log('=== LOGIN ERROR ===');
+  console.log('Message:', error?.message);
+  console.log('Code:', error?.code);
+  console.log('Response:', error?.response?.data);
+  console.log('Status:', error?.response?.status);
+  
+  const message =
+    error?.response?.data?.message || error?.message || "Invalid username or password.";
+  Alert.alert("Login Failed", message);
+} finally {
       setLoading(false);
     }
   };

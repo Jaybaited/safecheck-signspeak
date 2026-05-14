@@ -15,7 +15,7 @@ import {
 import { FSLCamera } from "../../components/camera/FSLCamera";
 import { capturePhoto } from "../../components/camera/capturePhoto";
 
-const MOBILE_ML_URL = "http://192.168.100.21:8001";
+const MOBILE_ML_URL = "http://192.168.1.114:8001";
 const FSL_LETTERS = ["A","B","C","D","E","F","G","H","I","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y"];
 const SPEED_DURATION = 60;
 const STREAK_TARGET = 10;
