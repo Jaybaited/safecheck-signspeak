@@ -148,19 +148,7 @@ export default function ParentSidebar({ onLogout, parent, child, unreadCount = 0
           </p>
         </div>
 
-        {/* Parent info row */}
-        <div className="flex items-center gap-3 px-3 py-2">
-          <div className="w-8 h-8 bg-gradient-to-br from-[#9B2020] to-[#7B1113] rounded-full flex items-center justify-center font-bold text-white text-xs shrink-0">
-            {parent.firstName[0]}{parent.lastName[0]}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-slate-900 dark:text-white truncate">
-              {parent.firstName} {parent.lastName}
-            </p>
-            <p className="text-xs text-slate-500 dark:text-gray-400">Parent</p>
-          </div>
-        </div>
-
+       
         <button
           onClick={onLogout}
           className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors"

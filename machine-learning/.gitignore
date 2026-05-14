@@ -1,0 +1,5 @@
+fsl_env/
+dataset/
+dataset.rar
+__pycache__/
+*.rar

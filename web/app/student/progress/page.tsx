@@ -1,16 +1,17 @@
-// app/student/progress/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter }           from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import {
-  TrendingUp, BookOpen, Calendar, Award,
-  Flame, CheckCircle, Lock, Star, Target,
+  BookOpen, Calendar, CheckCircle, Lock,
+  LogIn, LogOut, TrendingUp, RefreshCw,
+  Clock, ChevronRight,
 } from 'lucide-react';
-import StudentSidebar  from '@/components/student/StudentSidebar';
-import ThemeToggle     from '@/components/ThemeToggle';
+import Link from 'next/link';
+import StudentSidebar from '@/components/student/StudentSidebar';
+import ThemeToggle from '@/components/ThemeToggle';
 import { studentStorage } from '@/lib/storage';
-import { api }            from '@/lib/api';
+import { api } from '@/lib/api';
 import type { AttendanceRecord, AttendanceStats } from '@/lib/api';
 
 interface User {
@@ -25,7 +26,10 @@ const FSL_LETTERS = [
   'T','U','V','W','X','Y',
 ];
 
-interface WeekDay { label: string; iso: string; fsl: number; attended: boolean; }
+interface WeekDay {
+  label: string; iso: string;
+  fsl: number; hasTimeIn: boolean; hasTimeOut: boolean;
+}
 
 function getWeekDates(): { label: string; iso: string }[] {
   const today  = new Date();
@@ -38,38 +42,16 @@ function getWeekDates(): { label: string; iso: string }[] {
   });
 }
 
-function calcStreak(records: AttendanceRecord[]): number {
-  const presentDates = new Set(
-    records
-      .filter(r => r.status === 'PRESENT' || r.status === 'LATE')
-      .map(r => r.date.split('T')[0])
-  );
-  let streak = 0;
-  const today = new Date();
-  for (let i = 0; i < 365; i++) {
-    const d = new Date(today);
-    d.setDate(today.getDate() - i);
-    const day = d.getDay();
-    if (day === 0 || day === 6) continue;
-    const iso = d.toISOString().split('T')[0];
-    if (presentDates.has(iso)) { streak++; }
-    else { if (i === 0) continue; break; }
-  }
-  return streak;
-}
-
 export default function StudentProgressPage() {
   const router = useRouter();
   const [user,             setUser]             = useState<User | null>(null);
   const [authLoading,      setAuthLoading]      = useState(true);
   const [dataLoading,      setDataLoading]      = useState(true);
+  const [refreshing,       setRefreshing]       = useState(false);
   const [completedLetters, setCompletedLetters] = useState<Set<string>>(new Set());
   const [attendanceStats,  setAttendanceStats]  = useState<AttendanceStats | null>(null);
   const [weekDays,         setWeekDays]         = useState<WeekDay[]>([]);
-  const [streak,           setStreak]           = useState(0);
-  const [totalXP,          setTotalXP]          = useState(0);
-  const [highScore,        setHighScore]        = useState(0);
-  const [quizBest,         setQuizBest]         = useState(0);
+  const [recentRecords,    setRecentRecords]    = useState<AttendanceRecord[]>([]);
 
   useEffect(() => {
     const token    = localStorage.getItem('token');
@@ -79,351 +61,485 @@ export default function StudentProgressPage() {
       const parsedUser = JSON.parse(userData) as User;
       if (parsedUser.role !== 'STUDENT') { router.push('/login'); return; }
       setUser(parsedUser);
-
       const savedLetters = studentStorage.get(parsedUser.id, 'fsl_completed');
       const letters: Set<string> = savedLetters
         ? new Set(JSON.parse(savedLetters) as string[])
         : new Set();
       setCompletedLetters(letters);
-
-      const hs = parseInt(studentStorage.get(parsedUser.id, 'fsl_highscore') ?? '0');
-      const qb = parseInt(studentStorage.get(parsedUser.id, 'fsl_quiz_best') ?? '0');
-      setHighScore(hs);
-      setQuizBest(qb);
-
-      const weekDates = getWeekDates();
-
-      Promise.all([
-        api.getStudentStats(parsedUser.id),
-        api.getStudentAttendance(parsedUser.id),
-      ])
-        .then(([stats, records]: [AttendanceStats, AttendanceRecord[]]) => {
-          setAttendanceStats(stats);
-          setStreak(calcStreak(records));
-          const presentDates = new Set(
-            records
-              .filter(r => r.status === 'PRESENT' || r.status === 'LATE')
-              .map(r => r.date.split('T')[0])
-          );
-          setWeekDays(weekDates.map(({ label, iso }) => ({
-            label, iso,
-            fsl:      studentStorage.getFslActivity(parsedUser.id, iso),
-            attended: presentDates.has(iso),
-          })));
-          setTotalXP(letters.size * 50 + Math.floor(hs / 10) + qb * 20);
-        })
-        .catch(() => {
-          setWeekDays(weekDates.map(({ label, iso }) => ({
-            label, iso,
-            fsl:      studentStorage.getFslActivity(parsedUser.id, iso),
-            attended: false,
-          })));
-          setTotalXP(letters.size * 50 + Math.floor(hs / 10) + qb * 20);
-        })
-        .finally(() => setDataLoading(false));
+      loadData(parsedUser.id);
     } catch { router.push('/login'); }
-    finally   { setAuthLoading(false); }
+    finally { setAuthLoading(false); }
   }, [router]);
 
-  const handleLogout = () => {
+  const loadData = async (studentId: string, silent = false) => {
+    if (!silent) setDataLoading(true);
+    else setRefreshing(true);
+    try {
+      const weekDates = getWeekDates();
+      const [stats, records] = await Promise.all([
+        api.getStudentStats(studentId),
+        api.getStudentAttendance(studentId),
+      ]);
+      setAttendanceStats(stats as AttendanceStats);
+
+      const recordsByDate: Record<string, AttendanceRecord> = {};
+      (records as AttendanceRecord[]).forEach((r) => {
+        recordsByDate[r.date.split('T')[0]] = r;
+      });
+
+      setWeekDays(weekDates.map(({ label, iso }) => ({
+        label, iso,
+        fsl:        studentStorage.getFslActivity(studentId, iso),
+        hasTimeIn:  !!recordsByDate[iso]?.timeIn,
+        hasTimeOut: !!recordsByDate[iso]?.timeOut,
+      })));
+
+      const sorted = [...(records as AttendanceRecord[])]
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+        .slice(0, 3);
+      setRecentRecords(sorted);
+    } catch (err) {
+      console.error('Failed to load progress data:', err);
+      const weekDates = getWeekDates();
+      setWeekDays(weekDates.map(({ label, iso }) => ({
+        label, iso,
+        fsl: studentStorage.getFslActivity(studentId, iso),
+        hasTimeIn: false, hasTimeOut: false,
+      })));
+    } finally {
+      setDataLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  const handleRefresh = () => { if (user) loadData(user.id, true); };
+  const handleLogout  = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     router.push('/login');
   };
 
+  const formatTime = (str?: string | null) =>
+    str ? new Date(str).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '—';
+
+  const formatDate = (str: string) =>
+    new Date(str).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+
   if (authLoading || !user) {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-gray-950 flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-[#7B1113] border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-4 border-purple-600 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   const fslPct         = Math.round((completedLetters.size / FSL_LETTERS.length) * 100);
-  const maxBarFSL      = Math.max(...weekDays.map(d => d.fsl), 1);
-  const presentDays    = attendanceStats?.present     ?? 0;
-  const totalDays      = attendanceStats?.totalDays   ?? 0;
+  const remaining      = FSL_LETTERS.length - completedLetters.size;
+  const presentDays    = attendanceStats?.present        ?? 0;
+  const totalDays      = attendanceStats?.totalDays      ?? 0;
   const attendanceRate = attendanceStats?.attendanceRate ?? 0;
-
-  const achievements = [
-    { id: 1, title: 'First Sign',        desc: 'Completed your first FSL letter',       icon: Star,     xp: 50,  earned: completedLetters.size >= 1  },
-    { id: 2, title: 'Half the Alphabet', desc: 'Mastered 12 or more letters',           icon: BookOpen, xp: 200, earned: completedLetters.size >= 12 },
-    { id: 3, title: 'Full Alphabet',     desc: 'Mastered all 24 FSL letters',           icon: Award,    xp: 500, earned: completedLetters.size >= 24 },
-    { id: 4, title: 'Perfect Week',      desc: 'Attended all 5 weekdays this week',     icon: Calendar, xp: 150, earned: weekDays.filter(d => ['Mon','Tue','Wed','Thu','Fri'].includes(d.label) && d.attended).length >= 5 },
-    { id: 5, title: 'Week Streak',       desc: '7-day attendance streak',               icon: Flame,    xp: 100, earned: streak >= 7 },
-    { id: 6, title: 'High Scorer',       desc: 'Score 500+ points in FSL Games',        icon: Target,   xp: 300, earned: highScore >= 500 },
-  ];
-
-  // ── Compact horizontal stat cards ──────────────────────────────────────────
-  const statCards = [
-    {
-      icon: BookOpen, label: 'FSL Progress',
-      value: `${fslPct}%`,
-      sub: `${completedLetters.size} of ${FSL_LETTERS.length} letters`,
-      iconBg: 'bg-[#7B1113]/10 dark:bg-[#7B1113]/20',
-      iconColor: 'text-[#7B1113] dark:text-[#E8C96A]',
-      valueColor: 'text-[#7B1113] dark:text-[#E8C96A]',
-    },
-    {
-      icon: Calendar, label: 'Attendance Rate',
-      value: dataLoading ? '…' : `${Math.round(attendanceRate)}%`,
-      sub: dataLoading ? 'Loading…' : `${presentDays} of ${totalDays} days`,
-      iconBg: 'bg-emerald-100 dark:bg-green-500/10',
-      iconColor: 'text-emerald-600 dark:text-green-400',
-      valueColor: 'text-emerald-600 dark:text-green-400',
-    },
-    {
-      icon: Flame, label: 'Current Streak',
-      value: dataLoading ? '…' : `${streak} days`,
-      sub: streak > 0 ? 'Keep it going! 🔥' : 'Start attending!',
-      iconBg: 'bg-orange-100 dark:bg-orange-500/10',
-      iconColor: 'text-orange-500 dark:text-orange-400',
-      valueColor: 'text-orange-500 dark:text-orange-400',
-    },
-    {
-      icon: Star, label: 'Total XP',
-      value: totalXP.toLocaleString(),
-      sub: `${achievements.filter(a => a.earned).length} achievements earned`,
-      iconBg: 'bg-yellow-100 dark:bg-yellow-500/10',
-      iconColor: 'text-yellow-600 dark:text-yellow-400',
-      valueColor: 'text-yellow-600 dark:text-yellow-400',
-    },
-  ];
+  const maxBarFSL      = Math.max(...weekDays.map(d => d.fsl), 1);
+  const weekFSLTotal   = weekDays.reduce((s, d) => s + d.fsl, 0);
+  const weekTimeIns    = weekDays.filter(d => d.hasTimeIn).length;
+  const nextLetter     = FSL_LETTERS.find(l => !completedLetters.has(l)) ?? null;
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-gray-950 text-slate-900 dark:text-white transition-colors duration-200">
       <StudentSidebar onLogout={handleLogout} student={user} />
 
-      <main className="ml-64 p-8">
+      <main className="ml-64 flex flex-col p-6 gap-5">
 
-        {/* ── Header ────────────────────────────────────────────────────── */}
-        <div className="flex justify-between items-center mb-8">
+        {/* ── Header ── */}
+        <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold mb-2">My Progress</h1>
-            <p className="text-slate-500 dark:text-gray-400">
-              Track your FSL learning and attendance milestones
+            <h1 className="text-2xl font-bold tracking-tight">My Progress</h1>
+            <p className="text-sm text-slate-500 dark:text-gray-400 mt-0.5">
+              Track your FSL learning and attendance
             </p>
           </div>
-          <ThemeToggle />
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium
+                bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700
+                text-slate-600 dark:text-gray-300
+                hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors
+                disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
+          </div>
         </div>
 
-        {/* ── Compact Horizontal Stat Cards ─────────────────────────────── */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
-          {statCards.map(({ icon: Icon, label, value, sub, iconBg, iconColor, valueColor }) => (
+        {/* ── Stat Cards ── */}
+        <div className="grid grid-cols-4 gap-4">
+          {[
+            {
+              icon: BookOpen,   label: 'FSL Progress',
+              value: `${fslPct}%`,
+              sub: `${completedLetters.size} of ${FSL_LETTERS.length} letters mastered`,
+              iconBg: 'bg-purple-100 dark:bg-purple-500/10',
+              iconColor: 'text-purple-600 dark:text-purple-400',
+              valueColor: 'text-purple-600 dark:text-purple-400',
+            },
+            {
+              icon: Calendar,   label: 'Attendance Rate',
+              value: dataLoading ? '—' : `${Math.round(attendanceRate)}%`,
+              sub: dataLoading ? 'Loading…' : `${presentDays} of ${totalDays} days present`,
+              iconBg: 'bg-emerald-100 dark:bg-emerald-500/10',
+              iconColor: 'text-emerald-600 dark:text-emerald-400',
+              valueColor: 'text-emerald-600 dark:text-emerald-400',
+            },
+            {
+              icon: LogIn,      label: 'Time-In This Week',
+              value: dataLoading ? '—' : String(weekTimeIns),
+              sub: 'days with time-in recorded',
+              iconBg: 'bg-cyan-100 dark:bg-cyan-500/10',
+              iconColor: 'text-cyan-600 dark:text-cyan-400',
+              valueColor: 'text-cyan-600 dark:text-cyan-400',
+            },
+            {
+              icon: TrendingUp, label: 'FSL This Week',
+              value: dataLoading ? '—' : String(weekFSLTotal),
+              sub: 'letters practiced this week',
+              iconBg: 'bg-amber-100 dark:bg-amber-500/10',
+              iconColor: 'text-amber-600 dark:text-amber-400',
+              valueColor: 'text-amber-600 dark:text-amber-400',
+            },
+          ].map(({ icon: Icon, label, value, sub, iconBg, iconColor, valueColor }) => (
             <div
               key={label}
-              className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 rounded-xl p-5 shadow-sm dark:shadow-none transition-colors duration-200"
+              className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800
+                rounded-xl p-4 flex items-center gap-4 shadow-sm dark:shadow-none transition-colors"
             >
-              {/* ✅ Horizontal layout — icon left, text right, NO blank space */}
-              <div className="flex items-center gap-4">
-                <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${iconBg}`}>
-                  <Icon className={`w-6 h-6 ${iconColor}`} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-slate-500 dark:text-gray-400 text-sm">{label}</p>
-                  <h3 className={`text-2xl font-bold mt-0.5 ${valueColor}`}>{value}</h3>
-                  <p className="text-xs text-slate-400 dark:text-gray-500 mt-0.5 truncate">{sub}</p>
-                </div>
+              <div className={`w-11 h-11 ${iconBg} rounded-xl flex items-center justify-center shrink-0`}>
+                <Icon className={`w-5 h-5 ${iconColor}`} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs text-slate-500 dark:text-gray-400 mb-0.5">{label}</p>
+                <p className={`text-2xl font-bold leading-none ${valueColor}`}>{value}</p>
+                <p className="text-xs text-slate-400 dark:text-gray-500 mt-1 truncate">{sub}</p>
               </div>
             </div>
           ))}
         </div>
 
-        {/* ── Weekly Activity + This Week ────────────────────────────────── */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+        {/* ── Main Layout ── */}
+        <div className="flex gap-4 items-start">
 
-          {/* Bar Chart */}
-          <div className="lg:col-span-2 bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 rounded-xl p-6 shadow-sm dark:shadow-none transition-colors duration-200">
-            <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-6">
-              Weekly FSL Activity
-            </h2>
-            {dataLoading ? (
-              <div className="h-40 flex items-center justify-center">
-                <div className="w-6 h-6 border-4 border-[#7B1113] border-t-transparent rounded-full animate-spin" />
-              </div>
-            ) : (
-              <>
-                <div className="flex items-end gap-3 h-40">
-                  {weekDays.map(({ label, fsl }) => (
-                    <div key={label} className="flex-1 flex flex-col items-center gap-2">
-                      <span className="text-xs text-slate-500 dark:text-gray-400 font-medium">
-                        {fsl > 0 ? fsl : ''}
+          {/* ── LEFT: FSL Progress ── */}
+          <div className="flex flex-col gap-4 flex-1 min-w-0">
+
+            {/* FSL Alphabet Grid */}
+            <div className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800
+              rounded-xl p-5 shadow-sm dark:shadow-none transition-colors">
+
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <h2 className="text-base font-bold">FSL Alphabet Progress</h2>
+                  <p className="text-sm text-slate-500 dark:text-gray-400 mt-0.5">
+                    {completedLetters.size} mastered · {remaining} remaining
+                    {nextLetter && (
+                      <span className="ml-2 text-purple-600 dark:text-purple-400 font-medium">
+                        · Next up: <strong>{nextLetter}</strong>
                       </span>
-                      <div className="w-full flex flex-col justify-end" style={{ height: '120px' }}>
-                        {/* ✅ Maroon bars, not purple */}
-                        <div
-                          className="w-full bg-[#7B1113] dark:bg-[#9B2020] rounded-t-md transition-all duration-500 hover:bg-[#9B2020]"
-                          style={{
-                            height:    fsl > 0 ? `${(fsl / maxBarFSL) * 100}%` : '4px',
-                            minHeight: fsl > 0 ? '8px' : '4px',
-                            opacity:   fsl > 0 ? 1 : 0.2,
-                          }}
-                        />
-                      </div>
-                      <span className="text-xs text-slate-500 dark:text-gray-400">{label}</span>
-                    </div>
-                  ))}
+                    )}
+                  </p>
                 </div>
-                <p className="text-xs text-slate-400 dark:text-gray-500 mt-4 text-center">
-                  Letters practiced per day this week
-                </p>
-              </>
-            )}
-          </div>
-
-          {/* This Week Sidebar */}
-          <div className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 rounded-xl p-6 shadow-sm dark:shadow-none transition-colors duration-200">
-            <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-6">This Week</h2>
-            {dataLoading ? (
-              <div className="space-y-4">
-                {Array.from({ length: 7 }).map((_, i) => (
-                  <div key={i} className="h-5 bg-slate-100 dark:bg-gray-800 rounded animate-pulse" />
-                ))}
+                <span className="text-2xl font-bold text-purple-600 dark:text-purple-400">{fslPct}%</span>
               </div>
-            ) : (
-              <div className="space-y-4">
-                {weekDays.map(({ label, fsl, attended }) => (
-                  <div key={label} className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-slate-700 dark:text-gray-300 w-8">
-                      {label}
-                    </span>
-                    <div className="flex items-center gap-2 flex-1 ml-4">
-                      <div className={`w-2 h-2 rounded-full shrink-0 ${
-                        attended ? 'bg-emerald-500' : 'bg-slate-200 dark:bg-gray-700'
-                      }`} />
-                      <div className="flex-1 h-2 bg-slate-100 dark:bg-gray-800 rounded-full overflow-hidden">
-                        {/* ✅ Maroon mini-bars */}
-                        <div
-                          className="h-full bg-[#7B1113] dark:bg-[#9B2020] rounded-full transition-all duration-500"
-                          style={{ width: fsl > 0 ? `${(fsl / maxBarFSL) * 100}%` : '0%' }}
-                        />
-                      </div>
-                    </div>
-                    <span className="text-xs text-slate-400 dark:text-gray-500 w-14 text-right">
-                      {fsl > 0 ? `${fsl} signs` : 'none'}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-            <div className="mt-6 pt-4 border-t border-slate-200 dark:border-gray-800 flex items-center gap-4 text-xs text-slate-400 dark:text-gray-500">
-              <div className="flex items-center gap-1.5">
-                <div className="w-2 h-2 rounded-full bg-emerald-500" /> Attended
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-3 h-2 rounded-full bg-[#7B1113]" /> FSL signs
-              </div>
-            </div>
-          </div>
-        </div>
 
-        {/* ── FSL Alphabet Progress ──────────────────────────────────────── */}
-        <div className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 rounded-xl p-6 shadow-sm dark:shadow-none transition-colors duration-200 mb-6">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h2 className="text-xl font-bold text-slate-900 dark:text-white">
-                FSL Alphabet Progress
-              </h2>
-              <p className="text-sm text-slate-500 dark:text-gray-400 mt-1">
-                {completedLetters.size} of {FSL_LETTERS.length} letters mastered
-              </p>
-            </div>
-            <div className="text-right">
-              <span className="text-2xl font-bold text-[#7B1113] dark:text-[#E8C96A]">
-                {fslPct}%
-              </span>
-              <p className="text-xs text-slate-400 dark:text-gray-500">complete</p>
-            </div>
-          </div>
-
-          {/* Progress bar */}
-          <div className="w-full bg-slate-100 dark:bg-gray-800 rounded-full h-2 mb-6">
-            <div
-              className="bg-[#7B1113] h-2 rounded-full transition-all duration-700"
-              style={{ width: `${fslPct}%` }}
-            />
-          </div>
-
-          {/* Letter grid */}
-          <div className="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-12 gap-2">
-            {FSL_LETTERS.map((letter) => {
-              const done = completedLetters.has(letter);
-              return (
+              {/* Progress bar */}
+              <div className="w-full bg-slate-100 dark:bg-gray-800 rounded-full h-2 mb-4">
                 <div
-                  key={letter}
-                  className={`aspect-square rounded-xl flex flex-col items-center justify-center text-sm font-bold transition-all ${
-                    done
-                      ? 'bg-[#7B1113] text-white shadow-md shadow-[#7B1113]/30'
-                      : 'bg-slate-100 dark:bg-gray-800 text-slate-400 dark:text-gray-500'
-                  }`}
-                >
-                  {letter}
-                  {done && <CheckCircle className="w-3 h-3 mt-0.5 opacity-80" />}
-                </div>
-              );
-            })}
-            {/* J and Z locked */}
-            {['J', 'Z'].map((letter) => (
-              <div
-                key={letter}
-                className="aspect-square rounded-xl flex flex-col items-center justify-center text-sm font-bold bg-slate-50 dark:bg-gray-900 text-slate-300 dark:text-gray-600 border-2 border-dashed border-slate-200 dark:border-gray-700"
-              >
-                {letter}
-                <Lock className="w-3 h-3 mt-0.5" />
+                  className="bg-purple-600 h-2 rounded-full transition-all duration-700"
+                  style={{ width: `${fslPct}%` }}
+                />
               </div>
-            ))}
-          </div>
-        </div>
 
-        {/* ── Achievements ──────────────────────────────────────────────── */}
-        <div className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 rounded-xl p-6 shadow-sm dark:shadow-none transition-colors duration-200">
-          <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-6">Achievements</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {achievements.map(({ id, title, desc, icon: Icon, earned, xp }) => (
-              <div
-                key={id}
-                className={`flex items-start gap-4 p-4 rounded-xl border transition-colors ${
-                  earned
-                    ? 'bg-[#7B1113]/5 dark:bg-[#7B1113]/10 border-[#7B1113]/20 dark:border-[#7B1113]/30'
-                    : 'bg-slate-50 dark:bg-gray-800/50 border-slate-200 dark:border-gray-700 opacity-50'
-                }`}
-              >
-                <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${
-                  earned
-                    ? 'bg-[#7B1113] text-white shadow-md shadow-[#7B1113]/30'
-                    : 'bg-slate-200 dark:bg-gray-700 text-slate-400 dark:text-gray-500'
-                }`}>
-                  <Icon className="w-6 h-6" />
+              {/* Letter grid */}
+              <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(13, minmax(0, 1fr))' }}>
+                {FSL_LETTERS.map((letter) => {
+                  const done   = completedLetters.has(letter);
+                  const isNext = letter === nextLetter;
+                  return (
+                    <div
+                      key={letter}
+                      className={`h-10 rounded-xl flex flex-col items-center justify-center text-xs font-bold
+                        transition-all relative
+                        ${done
+                          ? 'bg-purple-600 text-white shadow-sm shadow-purple-500/20'
+                          : isNext
+                          ? 'bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-300 ring-2 ring-purple-400 ring-offset-1 dark:ring-offset-gray-900'
+                          : 'bg-slate-100 dark:bg-gray-800 text-slate-500 dark:text-gray-400'
+                        }`}
+                    >
+                      {letter}
+                      {done && <CheckCircle className="w-2.5 h-2.5 text-white/70 mt-0.5" />}
+                    </div>
+                  );
+                })}
+                {['J','Z'].map((letter) => (
+                  <div
+                    key={letter}
+                    className="h-10 rounded-xl flex flex-col items-center justify-center text-xs font-bold
+                      bg-slate-50 dark:bg-gray-900 text-slate-300 dark:text-gray-600
+                      border border-dashed border-slate-200 dark:border-gray-700"
+                  >
+                    {letter}
+                    <Lock className="w-2.5 h-2.5 mt-0.5" />
+                  </div>
+                ))}
+              </div>
+
+              {/* Legend */}
+              <div className="flex items-center gap-4 mt-4 pt-4 border-t border-slate-100 dark:border-gray-800">
+                {[
+                  { color: 'bg-purple-600', label: 'Mastered' },
+                  { color: 'bg-purple-100 dark:bg-purple-500/20 ring-2 ring-purple-400', label: 'Next up' },
+                  { color: 'bg-slate-100 dark:bg-gray-800', label: 'Not yet started' },
+                  { color: 'bg-slate-50 dark:bg-gray-900 border border-dashed border-slate-300 dark:border-gray-600', label: 'Dynamic (locked)' },
+                ].map(({ color, label }) => (
+                  <div key={label} className="flex items-center gap-2 text-xs text-slate-500 dark:text-gray-400">
+                    <div className={`w-4 h-4 rounded-md ${color}`} /> {label}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Weekly FSL Bar Chart */}
+            <div className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800
+              rounded-xl p-5 shadow-sm dark:shadow-none transition-colors">
+
+              <div className="flex items-center justify-between mb-1">
+                <div>
+                  <h2 className="text-base font-bold">Weekly FSL Activity</h2>
+                  <p className="text-xs text-slate-500 dark:text-gray-400 mt-0.5">
+                    Letters practiced per day this week
+                  </p>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className={`font-semibold text-sm ${
-                      earned
-                        ? 'text-[#7B1113] dark:text-[#E8C96A]'
-                        : 'text-slate-500 dark:text-gray-400'
-                    }`}>
-                      {title}
-                    </p>
-                    <span className={`text-xs font-bold shrink-0 ${
-                      earned
-                        ? 'text-yellow-600 dark:text-yellow-400'
-                        : 'text-slate-400 dark:text-gray-500'
-                    }`}>
-                      +{xp} XP
+                <div className="text-right">
+                  <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">{weekFSLTotal}</p>
+                  <p className="text-xs text-slate-400 dark:text-gray-500">this week</p>
+                </div>
+              </div>
+
+              {dataLoading ? (
+                <div className="h-36 flex items-center justify-center">
+                  <div className="w-6 h-6 border-4 border-purple-600 border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-end gap-3 h-36 pt-3">
+                    {weekDays.map(({ label, fsl, hasTimeIn }) => (
+                      <div key={label} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end">
+                        {fsl > 0 && (
+                          <span className="text-xs text-slate-500 dark:text-gray-400 font-semibold tabular-nums">
+                            {fsl}
+                          </span>
+                        )}
+                        <div className="w-full flex-1 flex flex-col justify-end">
+                          <div
+                            className="w-full rounded-t-md bg-purple-600 dark:bg-purple-500
+                              hover:bg-purple-700 transition-colors"
+                            style={{
+                              height:    fsl > 0 ? `${(fsl / maxBarFSL) * 100}%` : '4px',
+                              minHeight: fsl > 0 ? '8px' : '4px',
+                              opacity:   fsl > 0 ? 1 : 0.15,
+                            }}
+                          />
+                        </div>
+                        <div className={`w-2 h-2 rounded-full shrink-0 ${
+                          hasTimeIn ? 'bg-emerald-500' : 'bg-slate-200 dark:bg-gray-700'
+                        }`} />
+                        <span className="text-xs text-slate-500 dark:text-gray-400">{label}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center gap-5 mt-3 pt-3 border-t border-slate-100 dark:border-gray-800">
+                    <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-gray-400">
+                      <div className="w-4 h-3 rounded-sm bg-purple-600" /> FSL letters practiced
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-gray-400">
+                      <div className="w-2 h-2 rounded-full bg-emerald-500" /> Attended (time-in recorded)
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* ── RIGHT: Attendance Summary ── */}
+          <div className="w-72 shrink-0 flex flex-col gap-4">
+
+            {/* Attendance Overview */}
+            <div className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800
+              rounded-xl p-5 shadow-sm dark:shadow-none transition-colors">
+              <h2 className="text-base font-bold mb-4">Attendance Overview</h2>
+
+              {/* Circular rate */}
+              <div className="flex items-center gap-4 mb-4">
+                <div className="relative w-16 h-16 shrink-0">
+                  <svg className="w-16 h-16 -rotate-90" viewBox="0 0 64 64">
+                    <circle cx="32" cy="32" r="26" fill="none"
+                      className="stroke-slate-100 dark:stroke-gray-800" strokeWidth="6" />
+                    <circle cx="32" cy="32" r="26" fill="none"
+                      className="stroke-emerald-500" strokeWidth="6"
+                      strokeDasharray={`${2 * Math.PI * 26}`}
+                      strokeDashoffset={`${2 * Math.PI * 26 * (1 - (dataLoading ? 0 : attendanceRate / 100))}`}
+                      strokeLinecap="round"
+                      style={{ transition: 'stroke-dashoffset 0.7s ease' }}
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                      {dataLoading ? '—' : `${Math.round(attendanceRate)}%`}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-500 dark:text-gray-400 mt-0.5">{desc}</p>
-                  {earned && (
-                    <div className="flex items-center gap-1 mt-2">
-                      <CheckCircle className="w-3 h-3 text-emerald-500" />
-                      <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
-                        Earned
-                      </span>
-                    </div>
-                  )}
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+                    {dataLoading ? '—' : presentDays}
+                    <span className="text-sm font-normal text-slate-400 dark:text-gray-500 ml-1">
+                      / {totalDays}
+                    </span>
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-gray-400 mt-0.5">days attended</p>
                 </div>
               </div>
-            ))}
+
+              {/* This week tracker */}
+              <p className="text-xs font-semibold text-slate-400 dark:text-gray-500 uppercase tracking-wide mb-2">
+                This Week
+              </p>
+              <div className="grid grid-cols-7 gap-1 mb-2">
+                {weekDays.map(({ label, hasTimeIn, hasTimeOut }) => (
+                  <div key={label} className="flex flex-col items-center gap-1">
+                    <div className={`w-full h-7 rounded-lg flex items-center justify-center transition-colors
+                      ${hasTimeIn && hasTimeOut
+                        ? 'bg-emerald-100 dark:bg-emerald-500/20 border border-emerald-300 dark:border-emerald-500/40'
+                        : hasTimeIn
+                        ? 'bg-purple-100 dark:bg-purple-500/20 border border-purple-300 dark:border-purple-500/40'
+                        : 'bg-slate-100 dark:bg-gray-800 border border-slate-200 dark:border-gray-700'
+                      }`}
+                    >
+                      {hasTimeIn && (
+                        <div className={`w-2 h-2 rounded-full ${hasTimeOut ? 'bg-emerald-500' : 'bg-purple-500'}`} />
+                      )}
+                    </div>
+                    <span className="text-[10px] text-slate-400 dark:text-gray-500">{label.slice(0, 2)}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-x-3 gap-y-1">
+                {[
+                  { color: 'bg-emerald-100 dark:bg-emerald-500/20 border border-emerald-300 dark:border-emerald-500/40', label: 'Full day' },
+                  { color: 'bg-purple-100 dark:bg-purple-500/20 border border-purple-300 dark:border-purple-500/40',   label: 'Time-in only' },
+                  { color: 'bg-slate-100 dark:bg-gray-800 border border-slate-200 dark:border-gray-700',               label: 'No record' },
+                ].map(({ color, label }) => (
+                  <div key={label} className="flex items-center gap-1.5">
+                    <div className={`w-3 h-3 rounded-sm ${color}`} />
+                    <span className="text-[10px] text-slate-400 dark:text-gray-500">{label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Recent Check-ins */}
+            <div className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800
+              rounded-xl p-5 shadow-sm dark:shadow-none transition-colors">
+
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h2 className="text-base font-bold">Recent Check-ins</h2>
+                  <p className="text-xs text-slate-500 dark:text-gray-400 mt-0.5">Last 3 entries</p>
+                </div>
+                <Link
+                  href="/student/attendance"
+                  className="flex items-center gap-1 text-xs font-medium
+                    text-purple-600 dark:text-purple-400
+                    hover:text-purple-700 dark:hover:text-purple-300 transition-colors"
+                >
+                  View all <ChevronRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                {dataLoading ? (
+                  Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="animate-pulse rounded-xl bg-slate-50 dark:bg-gray-800 p-3 space-y-2">
+                      <div className="h-3 bg-slate-200 dark:bg-gray-700 rounded w-24" />
+                      <div className="flex gap-3">
+                        <div className="h-3 bg-slate-200 dark:bg-gray-700 rounded w-16" />
+                        <div className="h-3 bg-slate-200 dark:bg-gray-700 rounded w-16" />
+                      </div>
+                    </div>
+                  ))
+                ) : recentRecords.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-6 text-center">
+                    <Calendar className="w-8 h-8 text-slate-300 dark:text-gray-700 mb-2" />
+                    <p className="text-sm text-slate-500 dark:text-gray-400">No records yet</p>
+                  </div>
+                ) : (
+                  recentRecords.map((record) => {
+                    let duration = '';
+                    if (record.timeIn && record.timeOut) {
+                      const ms   = new Date(record.timeOut).getTime() - new Date(record.timeIn).getTime();
+                      const hrs  = Math.floor(ms / 3600000);
+                      const mins = Math.floor((ms % 3600000) / 60000);
+                      duration   = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+                    }
+                    return (
+                      <div
+                        key={record.id}
+                        className="rounded-xl bg-slate-50 dark:bg-gray-800/60
+                          border border-slate-100 dark:border-gray-700/50 p-3"
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-semibold text-slate-700 dark:text-gray-200">
+                            {formatDate(record.date)}
+                          </span>
+                          {duration && (
+                            <span className="text-[10px] text-slate-400 dark:text-gray-500 flex items-center gap-0.5">
+                              <Clock className="w-3 h-3" /> {duration}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-5 h-5 rounded-md bg-purple-100 dark:bg-purple-500/20 flex items-center justify-center">
+                              <LogIn className="w-3 h-3 text-purple-600 dark:text-purple-400" />
+                            </div>
+                            <span className="text-xs font-semibold text-purple-600 dark:text-purple-400 tabular-nums">
+                              {formatTime(record.timeIn)}
+                            </span>
+                          </div>
+                          <div className="flex-1 h-px bg-slate-200 dark:bg-gray-700" />
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-5 h-5 rounded-md bg-cyan-100 dark:bg-cyan-500/20 flex items-center justify-center">
+                              <LogOut className="w-3 h-3 text-cyan-600 dark:text-cyan-400" />
+                            </div>
+                            {record.timeOut ? (
+                              <span className="text-xs font-semibold text-cyan-600 dark:text-cyan-400 tabular-nums">
+                                {formatTime(record.timeOut)}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-semibold text-amber-500 dark:text-amber-400">
+                                Pending
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </main>
