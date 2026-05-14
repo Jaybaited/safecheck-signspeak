@@ -1,4 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  UnauthorizedException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import * as bcrypt from 'bcrypt';
@@ -22,9 +27,7 @@ export class UsersService {
         createdAt: true,
         updatedAt: true,
       },
-      orderBy: {
-        createdAt: 'desc',
-      },
+      orderBy: { createdAt: 'desc' },
     });
   }
 
@@ -50,10 +53,8 @@ export class UsersService {
   async create(createUserDto: CreateUserDto) {
     try {
       const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
-
-      // Use Prisma.$executeRaw with proper type casting for enums
       await this.prisma.$executeRawUnsafe(
-        `INSERT INTO users (id, username, email, password, role, "firstName", "lastName", "gradeLevel", "rfidCard", "photoUrl", "createdAt", "updatedAt") 
+        `INSERT INTO users (id, username, email, password, role, "firstName", "lastName", "gradeLevel", "rfidCard", "photoUrl", "createdAt", "updatedAt")
          VALUES ($1, $2, $3, $4, $5::"Role", $6, $7, $8::"GradeLevel", $9, $10, NOW(), NOW())`,
         this.generateUuid(),
         createUserDto.username,
@@ -64,10 +65,8 @@ export class UsersService {
         createUserDto.lastName,
         createUserDto.gradeLevel || null,
         createUserDto.rfidCard || null,
-        createUserDto.photoUrl || null
+        createUserDto.photoUrl || null,
       );
-
-      // Fetch the created user
       return this.prisma.user.findFirst({
         where: { username: createUserDto.username },
         orderBy: { createdAt: 'desc' },
@@ -87,6 +86,13 @@ export class UsersService {
       });
     } catch (error) {
       console.error('Error creating user:', error);
+      const msg: string = (error as any)?.meta?.message ?? (error as any)?.message ?? '';
+      if (msg.includes('"rfidCard"'))
+        throw new ConflictException('This RFID card is already assigned to another student.');
+      if (msg.includes('"username"'))
+        throw new ConflictException('This username is already taken. Please choose another.');
+      if (msg.includes('"email"'))
+        throw new ConflictException('This email is already in use.');
       throw error;
     }
   }
@@ -101,20 +107,16 @@ export class UsersService {
 
   async update(id: string, updateData: Partial<CreateUserDto>) {
     const data: Record<string, unknown> = {};
-
-    if (updateData.username) data.username = updateData.username;
-    if (updateData.email !== undefined) data.email = updateData.email;
-    if (updateData.firstName) data.firstName = updateData.firstName;
-    if (updateData.lastName) data.lastName = updateData.lastName;
-    if (updateData.role) data.role = updateData.role;
-    if (updateData.gradeLevel !== undefined)
-      data.gradeLevel = updateData.gradeLevel;
-    if (updateData.rfidCard !== undefined) data.rfidCard = updateData.rfidCard;
-    if (updateData.photoUrl !== undefined) data.photoUrl = updateData.photoUrl;
-
-    if (updateData.password) {
+    if (updateData.username)              data.username   = updateData.username;
+    if (updateData.email !== undefined)   data.email      = updateData.email;
+    if (updateData.firstName)             data.firstName  = updateData.firstName;
+    if (updateData.lastName)              data.lastName   = updateData.lastName;
+    if (updateData.role)                  data.role       = updateData.role;
+    if (updateData.gradeLevel !== undefined) data.gradeLevel = updateData.gradeLevel;
+    if (updateData.rfidCard !== undefined)   data.rfidCard   = updateData.rfidCard;
+    if (updateData.photoUrl !== undefined)   data.photoUrl   = updateData.photoUrl;
+    if (updateData.password)
       data.password = await bcrypt.hash(updateData.password, 10);
-    }
 
     return this.prisma.user.update({
       where: { id },
@@ -136,9 +138,7 @@ export class UsersService {
   }
 
   async remove(id: string) {
-    return this.prisma.user.delete({
-      where: { id },
-    });
+    return this.prisma.user.delete({ where: { id } });
   }
 
   async getStats() {
@@ -148,32 +148,64 @@ export class UsersService {
       this.prisma.user.count({ where: { role: 'STUDENT' } }),
       this.prisma.user.count({ where: { role: 'PARENT' } }),
     ]);
-
-    return {
-      admins,
-      teachers,
-      students,
-      parents,
-      total: admins + teachers + students + parents,
-    };
+    return { admins, teachers, students, parents, total: admins + teachers + students + parents };
   }
 
-  async getMyChildren(parentId: string) {
-  const links = await this.prisma.parentStudent.findMany({
-    where: { parentId },
-    include: {
-      student: {
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          gradeLevel: true,
-          photoUrl: true,
+  // ── Returns the parent linked to a student ──────────────────────────────
+  async getStudentParent(studentId: string) {
+    const link = await this.prisma.parentStudent.findFirst({
+      where: { studentId },
+      include: {
+        parent: {
+          select: { id: true, firstName: true, lastName: true },
         },
       },
-    },
-  });
-  return links.map((link) => link.student);
-}
+    });
+    return link?.parent ?? null;
+  }
 
+  // ── Returns children of a parent including rfidCard ─────────────────────
+  async getMyChildren(parentId: string) {
+    const links = await this.prisma.parentStudent.findMany({
+      where: { parentId },
+      include: {
+        student: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            gradeLevel: true,
+            photoUrl: true,
+            rfidCard: true,
+          },
+        },
+      },
+    });
+    return links.map((link) => link.student);
+  }
+
+  // ── Change password with current-password verification ──────────────────
+  async changePassword(userId: string, currentPassword: string, newPassword: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found.');
+
+    const valid = await bcrypt.compare(currentPassword, user.password);
+    if (!valid) throw new UnauthorizedException('Current password is incorrect.');
+
+    const hashed = await bcrypt.hash(newPassword, 10);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { password: hashed },
+    });
+    return { message: 'Password changed successfully.' };
+  }
+
+  // ── Save FCM / Expo push token for the logged-in user ───────────────────
+  async updateFcmToken(userId: string, fcmToken: string) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { pushToken: fcmToken },
+      select: { id: true, pushToken: true },
+    });
+  }
 }

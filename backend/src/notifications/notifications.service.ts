@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import axios from 'axios';
 
 @Injectable()
 export class NotificationsService {
@@ -20,31 +19,31 @@ export class NotificationsService {
     body: string,
     data?: Record<string, any>,
   ) {
-    const message = {
-      to: pushToken,
-      sound: 'default',
-      title,
-      body,
-      data: data ?? {},
-    };
-
     try {
-      console.log('📤 Sending push notification to:', pushToken);
-      await axios.post('https://exp.host/--/api/v2/push/send', message, {
-        headers: {
-          Accept: 'application/json',
-          'Accept-Encoding': 'gzip, deflate',
-          'Content-Type': 'application/json',
-        },
+      console.log('📤 Sending Expo push notification to:', pushToken);
+
+      const response = await fetch('https://exp.host/--/api/v2/push/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: pushToken,
+          title,
+          body,
+          data,
+          sound: 'default',
+          priority: 'high',
+        }),
       });
-      console.log('✅ Push notification sent successfully');
+
+      const result = await response.json();
+      console.log('✅ Expo notification result:', JSON.stringify(result));
 
       await this.prisma.notification.create({
         data: {
           userId: data?.parentId ?? '',
           type: 'PUSH',
           message: body,
-          status: 'SENT',
+          status: 'unread',
         },
       });
     } catch (error) {
@@ -87,8 +86,8 @@ export class NotificationsService {
 
     console.log('👨‍👦 parentLink found:', JSON.stringify(parentLink));
 
-    if (!parentLink?.parent?.pushToken) {
-      console.warn(`⚠️ No push token found for parent of student ${studentId}`);
+    if (!parentLink) {
+      console.warn(`⚠️ No parent link found for student ${studentId}`);
       return;
     }
 
@@ -107,17 +106,33 @@ export class NotificationsService {
     console.log('📨 Notification title:', title);
     console.log('📨 Notification body:', body);
 
-    await this.sendPushNotification(
-      parentLink.parent.pushToken,
-      title,
-      body,
-      {
-        type,
-        studentId,
-        parentId: parentLink.parent.id,
-      },
-    );
+    if (parentLink.parent.pushToken) {
+      // ✅ Send Expo push notification to mobile
+      await this.sendPushNotification(
+        parentLink.parent.pushToken,
+        title,
+        body,
+        {
+          type,
+          studentId,
+          parentId: parentLink.parent.id,
+        },
+      );
+    } else {
+      // ⚠️ No push token — save to DB only so web polling can pick it up
+      console.warn(`⚠️ No push token for parent — saving to DB only`);
+      await this.prisma.notification.create({
+        data: {
+          userId: parentLink.parent.id,
+          type: 'PUSH',
+          message: body,
+          status: 'unread',
+        },
+      });
+    }
   }
+
+  // ─── Web polling endpoints ────────────────────────────────────────────────
 
   async getMyNotifications(userId: string) {
     return this.prisma.notification.findMany({
@@ -125,5 +140,36 @@ export class NotificationsService {
       orderBy: { sentAt: 'desc' },
       take: 50,
     });
+  }
+
+  async getUnreadNotifications(userId: string) {
+    return this.prisma.notification.findMany({
+      where: { userId, status: 'unread' },
+      orderBy: { sentAt: 'desc' },
+    });
+  }
+
+  async getAllNotifications(userId: string) {
+    return this.prisma.notification.findMany({
+      where: { userId },
+      orderBy: { sentAt: 'desc' },
+      take: 50,
+    });
+  }
+
+  async markAllRead(userId: string) {
+    await this.prisma.notification.updateMany({
+      where: { userId, status: { in: ['unread', 'FAILED'] } },
+      data: { status: 'read' },
+    });
+    return { success: true };
+  }
+
+  async markOneRead(notificationId: string) {
+    await this.prisma.notification.update({
+      where: { id: notificationId },
+      data: { status: 'read' },
+    });
+    return { success: true };
   }
 }
