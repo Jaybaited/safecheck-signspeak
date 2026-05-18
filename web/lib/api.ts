@@ -34,13 +34,30 @@ async function apiFetch<T>(path: string, options?: ApiFetchOptions): Promise<T> 
     const combined = [raw, meta].filter(Boolean).join(' ');
 
     if (res.status === 401) {
-      if (!skipAuthRedirect && typeof window !== 'undefined') {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        window.location.href = '/login?reason=expired';
-      }
-      throw new Error(combined || 'Unauthorized');
+  if (!skipAuthRedirect && typeof window !== 'undefined') {
+    const storedRefresh = localStorage.getItem('refreshToken');
+    if (storedRefresh) {
+      try {
+        const refreshRes = await fetch(`${BASE_URL}/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken: storedRefresh }),
+        });
+        if (refreshRes.ok) {
+          const { accessToken } = await refreshRes.json();
+          localStorage.setItem('token', accessToken);
+          // retry original request with new token
+          return apiFetch<T>(path, options);
+        }
+      } catch {}
     }
+    localStorage.removeItem('token');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('user');
+    window.location.href = '/login?reason=expired';
+  }
+  throw new Error(combined || 'Unauthorized');
+}
 
     throw new Error(combined || `Request failed: ${res.status}`);
   }
@@ -84,8 +101,9 @@ export interface AuthUser {
 }
 
 export interface LoginResponse {
-  accessToken: string;
-  user:        AuthUser;
+  accessToken:  string;
+  refreshToken: string;
+  user:         AuthUser;
 }
 
 export interface AttendanceRecord {
@@ -128,12 +146,18 @@ export interface ChildInfo {
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
-export const login = (username: string, password: string) =>
-  apiFetch<LoginResponse>('/auth/login', {
+export const login = async (username: string, password: string) => {
+  const res = await apiFetch<LoginResponse>('/auth/login', {
     method: 'POST',
     body: JSON.stringify({ username, password }),
     skipAuthRedirect: true,
   });
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('token', res.accessToken);
+    localStorage.setItem('refreshToken', res.refreshToken);
+  }
+  return res;
+};
 
 export const getMe = () => apiFetch<User>('/auth/me');
 
