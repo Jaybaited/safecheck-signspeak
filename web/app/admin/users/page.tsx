@@ -20,30 +20,21 @@ interface User {
 
 type RoleFilter = 'ALL' | 'ADMIN' | 'TEACHER' | 'STUDENT' | 'PARENT';
 
-// ── Excel export helper (no external lib needed)
 function exportToExcel(users: ApiUser[], filename: string) {
   const headers = ['First Name','Last Name','Username','Email','Role','Grade Level','RFID Card','Created Date'];
-
   const formatGrade = (g: string | null | undefined) => g ? g.replace('GRADE_', 'Grade ') : 'N/A';
   const formatDate  = (d: string) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-
   const rows = users.map((u) => [
-    u.firstName,
-    u.lastName,
-    u.username,
-    u.email      ?? '',
-    u.role,
+    u.firstName, u.lastName, u.username,
+    u.email ?? '', u.role,
     formatGrade(u.gradeLevel),
-    u.rfidCard   ?? 'Not Assigned',
+    u.rfidCard ?? 'Not Assigned',
     formatDate(u.createdAt),
   ]);
-
-  // Build CSV with BOM for Excel UTF-8
-  const bom   = '\uFEFF';
-  const csv   = [headers, ...rows]
+  const bom = '\uFEFF';
+  const csv = [headers, ...rows]
     .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
     .join('\r\n');
-
   const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
@@ -51,6 +42,22 @@ function exportToExcel(users: ApiUser[], filename: string) {
   a.download = `${filename}.csv`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+// ── Friendly error message mapper ← added
+function friendlyError(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (msg.includes('rfidCard') || msg.includes('"rfidCard"'))
+    return 'This RFID card is already assigned to another student.';
+  if (msg.includes('username') && (msg.includes('Unique') || msg.includes('23505')))
+    return 'This username is already taken. Please choose another.';
+  if (msg.includes('email') && (msg.includes('Unique') || msg.includes('23505')))
+    return 'This email is already in use.';
+  if (msg.includes('401') || msg.toLowerCase().includes('unauthorized'))
+    return 'Your session has expired. Please log in again.';
+  if (msg.toLowerCase().includes('network') || msg.includes('fetch') || msg.includes('500'))
+    return 'Something went wrong. Please try again.';
+  return msg || 'Something went wrong. Please try again.';
 }
 
 export default function ManageUsersPage() {
@@ -65,11 +72,11 @@ export default function ManageUsersPage() {
   const [selectedUser,    setSelectedUser]    = useState<ApiUser | null>(null);
   const [error,           setError]           = useState<string | null>(null);
   const [isDeleting,      setIsDeleting]      = useState(false);
+  const [isSubmitting,    setIsSubmitting]    = useState(false); // ← added double-submit guard
 
-  // ── Search + Filter state
-  const [searchTerm,    setSearchTerm]    = useState('');
-  const [roleFilter,    setRoleFilter]    = useState<RoleFilter>('ALL');
-  const [showFilter,    setShowFilter]    = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>('ALL');
+  const [showFilter, setShowFilter] = useState(false);
 
   // ── Auth guard
   useEffect(() => {
@@ -90,7 +97,7 @@ export default function ManageUsersPage() {
       setUsers(await api.getUsers());
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch users');
+      setError(friendlyError(err)); // ← uses friendly mapper
     }
   };
 
@@ -101,19 +108,24 @@ export default function ManageUsersPage() {
   };
 
   const handleAddUser = async (formData: CreateUserDto) => {
+    if (isSubmitting) return; // ← double-submit guard
+    setIsSubmitting(true);    // ← lock
+    setError(null);
     try {
-      setError(null);
       await api.createUser(formData);
       await fetchUsers();
       setShowAddModal(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create user');
-      throw err;
+      const msg = friendlyError(err); // ← friendly message
+      setError(msg);
+      throw new Error(msg); // re-throw so modal can also show it
+    } finally {
+      setIsSubmitting(false); // ← unlock
     }
   };
 
   const handleDeleteUser = async () => {
-    if (!selectedUser) return;
+    if (!selectedUser || isDeleting) return; // ← double-delete guard
     setIsDeleting(true);
     setError(null);
     try {
@@ -123,13 +135,12 @@ export default function ManageUsersPage() {
       setSelectedUser(null);
       setOpenDropdown(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete user');
+      setError(friendlyError(err)); // ← friendly message
     } finally {
       setIsDeleting(false);
     }
   };
 
-  // ── Live search + role filter (computed, no extra state)
   const filteredUsers = useMemo(() => {
     const term = searchTerm.toLowerCase().trim();
     return users.filter((u) => {
@@ -139,9 +150,7 @@ export default function ManageUsersPage() {
         u.lastName.toLowerCase().includes(term)   ||
         u.username.toLowerCase().includes(term)   ||
         (u.email ?? '').toLowerCase().includes(term);
-
       const matchesRole = roleFilter === 'ALL' || u.role === roleFilter;
-
       return matchesSearch && matchesRole;
     });
   }, [users, searchTerm, roleFilter]);
@@ -160,10 +169,10 @@ export default function ManageUsersPage() {
   }
 
   const statCards = [
-    { label: 'Admins',   count: users.filter((u) => u.role === 'ADMIN').length,   icon: Shield,        iconBg: 'bg-[#7B1113]/10 dark:bg-[#7B1113]/20',   iconColor: 'text-[#7B1113] dark:text-[#E8C96A]'    },
-    { label: 'Teachers', count: users.filter((u) => u.role === 'TEACHER').length, icon: UserCheck,     iconBg: 'bg-blue-100 dark:bg-blue-500/10',         iconColor: 'text-blue-600 dark:text-blue-400'       },
-    { label: 'Students', count: users.filter((u) => u.role === 'STUDENT').length, icon: GraduationCap, iconBg: 'bg-emerald-100 dark:bg-emerald-500/10',   iconColor: 'text-emerald-600 dark:text-emerald-400' },
-    { label: 'Parents',  count: users.filter((u) => u.role === 'PARENT').length,  icon: Users,         iconBg: 'bg-[#C4972A]/10',                         iconColor: 'text-[#8B6818] dark:text-[#E8C96A]'    },
+    { label: 'Admins',   count: users.filter((u) => u.role === 'ADMIN').length,   icon: Shield,        iconBg: 'bg-[#7B1113]/10 dark:bg-[#7B1113]/20',  iconColor: 'text-[#7B1113] dark:text-[#E8C96A]'    },
+    { label: 'Teachers', count: users.filter((u) => u.role === 'TEACHER').length, icon: UserCheck,     iconBg: 'bg-blue-100 dark:bg-blue-500/10',        iconColor: 'text-blue-600 dark:text-blue-400'       },
+    { label: 'Students', count: users.filter((u) => u.role === 'STUDENT').length, icon: GraduationCap, iconBg: 'bg-emerald-100 dark:bg-emerald-500/10',  iconColor: 'text-emerald-600 dark:text-emerald-400' },
+    { label: 'Parents',  count: users.filter((u) => u.role === 'PARENT').length,  icon: Users,         iconBg: 'bg-[#C4972A]/10',                        iconColor: 'text-[#8B6818] dark:text-[#E8C96A]'    },
   ];
 
   const ROLE_OPTIONS: RoleFilter[] = ['ALL','ADMIN','TEACHER','STUDENT','PARENT'];
@@ -174,7 +183,7 @@ export default function ManageUsersPage() {
 
       <main className="ml-64 p-6">
 
-        {/* ── Header ─────────────────────────────────────────────── */}
+        {/* ── Header ── */}
         <div className="flex justify-between items-center mb-6">
           <div>
             <h1 className="text-2xl font-bold mb-0.5">Manage Users</h1>
@@ -185,7 +194,7 @@ export default function ManageUsersPage() {
           <ThemeToggle />
         </div>
 
-        {/* ── Error ──────────────────────────────────────────────── */}
+        {/* ── Error ── */}
         {error && (
           <div className="mb-5 flex items-center gap-3 p-3.5 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-xl text-sm">
             <XCircle className="w-4 h-4 text-red-500 shrink-0" />
@@ -193,7 +202,7 @@ export default function ManageUsersPage() {
           </div>
         )}
 
-        {/* ── Stat Cards ──────────────────────────────────────────── */}
+        {/* ── Stat Cards ── */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           {statCards.map((card) => (
             <div
@@ -213,7 +222,7 @@ export default function ManageUsersPage() {
           ))}
         </div>
 
-        {/* ── User Table ──────────────────────────────────────────── */}
+        {/* ── User Table ── */}
         <div className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 rounded-xl p-5 shadow-sm dark:shadow-none">
 
           {/* Toolbar */}
@@ -281,7 +290,7 @@ export default function ManageUsersPage() {
                 )}
               </div>
 
-              {/* Export — all users */}
+              {/* Export all */}
               <button
                 onClick={() => exportToExcel(users, 'all-users')}
                 className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-gray-800 dark:hover:bg-gray-700 border border-slate-200 dark:border-gray-700 text-slate-600 dark:text-gray-300 rounded-lg text-sm transition-colors"
@@ -290,7 +299,7 @@ export default function ManageUsersPage() {
                 Export All
               </button>
 
-              {/* Export — filtered/searched */}
+              {/* Export filtered */}
               {(searchTerm || roleFilter !== 'ALL') && filteredUsers.length > 0 && (
                 <button
                   onClick={() => exportToExcel(filteredUsers, `users-${roleFilter.toLowerCase()}-filtered`)}
@@ -304,7 +313,8 @@ export default function ManageUsersPage() {
 
             <button
               onClick={() => setShowAddModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-[#7B1113] hover:bg-[#9B2020] text-white rounded-lg text-sm font-medium transition-colors shadow-sm"
+              disabled={isSubmitting} // ← guard
+              className="flex items-center gap-2 px-4 py-2 bg-[#7B1113] hover:bg-[#9B2020] disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors shadow-sm"
             >
               <UserPlus className="w-4 h-4" />
               Add User
@@ -416,7 +426,6 @@ export default function ManageUsersPage() {
               </tbody>
             </table>
 
-            {/* Empty states */}
             {filteredUsers.length === 0 && users.length > 0 && (
               <div className="text-center py-10">
                 <Search className="w-8 h-8 text-slate-300 dark:text-gray-600 mx-auto mb-2" />
@@ -458,7 +467,6 @@ export default function ManageUsersPage() {
         </div>
       </main>
 
-      {/* Click outside to close dropdown & filter */}
       {(openDropdown || showFilter) && (
         <div
           className="fixed inset-0 z-40"

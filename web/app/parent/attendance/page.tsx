@@ -4,50 +4,42 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Calendar, Clock, Download,
-  ChevronLeft, ChevronRight, Bell,
+  ChevronLeft, ChevronRight, Bell, AlertCircle,
 } from 'lucide-react';
 import ParentSidebar from '@/components/parent/ParentSidebar';
 import ThemeToggle from '@/components/ThemeToggle';
+import { api } from '@/lib/api';
+import type { ChildInfo, AttendanceRecord } from '@/lib/api';
+import { usePersistedUnreadCount } from '@/hooks/usePersistedUnreadCount';
 
 interface ParentUser {
   id: string; username: string; role: string;
   firstName: string; lastName: string;
 }
 
-interface Child {
-  id: string; firstName: string; lastName: string; gradeLevel: string | null;
-}
+const PLACEHOLDER_CHILD = { id: '', firstName: '—', lastName: '', gradeLevel: null };
 
-// Only Date, Time In, Time Out — no status field
-interface AttendanceRecord {
-  id: string;
-  date: string;
-  timeIn: string | null;
-  timeOut: string | null;
-}
+const formatDate = (iso: string) =>
+  new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 
-const sampleChild: Child = {
-  id: 'child-1', firstName: 'Ana', lastName: 'Dela Cruz', gradeLevel: 'GRADE_8',
+const formatTime = (iso: string | null | undefined) => {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? iso : d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 };
 
-const SAMPLE_RECORDS: AttendanceRecord[] = [
-  { id: '1',  date: '2026-03-12', timeIn: '07:45', timeOut: '16:00' },
-  { id: '2',  date: '2026-03-11', timeIn: '07:52', timeOut: '16:00' },
-  { id: '3',  date: '2026-03-10', timeIn: '08:10', timeOut: '16:00' },
-  { id: '4',  date: '2026-03-09', timeIn: '07:48', timeOut: '16:00' },
-  { id: '5',  date: '2026-03-06', timeIn: null,    timeOut: null    },
-  { id: '6',  date: '2026-03-05', timeIn: '07:50', timeOut: '16:00' },
-  { id: '7',  date: '2026-03-04', timeIn: '07:44', timeOut: '16:00' },
-  { id: '8',  date: '2026-03-03', timeIn: '08:22', timeOut: '16:00' },
-  { id: '9',  date: '2026-03-02', timeIn: '07:55', timeOut: '16:00' },
-  { id: '10', date: '2026-02-28', timeIn: null,    timeOut: null    },
-];
-
 export default function ParentAttendancePage() {
-  const [parent, setParent]             = useState<ParentUser | null>(null);
-  const [authLoading, setAuthLoading]   = useState(true);
+  const router = useRouter();
+  const [parent,        setParent]        = useState<ParentUser | null>(null);
+  const [child,         setChild]         = useState<ChildInfo | null>(null);
+  const [records,       setRecords]       = useState<AttendanceRecord[]>([]);
+  const [authLoading,   setAuthLoading]   = useState(true);
+  const [dataLoading,   setDataLoading]   = useState(false);
+  const [error,         setError]         = useState('');
   const [selectedMonth, setSelectedMonth] = useState(new Date());
-  const router                          = useRouter();
+
+  // ── Bell badge — reads from localStorage, syncs across pages
+  const unreadCount = usePersistedUnreadCount(parent?.id);
 
   useEffect(() => {
     const token    = localStorage.getItem('token');
@@ -57,13 +49,25 @@ export default function ParentAttendancePage() {
       const p = JSON.parse(userData) as ParentUser;
       if (p.role !== 'PARENT') { router.push('/login'); return; }
       setParent(p);
+      setAuthLoading(false);
+
+      api.getParentChildren(p.id)
+        .then((children) => {
+          if (!children.length) return;
+          const firstChild = children[0];
+          setChild(firstChild);
+          setDataLoading(true);
+          return api.getStudentAttendance(firstChild.id)
+            .then(setRecords)
+            .catch(() => setError('Failed to load attendance records.'))
+            .finally(() => setDataLoading(false));
+        })
+        .catch(() => setError('Failed to load child data.'));
     } catch { router.push('/login'); }
-    finally { setAuthLoading(false); }
   }, [router]);
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    localStorage.removeItem('token'); localStorage.removeItem('user');
     router.push('/login');
   };
 
@@ -75,23 +79,52 @@ export default function ParentAttendancePage() {
     });
   };
 
+  const filteredRecords = records.filter((r) => {
+    const d = new Date(r.date);
+    return (
+      d.getFullYear() === selectedMonth.getFullYear() &&
+      d.getMonth()    === selectedMonth.getMonth()
+    );
+  });
+
   const stats = {
-    total:   SAMPLE_RECORDS.length,
-    tapped:  SAMPLE_RECORDS.filter((r) => r.timeIn !== null).length,
-    noTap:   SAMPLE_RECORDS.filter((r) => r.timeIn === null).length,
+    total:  filteredRecords.length,
+    tapped: filteredRecords.filter((r) => r.timeIn).length,
+    noTap:  filteredRecords.filter((r) => !r.timeIn).length,
   };
 
-  if (authLoading || !parent) {
-    return (
-      <div className="min-h-screen bg-slate-50 dark:bg-gray-950 flex items-center justify-center transition-colors duration-200">
-        <div className="w-8 h-8 border-4 border-[#7B1113] border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
+  const handleExportCSV = () => {
+    const rows = [
+      ['Date', 'Time In', 'Time Out'],
+      ...filteredRecords.map((r) => [
+        formatDate(r.date),
+        formatTime(r.timeIn),
+        formatTime(r.timeOut),
+      ]),
+    ];
+    const csv  = rows.map((row) => row.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `attendance-${selectedMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }).replace(' ', '-')}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  if (authLoading || !parent) return (
+    <div className="min-h-screen bg-slate-50 dark:bg-gray-950 flex items-center justify-center">
+      <div className="w-8 h-8 border-4 border-[#7B1113] border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
+
+  const sidebarChild = child
+    ? { id: child.id, firstName: child.firstName, lastName: child.lastName, gradeLevel: child.gradeLevel }
+    : PLACEHOLDER_CHILD;
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-gray-950 text-slate-900 dark:text-white transition-colors duration-200">
-      <ParentSidebar onLogout={handleLogout} parent={parent} child={sampleChild} />
+      <ParentSidebar onLogout={handleLogout} parent={parent} child={sidebarChild} unreadCount={unreadCount} />
 
       <main className="ml-64 p-8">
         {/* Header */}
@@ -99,18 +132,12 @@ export default function ParentAttendancePage() {
           <div>
             <h1 className="text-3xl font-bold mb-1">Attendance History</h1>
             <p className="text-slate-500 dark:text-gray-400 text-sm">
-              {sampleChild.firstName}&apos;s RFID tap records
+              {child ? `${child.firstName}'s RFID tap records` : 'Loading child data…'}
             </p>
           </div>
           <div className="flex items-center gap-4">
             <ThemeToggle />
-            <button
-              aria-label="Notifications"
-              onClick={() => router.push('/parent/notifications')}
-              className="relative p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-gray-800 transition-colors"
-            >
-              <Bell className="w-6 h-6 text-slate-600 dark:text-gray-400" />
-            </button>
+            
             <button
               onClick={() => router.push('/parent/profile')}
               className="w-10 h-10 bg-gradient-to-br from-[#9B2020] to-[#7B1113] rounded-full flex items-center justify-center font-bold text-white shadow-md select-none hover:brightness-110 transition-all active:scale-95"
@@ -120,38 +147,21 @@ export default function ParentAttendancePage() {
           </div>
         </div>
 
+        {error && (
+          <div className="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-xl mb-6">
+            <AlertCircle className="w-5 h-5 text-red-500 shrink-0" />
+            <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
+          </div>
+        )}
+
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           {[
-            {
-              icon: Calendar,
-              label: 'Total Records',
-              value: stats.total,
-              color: 'text-slate-900 dark:text-white',
-              iconCls: 'text-slate-500 dark:text-gray-400',
-              bg: 'bg-slate-100 dark:bg-gray-800',
-            },
-            {
-              icon: Clock,
-              label: 'Days Tapped In',
-              value: stats.tapped,
-              color: 'text-[#7B1113] dark:text-[#E8C96A]',
-              iconCls: 'text-[#7B1113] dark:text-[#E8C96A]',
-              bg: 'bg-[#7B1113]/10 dark:bg-[#7B1113]/20',
-            },
-            {
-              icon: Download,
-              label: 'No Tap Days',
-              value: stats.noTap,
-              color: 'text-slate-500 dark:text-gray-400',
-              iconCls: 'text-slate-400 dark:text-gray-500',
-              bg: 'bg-slate-100 dark:bg-gray-800',
-            },
+            { icon: Calendar, label: 'Total Records',  value: stats.total,  color: 'text-slate-900 dark:text-white',     iconCls: 'text-slate-500 dark:text-gray-400',   bg: 'bg-slate-100 dark:bg-gray-800' },
+            { icon: Clock,    label: 'Days Tapped In', value: stats.tapped, color: 'text-[#7B1113] dark:text-[#E8C96A]', iconCls: 'text-[#7B1113] dark:text-[#E8C96A]', bg: 'bg-[#7B1113]/10 dark:bg-[#7B1113]/20' },
+            { icon: Download, label: 'No Tap Days',    value: stats.noTap,  color: 'text-slate-500 dark:text-gray-400',   iconCls: 'text-slate-400 dark:text-gray-500',   bg: 'bg-slate-100 dark:bg-gray-800' },
           ].map(({ icon: Icon, label, value, color, iconCls, bg }) => (
-            <div
-              key={label}
-              className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 rounded-xl p-6 shadow-sm dark:shadow-none transition-colors duration-200"
-            >
+            <div key={label} className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 rounded-xl p-6 shadow-sm dark:shadow-none transition-colors duration-200">
               <div className={`w-12 h-12 ${bg} rounded-lg flex items-center justify-center mb-4`}>
                 <Icon className={`w-6 h-6 ${iconCls}`} />
               </div>
@@ -165,30 +175,22 @@ export default function ParentAttendancePage() {
           {/* Month Navigator */}
           <div className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 rounded-xl p-6 shadow-sm dark:shadow-none transition-colors duration-200">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-slate-900 dark:text-white">Month</h2>
+              <h2 className="text-xl font-bold">Month</h2>
               <div className="flex items-center gap-1">
-                <button
-                  onClick={() => changeMonth('prev')}
-                  className="p-1 hover:bg-slate-100 dark:hover:bg-gray-800 rounded transition-colors"
-                >
+                <button onClick={() => changeMonth('prev')} className="p-1 hover:bg-slate-100 dark:hover:bg-gray-800 rounded transition-colors">
                   <ChevronLeft className="w-5 h-5 text-slate-600 dark:text-gray-400" />
                 </button>
                 <span className="text-sm font-medium text-slate-700 dark:text-gray-300 w-32 text-center">
                   {selectedMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
                 </span>
-                <button
-                  onClick={() => changeMonth('next')}
-                  className="p-1 hover:bg-slate-100 dark:hover:bg-gray-800 rounded transition-colors"
-                >
+                <button onClick={() => changeMonth('next')} className="p-1 hover:bg-slate-100 dark:hover:bg-gray-800 rounded transition-colors">
                   <ChevronRight className="w-5 h-5 text-slate-600 dark:text-gray-400" />
                 </button>
               </div>
             </div>
 
             <div className="grid grid-cols-7 gap-1 text-center text-xs text-slate-400 dark:text-gray-500 font-medium mb-2">
-              {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((d) => (
-                <div key={d}>{d}</div>
-              ))}
+              {['Su','Mo','Tu','We','Th','Fr','Sa'].map((d) => <div key={d}>{d}</div>)}
             </div>
             <div className="text-center text-slate-400 dark:text-gray-500 py-8 text-sm">
               Calendar view coming soon
@@ -207,54 +209,64 @@ export default function ParentAttendancePage() {
             </div>
           </div>
 
-          {/* Records Table — Date, Time In, Time Out only */}
+          {/* Records Table */}
           <div className="lg:col-span-2 bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 rounded-xl p-6 shadow-sm dark:shadow-none transition-colors duration-200">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-slate-900 dark:text-white">Tap Records</h2>
-              <button className="flex items-center gap-2 px-4 py-2 bg-[#7B1113] hover:bg-[#9B2020] text-white rounded-lg text-sm font-medium transition-colors shadow-sm">
-                <Download className="w-4 h-4" />
-                Export CSV
+              <h2 className="text-xl font-bold">Tap Records</h2>
+              <button
+                onClick={handleExportCSV}
+                disabled={filteredRecords.length === 0}
+                className="flex items-center gap-2 px-4 py-2 bg-[#7B1113] hover:bg-[#9B2020] disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors shadow-sm"
+              >
+                <Download className="w-4 h-4" /> Export CSV
               </button>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="border-b border-slate-200 dark:border-gray-800">
-                  <tr className="text-left text-slate-500 dark:text-gray-400 text-sm">
-                    {['Date', 'Time In', 'Time Out'].map((h) => (
-                      <th key={h} className="pb-3 font-medium">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {SAMPLE_RECORDS.map((r) => (
-                    <tr
-                      key={r.id}
-                      className="border-b border-slate-100 dark:border-gray-800/50 hover:bg-slate-50 dark:hover:bg-gray-800/30 transition-colors"
-                    >
-                      <td className="py-3.5">
-                        <div className="flex items-center gap-2">
-                          <Calendar className="w-4 h-4 text-slate-400 dark:text-gray-500" />
-                          <span className="text-sm text-slate-700 dark:text-gray-300">{r.date}</span>
-                        </div>
-                      </td>
-                      <td className="py-3.5">
-                        <div className="flex items-center gap-2">
-                          <Clock className="w-4 h-4 text-slate-400 dark:text-gray-500" />
-                          <span className="text-sm text-slate-500 dark:text-gray-400">
-                            {r.timeIn ?? '—'}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="py-3.5">
-                        <span className="text-sm text-slate-500 dark:text-gray-400">
-                          {r.timeOut ?? '—'}
-                        </span>
-                      </td>
+
+            {dataLoading ? (
+              <div className="space-y-3 animate-pulse">
+                {[0,1,2,3,4].map(i => (
+                  <div key={i} className="h-12 bg-slate-100 dark:bg-gray-800 rounded-lg" />
+                ))}
+              </div>
+            ) : filteredRecords.length === 0 ? (
+              <div className="py-16 text-center">
+                <Calendar className="w-12 h-12 text-slate-300 dark:text-gray-600 mx-auto mb-3" />
+                <p className="text-slate-500 dark:text-gray-400 font-medium">No records for this month</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="border-b border-slate-200 dark:border-gray-800">
+                    <tr className="text-left text-slate-500 dark:text-gray-400 text-sm">
+                      {['Date', 'Time In', 'Time Out'].map((h) => (
+                        <th key={h} className="pb-3 font-medium">{h}</th>
+                      ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {filteredRecords.map((r) => (
+                      <tr key={r.id} className="border-b border-slate-100 dark:border-gray-800/50 hover:bg-slate-50 dark:hover:bg-gray-800/30 transition-colors">
+                        <td className="py-3.5">
+                          <div className="flex items-center gap-2">
+                            <Calendar className="w-4 h-4 text-slate-400 dark:text-gray-500" />
+                            <span className="text-sm text-slate-700 dark:text-gray-300">{formatDate(r.date)}</span>
+                          </div>
+                        </td>
+                        <td className="py-3.5">
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-slate-400 dark:text-gray-500" />
+                            <span className="text-sm text-slate-500 dark:text-gray-400">{formatTime(r.timeIn)}</span>
+                          </div>
+                        </td>
+                        <td className="py-3.5">
+                          <span className="text-sm text-slate-500 dark:text-gray-400">{formatTime(r.timeOut)}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       </main>

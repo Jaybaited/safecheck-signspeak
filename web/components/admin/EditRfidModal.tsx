@@ -13,6 +13,18 @@ interface EditRfidModalProps {
   currentRfid: string | null;
 }
 
+// ── Friendly error mapper ← added
+function friendlyError(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (msg.includes('rfidCard') || msg.includes('"rfidCard"'))
+    return 'This RFID card is already assigned to another student.';
+  if (msg.includes('401') || msg.toLowerCase().includes('unauthorized'))
+    return 'Your session has expired. Please log in again.';
+  if (msg.toLowerCase().includes('network') || msg.includes('fetch'))
+    return 'Cannot connect to the server. Please check your connection.';
+  return msg || 'Failed to update RFID card. Please try again.';
+}
+
 export default function EditRfidModal({
   isOpen, onClose, onSubmit,
   studentName, userId, currentRfid,
@@ -33,13 +45,14 @@ export default function EditRfidModal({
 
   const handleSubmit = async () => {
     if (!scannedRfid) { startScan(); return; }
+    if (submitting) return; // ← double-submit guard
     setSubmitting(true);
     setError(null);
     try {
       await onSubmit(userId, scannedRfid);
       handleClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update RFID card.');
+      setError(friendlyError(err)); // ← friendly message
     } finally {
       setSubmitting(false);
     }

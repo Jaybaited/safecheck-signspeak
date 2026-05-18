@@ -1,13 +1,24 @@
 'use client'
 
 import { useState, useId } from 'react'
-import { useRouter }       from 'next/navigation'
-import Link                from 'next/link'
-import { login }           from '@/lib/api'
+import { useRouter, useSearchParams } from 'next/navigation'
+import Link from 'next/link'
+import { login } from '@/lib/api'
 import { ShieldCheck, Eye, EyeOff, AlertCircle, ArrowRight } from 'lucide-react'
 
 export default function LoginPage() {
-  const router = useRouter()
+  const router       = useRouter()
+  const searchParams = useSearchParams()
+
+  // Initialize from URL once; we clear it as soon as user interacts
+  const [isExpired, setIsExpired] = useState(() => {
+    const expired = searchParams.get('reason') === 'expired'
+    if (expired && typeof window !== 'undefined') {
+      // Clean the URL so refresh / testing doesn't keep the param
+      window.history.replaceState({}, '', '/login')
+    }
+    return expired
+  })
 
   const [username,     setUsername]     = useState('')
   const [password,     setPassword]     = useState('')
@@ -20,16 +31,45 @@ export default function LoginPage() {
   const errorId    = useId()
   const hasError   = error.length > 0
 
+  function handleUsernameChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setUsername(e.target.value)
+    setError('')
+    setIsExpired(false)
+  }
+
+  function handlePasswordChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setPassword(e.target.value)
+    setError('')
+    setIsExpired(false)
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
+    setIsExpired(false)
+
+    // Frontend empty field validation
+    if (!username.trim()) {
+      setError('Username is required.')
+      return
+    }
+    if (!password.trim()) {
+      setError('Password is required.')
+      return
+    }
+
     setLoading(true)
     try {
-      const res = await login(username, password)
-      localStorage.setItem('token', res.accessToken)
-      localStorage.setItem('user', JSON.stringify(res.user))
+      const res = await login(username.trim(), password)
 
-      const role = res.user.role
+      // Store only minimal non-sensitive fields
+      const { id, username: uname, role, firstName, lastName } = res.user
+      localStorage.setItem('token', res.accessToken)
+      localStorage.setItem(
+        'user',
+        JSON.stringify({ id, username: uname, role, firstName, lastName }),
+      )
+
       if      (role === 'ADMIN')   router.push('/admin/dashboard')
       else if (role === 'STUDENT') router.push('/student/dashboard')
       else if (role === 'TEACHER') router.push('/teacher/assessment')
@@ -37,11 +77,19 @@ export default function LoginPage() {
       else                         router.push('/admin/dashboard')
 
     } catch (err: unknown) {
-      setError(
-        err instanceof Error    ? err.message :
-        typeof err === 'string' ? err         :
-        'Invalid credentials. Please try again.'
-      )
+      const raw =
+        err instanceof Error ? err.message :
+        typeof err === 'string' ? err :
+        ''
+
+      // Friendly error mapping
+      if (raw.toLowerCase().includes('invalid credentials') || raw.includes('401')) {
+        setError('Incorrect username or password. Please try again.')
+      } else if (raw.toLowerCase().includes('network') || raw.includes('fetch')) {
+        setError('Cannot connect to the server. Please check your connection.')
+      } else {
+        setError(raw || 'Something went wrong. Please try again.')
+      }
     } finally {
       setLoading(false)
     }
@@ -55,7 +103,10 @@ export default function LoginPage() {
 
         {/* Logo + Title */}
         <div className="flex flex-col items-center text-center mb-8">
-          <Link href="/" className="flex items-center justify-center w-12 h-12 bg-gradient-to-br from-[#7B1113] to-[#9B2020] rounded-2xl shadow-sm mb-5">
+          <Link
+            href="/"
+            className="flex items-center justify-center w-12 h-12 bg-gradient-to-br from-[#7B1113] to-[#9B2020] rounded-2xl shadow-sm mb-5"
+          >
             <ShieldCheck className="w-6 h-6 text-white" />
           </Link>
           <h1 className="text-2xl font-bold tracking-tight text-gray-900 mb-1">
@@ -65,6 +116,19 @@ export default function LoginPage() {
             Sign in to SafeCheck<span className="text-[#7B1113]">·</span>SignSpeak
           </p>
         </div>
+
+        {/* Session Expired Banner */}
+        {isExpired && (
+          <div
+            role="alert"
+            className="mb-5 flex items-start gap-2.5 p-3.5 rounded-xl bg-amber-50 border border-amber-100"
+          >
+            <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+            <p className="text-sm text-amber-700">
+              Your session has expired. Please sign in again.
+            </p>
+          </div>
+        )}
 
         {/* Error */}
         {hasError && (
@@ -101,7 +165,7 @@ export default function LoginPage() {
               aria-invalid={hasError ? 'true' : 'false'}
               aria-describedby={hasError ? errorId : undefined}
               value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              onChange={handleUsernameChange}
               placeholder="Enter your username"
               className={`w-full h-11 px-4 rounded-xl border text-sm text-gray-900 placeholder:text-gray-300 outline-none transition-all
                 ${hasError
@@ -130,7 +194,7 @@ export default function LoginPage() {
                 aria-invalid={hasError ? 'true' : 'false'}
                 aria-describedby={hasError ? errorId : undefined}
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={handlePasswordChange}
                 placeholder="Enter your password"
                 className={`w-full h-11 px-4 pr-11 rounded-xl border text-sm text-gray-900 placeholder:text-gray-300 outline-none transition-all
                   ${hasError
@@ -144,9 +208,7 @@ export default function LoginPage() {
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
               >
-                {showPassword
-                  ? <EyeOff className="w-4 h-4" />
-                  : <Eye    className="w-4 h-4" />}
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
           </div>

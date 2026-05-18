@@ -31,7 +31,8 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "permissions": [
-        "android.permission.CAMERA"
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -71,9 +72,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "f085dd36-86a6-428e-8b69-898668059453"
+        "projectId": "8a792b3a-f2f4-47fc-a9b4-82a36538e740"
       }
     },
-    "owner": "retes"
+    "owner": "robertoretess-organization"
   }
 }

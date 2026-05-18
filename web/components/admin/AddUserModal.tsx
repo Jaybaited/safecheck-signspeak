@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react'; // ← added useEffect
 import { X, CheckCircle, CreditCard } from 'lucide-react';
 import { CreateUserDto } from '@/lib/api';
 import { useRfidScanner } from '@/hooks/useRfidScanner';
@@ -12,13 +12,12 @@ const GRADE_LEVELS = [
 ];
 
 interface AddUserModalProps {
-  isOpen:    boolean;
-  onClose:   () => void;
-  onSubmit:  (data: CreateUserDto) => Promise<void>;
-  error:     string | null;
+  isOpen:   boolean;
+  onClose:  () => void;
+  onSubmit: (data: CreateUserDto) => Promise<void>;
+  error:    string | null;
 }
 
-// Shared input class — respects light/dark theme
 const INPUT_CLS =
   'w-full px-4 py-2.5 rounded-xl border text-sm ' +
   'bg-gray-50 dark:bg-gray-800 ' +
@@ -31,11 +30,15 @@ const INPUT_CLS =
 const LABEL_CLS =
   'block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-1.5';
 
+// ── Auto-generate username: lastname.last6ofRFID ← added
+function generateUsername(lastName: string, rfidCard: string): string {
+  const cleanLast = lastName.trim().toLowerCase().replace(/\s+/g, '');
+  const last6     = rfidCard.replace(/\s+/g, '').slice(-6).padStart(6, '0');
+  return `${cleanLast}.${last6}`;
+}
+
 export default function AddUserModal({
-  isOpen,
-  onClose,
-  onSubmit,
-  error,
+  isOpen, onClose, onSubmit, error,
 }: AddUserModalProps) {
   const [formData, setFormData] = useState<CreateUserDto>({
     username:   '',
@@ -54,19 +57,44 @@ export default function AddUserModal({
     error: rfidError, startScan, resetScan,
   } = useRfidScanner();
 
+  // ── Auto-generate username whenever lastName or RFID changes ← added
+  useEffect(() => {
+    const rfid = scannedRfid || formData.rfidCard || '';
+    if (formData.lastName.trim() && rfid) {
+      setFormData((prev) => ({
+        ...prev,
+        username: generateUsername(formData.lastName, rfid),
+      }));
+    }
+  }, [formData.lastName, formData.rfidCard, scannedRfid]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // ── Frontend validations ← added
+    if (!formData.firstName.trim()) return;
+    if (!formData.lastName.trim())  return;
+    if (!formData.password || formData.password.length < 6) return;
+
     if (formData.role === 'STUDENT' && !scannedRfid) {
       startScan();
       return;
     }
+
+    const rfid     = scannedRfid || formData.rfidCard || undefined;
+    const username = generateUsername(
+      formData.lastName,
+      rfid ?? Date.now().toString() // fallback if no RFID (non-student)
+    );
+
     setSubmitting(true);
     try {
       await onSubmit({
         ...formData,
+        username,                              // ← always auto-generated
         email:      formData.email      || undefined,
         gradeLevel: formData.gradeLevel || undefined,
-        rfidCard:   scannedRfid || formData.rfidCard || undefined,
+        rfidCard:   rfid,
       });
       handleClose();
     } catch {
@@ -88,11 +116,17 @@ export default function AddUserModal({
 
   if (!isOpen) return null;
 
+  // ── Preview generated username ← added
+  const rfidPreview  = scannedRfid || formData.rfidCard || '';
+  const userPreview  = formData.lastName.trim() && rfidPreview
+    ? generateUsername(formData.lastName, rfidPreview)
+    : null;
+
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
 
-        {/* ── Header ───────────────────────────────────────────── */}
+        {/* ── Header ── */}
         <div className="sticky top-0 z-10 px-6 py-4 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 flex items-center justify-between rounded-t-2xl">
           <div>
             <h2 className="text-lg font-bold text-gray-900 dark:text-white">Add New User</h2>
@@ -108,7 +142,7 @@ export default function AddUserModal({
           </button>
         </div>
 
-        {/* ── Form ─────────────────────────────────────────────── */}
+        {/* ── Form ── */}
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
 
           {/* Error */}
@@ -142,17 +176,22 @@ export default function AddUserModal({
             </div>
           </div>
 
-          {/* Username */}
-          <div>
-            <label className={LABEL_CLS}>Username *</label>
-            <input
-              type="text" required
-              value={formData.username}
-              onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-              className={INPUT_CLS}
-              placeholder="e.g. delacruz.0001"
-            />
-          </div>
+          {/* ── Auto-generated username preview ← added */}
+          {userPreview && (
+            <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-slate-50 dark:bg-gray-800 border border-slate-200 dark:border-gray-700">
+              <div className="flex-1">
+                <p className="text-xs text-slate-400 dark:text-gray-500 uppercase tracking-widest font-semibold mb-0.5">
+                  Auto-generated Username
+                </p>
+                <p className="text-sm font-mono font-bold text-slate-800 dark:text-white">
+                  {userPreview}
+                </p>
+              </div>
+              <span className="text-[10px] px-2 py-0.5 bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-full font-semibold border border-emerald-200 dark:border-emerald-500/20">
+                Auto
+              </span>
+            </div>
+          )}
 
           {/* Email */}
           <div>
@@ -251,7 +290,7 @@ export default function AddUserModal({
             </div>
           )}
 
-          {/* ── Actions ──────────────────────────────────────────── */}
+          {/* ── Actions ── */}
           <div className="flex gap-3 pt-2">
             <button
               type="button"
