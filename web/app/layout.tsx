@@ -21,6 +21,10 @@ export const metadata: Metadata = {
   description:
     'Integrated RFID-based student attendance, safety monitoring, and Filipino Sign Language recognition system for the Philippine School for the Deaf.',
   keywords: ['RFID', 'attendance', 'FSL', 'Filipino Sign Language', 'Philippine School for the Deaf'],
+  icons: {
+    icon: '/assets/PSD_Logo.png',
+    apple: '/assets/PSD_Logo.png',
+  },
 }
 
 export default function RootLayout({
