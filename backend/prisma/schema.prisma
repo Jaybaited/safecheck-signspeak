@@ -37,11 +37,32 @@ enum CardStatus {
   SUSPENDED
 }
 
-// ← needed for attendance status queries
 enum AttendanceStatus {
   PRESENT
   LATE
   ABSENT
+}
+
+enum NotificationType {
+  ANNOUNCEMENT
+  ATTENDANCE
+  FSL
+  SYSTEM
+}
+
+enum NotificationStatus {
+  READ
+  UNREAD
+}
+
+enum FSLCategory {
+  ALPHABET
+  NUMBERS
+  GREETINGS
+  FAMILY
+  ACTIONS
+  OBJECTS
+  COLORS
 }
 
 model User {
@@ -55,7 +76,7 @@ model User {
   gradeLevel  GradeLevel?
   rfidCard    String?     @unique
   photoUrl    String?
-  pushToken   String?     // ← kept from Shane's mobile branch
+  pushToken   String?
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
@@ -94,20 +115,20 @@ model Attendance {
   id        String           @id @default(uuid())
   studentId String
   student   User             @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  timeIn    DateTime?        // ← optional (null until tapped in)
+  timeIn    DateTime?
   timeOut   DateTime?
   date      DateTime         @default(now()) @db.Date
-  status    AttendanceStatus @default(PRESENT) // ← kept from web branch
+  status    AttendanceStatus @default(PRESENT)
 
   @@map("attendances")
 }
 
 model FSLWord {
-  id        String        @id @default(uuid())
-  word      String        @unique
-  category  String
+  id        String      @id @default(uuid())
+  word      String      @unique
+  category  FSLCategory
   videoUrl  String
-  createdAt DateTime      @default(now())
+  createdAt DateTime    @default(now())
 
   progress  FSLProgress[]
 
@@ -130,12 +151,25 @@ model FSLProgress {
 }
 
 model Notification {
-  id      String   @id @default(uuid())
+  id      String             @id @default(uuid())
   userId  String
-  type    String
+  type    NotificationType
   message String
-  sentAt  DateTime @default(now())
-  status  String
+  sentAt  DateTime           @default(now())
+  status  NotificationStatus @default(UNREAD)
 
   @@map("notifications")
 }
+
+model AppConfig {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String
+  label     String
+  group     String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@map("app_config")
+}
+

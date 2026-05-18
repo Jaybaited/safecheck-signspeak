@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { NotificationsService } from '../notifications/notifications.service'; // ADD
+import { NotificationsService } from '../notifications/notifications.service';
+import { NetworkTimeService } from '../common/services/network-time.service';
 
 type AttendanceAction = 'CHECK_IN' | 'CHECK_OUT';
 
@@ -15,6 +16,7 @@ export interface RfidTapResult {
   attendance: {
     timeIn: Date | null;
     timeOut: Date | null;
+    status: string | null;
   };
 }
 
@@ -22,7 +24,8 @@ export interface RfidTapResult {
 export class AttendanceService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly notificationsService: NotificationsService, // ADD
+    private readonly notificationsService: NotificationsService,
+    private readonly networkTime: NetworkTimeService,
   ) {}
 
   async handleRfidTap(rfidCard: string): Promise<RfidTapResult> {
@@ -38,41 +41,76 @@ export class AttendanceService {
     });
 
     if (!user) throw new NotFoundException('RFID card not registered');
-    if (user.role !== 'STUDENT') {
+    if (user.role !== 'STUDENT')
       throw new NotFoundException('Only students can use attendance system');
-    }
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    // ✅ Always use network time — immune to local machine clock tampering
+    const serverNow = await this.networkTime.getNow();
+
+    // Compute Manila date components from network time
+    const manilaOffset = 8 * 60; // UTC+8 in minutes
+    const manilaMs = serverNow.getTime() + manilaOffset * 60 * 1000;
+    const manilaDate = new Date(manilaMs);
+
+    const manilaYear  = manilaDate.getUTCFullYear();
+    const manilaMonth = manilaDate.getUTCMonth();
+    const manilaDay   = manilaDate.getUTCDate();
+
+    // ✅ Store date as Manila date string at midnight UTC
+    // e.g. May 18 Manila → "2026-05-18T00:00:00.000Z" → displays as 2026-05-18 in Supabase
+    const attendanceDate = new Date(
+      `${manilaYear}-${String(manilaMonth + 1).padStart(2, '0')}-${String(manilaDay).padStart(2, '0')}T00:00:00.000Z`,
+    );
+    const attendanceDateNext = new Date(
+      attendanceDate.getTime() + 24 * 60 * 60 * 1000,
+    );
 
     const existingAttendance = await this.prisma.attendance.findFirst({
       where: {
         studentId: user.id,
-        date: { gte: today, lt: tomorrow },
+        date: {
+          gte: attendanceDate,
+          lt: attendanceDateNext,
+        },
       },
     });
+
+    // Determine LATE: 8:00 AM Manila time and beyond
+    const manilaHour   = manilaDate.getUTCHours();
+    const manilaMinute = manilaDate.getUTCMinutes();
+    const isLate = manilaHour > 8 || (manilaHour === 8 && manilaMinute > 0);
+    const status = isLate ? 'LATE' : 'PRESENT';
 
     let attendance = existingAttendance;
     let action: AttendanceAction;
 
     if (!attendance) {
+      // First tap = Check In
       attendance = await this.prisma.attendance.create({
-        data: { studentId: user.id, timeIn: new Date(), date: today },
+        data: {
+          studentId: user.id,
+          timeIn: serverNow,
+          date: attendanceDate,  // ✅ correct Manila date
+          status,
+        },
       });
       action = 'CHECK_IN';
     } else if (!attendance.timeOut) {
+      // Second tap = Check Out
       attendance = await this.prisma.attendance.update({
         where: { id: attendance.id },
-        data: { timeOut: new Date() },
+        data: {
+          timeOut: serverNow,
+        },
       });
       action = 'CHECK_OUT';
     } else {
-      throw new NotFoundException('Already checked in and out for today');
+      throw new NotFoundException(
+        `${user.firstName} has already checked in and out for today.`,
+      );
     }
 
-    // Notify parent after RFID tap — fire and forget
+    // Notify parent (fire and forget)
     this.notificationsService
       .notifyParentOnRFID(
         user.id,
@@ -91,11 +129,11 @@ export class AttendanceService {
       attendance: {
         timeIn: attendance.timeIn,
         timeOut: attendance.timeOut,
+        status: attendance.status,
       },
     };
   }
 
-  // ... rest of your methods unchanged
   async getStudentAttendance(studentId: string) {
     return this.prisma.attendance.findMany({
       where: { studentId },
@@ -114,13 +152,11 @@ export class AttendanceService {
 
     const totalDays = attendanceRecords.length;
     const present = attendanceRecords.filter((r) => r.timeIn !== null).length;
-    const late = attendanceRecords.filter((record) => {
-      if (!record.timeIn) return false;
-      const timeInDate = new Date(record.timeIn);
-      const hours = timeInDate.getHours();
-      const minutes = timeInDate.getMinutes();
-      return hours > 8 || (hours === 8 && minutes > 0);
-    }).length;
+
+    // ✅ Use stored status — no recalculation from timeIn hours
+    const late = attendanceRecords.filter(
+      (record) => record.status === 'LATE',
+    ).length;
 
     const absent = totalDays - present;
     const attendanceRate =
@@ -130,7 +166,8 @@ export class AttendanceService {
   }
 
   async getTodayAttendance(studentId: string) {
-    const today = new Date();
+    const now = new Date();
+    const today = new Date(now);
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -141,5 +178,12 @@ export class AttendanceService {
         date: { gte: today, lt: tomorrow },
       },
     });
+  }
+
+  /**
+   * Exposes network time for the debug/demo endpoint.
+   */
+  async getNetworkTime(): Promise<Date> {
+    return this.networkTime.getNow();
   }
 }

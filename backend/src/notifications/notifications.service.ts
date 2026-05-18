@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationStatus, NotificationType } from '@prisma/client';
 
 @Injectable()
 export class NotificationsService {
@@ -41,9 +42,9 @@ export class NotificationsService {
       await this.prisma.notification.create({
         data: {
           userId: data?.parentId ?? '',
-          type: 'PUSH',
+          type: NotificationType.ATTENDANCE,
           message: body,
-          status: 'unread',
+          status: NotificationStatus.UNREAD,
         },
       });
     } catch (error) {
@@ -51,9 +52,9 @@ export class NotificationsService {
       await this.prisma.notification.create({
         data: {
           userId: data?.parentId ?? '',
-          type: 'PUSH',
+          type: NotificationType.ATTENDANCE,
           message: body,
-          status: 'FAILED',
+          status: NotificationStatus.UNREAD,
         },
       });
     }
@@ -124,9 +125,9 @@ export class NotificationsService {
       await this.prisma.notification.create({
         data: {
           userId: parentLink.parent.id,
-          type: 'PUSH',
+          type: NotificationType.ATTENDANCE,
           message: body,
-          status: 'unread',
+          status: NotificationStatus.UNREAD,
         },
       });
     }
@@ -144,8 +145,9 @@ export class NotificationsService {
 
   async getUnreadNotifications(userId: string) {
     return this.prisma.notification.findMany({
-      where: { userId, status: 'unread' },
+      where: { userId, status: NotificationStatus.UNREAD },
       orderBy: { sentAt: 'desc' },
+      take: 50,
     });
   }
 
@@ -159,8 +161,8 @@ export class NotificationsService {
 
   async markAllRead(userId: string) {
     await this.prisma.notification.updateMany({
-      where: { userId, status: { in: ['unread', 'FAILED'] } },
-      data: { status: 'read' },
+      where: { userId, status: NotificationStatus.UNREAD },
+      data: { status: NotificationStatus.READ },
     });
     return { success: true };
   }
@@ -168,7 +170,7 @@ export class NotificationsService {
   async markOneRead(notificationId: string) {
     await this.prisma.notification.update({
       where: { id: notificationId },
-      data: { status: 'read' },
+      data: { status: NotificationStatus.READ },
     });
     return { success: true };
   }
