@@ -173,3 +173,24 @@ model AppConfig {
   @@map("app_config")
 }
 
+model LoginAttempt {
+  id        String   @id @default(uuid())
+  ip        String
+  username  String
+  success   Boolean
+  createdAt DateTime @default(now())
+
+  @@index([ip, username, createdAt])
+  @@map("login_attempts")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}

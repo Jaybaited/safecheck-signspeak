@@ -6,6 +6,8 @@ import {
   IsEnum,
   IsOptional,
   MinLength,
+  MaxLength,
+  Matches,
 } from 'class-validator';
 
 export enum Role {
@@ -33,28 +35,52 @@ export enum GradeLevel {
 export class CreateUserDto {
   @IsString()
   @IsNotEmpty()
+  @MinLength(3, { message: 'Username must be at least 3 characters' })
+  @MaxLength(30, { message: 'Username must not exceed 30 characters' })
   username: string;
 
-  @IsEmail()
+  @IsEmail({}, { message: 'Please provide a valid email address' })
   @IsOptional()
   email?: string;
 
   @IsString()
-  @MinLength(6)
+  @MinLength(8, { message: 'Password must be at least 8 characters' })
+  @Matches(/(?=.*[A-Z])/, {
+    message: 'Password must contain at least one uppercase letter',
+  })
+  @Matches(/(?=.*[a-z])/, {
+    message: 'Password must contain at least one lowercase letter',
+  })
+  @Matches(/(?=.*\d)/, {
+    message: 'Password must contain at least one number',
+  })
+  @Matches(/(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?])/, {
+    message: 'Password must contain at least one special character',
+  })
   password: string;
 
-  @IsEnum(Role)
+  @IsEnum(Role, { message: 'Role must be ADMIN, TEACHER, STUDENT, or PARENT' })
   role: Role;
 
   @IsString()
   @IsNotEmpty()
+  @MinLength(2, { message: 'First name must be at least 2 characters' })
+  @MaxLength(50, { message: 'First name must not exceed 50 characters' })
+  @Matches(/^[a-zA-Z\s\-'.]+$/, {
+    message: 'First name can only contain letters, spaces, hyphens, apostrophes, and periods',
+  })
   firstName: string;
 
   @IsString()
   @IsNotEmpty()
+  @MinLength(2, { message: 'Last name must be at least 2 characters' })
+  @MaxLength(50, { message: 'Last name must not exceed 50 characters' })
+  @Matches(/^[a-zA-Z\s\-'.]+$/, {
+    message: 'Last name can only contain letters, spaces, hyphens, apostrophes, and periods',
+  })
   lastName: string;
 
-  @IsEnum(GradeLevel)
+  @IsEnum(GradeLevel, { message: 'Invalid grade level' })
   @IsOptional()
   gradeLevel?: GradeLevel;
 
