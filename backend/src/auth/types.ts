@@ -12,5 +12,7 @@ export interface LoginResponse {
     role: string;
     firstName: string;
     lastName: string;
+    mustChangePassword: boolean;
   };
 }
+

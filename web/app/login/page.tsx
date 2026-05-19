@@ -5,26 +5,26 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { login } from '@/lib/api'
 import { ShieldCheck, Eye, EyeOff, AlertCircle, ArrowRight } from 'lucide-react'
+import ForgotPasswordModal from '@/components/admin/ForgotPasswordModal'
 
 export default function LoginPage() {
   const router       = useRouter()
   const searchParams = useSearchParams()
 
-  // Initialize from URL once; we clear it as soon as user interacts
   const [isExpired, setIsExpired] = useState(() => {
     const expired = searchParams.get('reason') === 'expired'
     if (expired && typeof window !== 'undefined') {
-      // Clean the URL so refresh / testing doesn't keep the param
       window.history.replaceState({}, '', '/login')
     }
     return expired
   })
 
-  const [username,     setUsername]     = useState('')
-  const [password,     setPassword]     = useState('')
-  const [showPassword, setShowPassword] = useState(false)
-  const [error,        setError]        = useState('')
-  const [loading,      setLoading]      = useState(false)
+  const [username,            setUsername]            = useState('')
+  const [password,            setPassword]            = useState('')
+  const [showPassword,        setShowPassword]        = useState(false)
+  const [error,               setError]               = useState('')
+  const [loading,             setLoading]             = useState(false)
+  const [showForgotPassword,  setShowForgotPassword]  = useState(false)
 
   const usernameId = useId()
   const passwordId = useId()
@@ -48,7 +48,6 @@ export default function LoginPage() {
     setError('')
     setIsExpired(false)
 
-    // Frontend empty field validation
     if (!username.trim()) {
       setError('Username is required.')
       return
@@ -62,14 +61,20 @@ export default function LoginPage() {
     try {
       const res = await login(username.trim(), password)
 
-      // Store only minimal non-sensitive fields
-      const { id, username: uname, role, firstName, lastName } = res.user
-      localStorage.setItem('token', res.accessToken)
+      // Store only non-sensitive user profile fields
+      const { id, username: uname, role, firstName, lastName, mustChangePassword } = res.user
       localStorage.setItem(
         'user',
-        JSON.stringify({ id, username: uname, role, firstName, lastName }),
+        JSON.stringify({ id, username: uname, role, firstName, lastName, mustChangePassword }),
       )
 
+      // ── Mandatory first-login password change ──────────────────────────
+      if (mustChangePassword) {
+        router.push('/change-password')
+        return
+      }
+
+      // ── Normal role-based redirect ─────────────────────────────────────
       if      (role === 'ADMIN')   router.push('/admin/dashboard')
       else if (role === 'STUDENT') router.push('/student/dashboard')
       else if (role === 'TEACHER') router.push('/teacher/assessment')
@@ -82,7 +87,6 @@ export default function LoginPage() {
         typeof err === 'string' ? err :
         ''
 
-      // Friendly error mapping
       if (raw.toLowerCase().includes('invalid credentials') || raw.includes('401')) {
         setError('Incorrect username or password. Please try again.')
       } else if (raw.toLowerCase().includes('network') || raw.includes('fetch')) {
@@ -177,12 +181,22 @@ export default function LoginPage() {
 
           {/* Password */}
           <div className="space-y-1.5">
-            <label
-              htmlFor={passwordId}
-              className="text-xs font-semibold text-gray-500 uppercase tracking-widest"
-            >
-              Password
-            </label>
+            <div className="flex items-center justify-between">
+              <label
+                htmlFor={passwordId}
+                className="text-xs font-semibold text-gray-500 uppercase tracking-widest"
+              >
+                Password
+              </label>
+              {/* Forgot Password link — inline next to the label */}
+              <button
+                type="button"
+                onClick={() => setShowForgotPassword(true)}
+                className="text-xs text-[#7B1113] hover:text-[#9B2020] hover:underline transition-colors"
+              >
+                Forgot password?
+              </button>
+            </div>
             <div className="relative">
               <input
                 id={passwordId}
@@ -257,6 +271,12 @@ export default function LoginPage() {
       <p className="mt-4 text-[10px] text-gray-300 uppercase tracking-widest">
         SafeCheck<span className="text-[#7B1113]">·</span>SignSpeak · Capstone 2026
       </p>
+
+      {/* Forgot Password Modal */}
+      <ForgotPasswordModal
+        isOpen={showForgotPassword}
+        onClose={() => setShowForgotPassword(false)}
+      />
     </div>
   )
 }

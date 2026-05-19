@@ -43,21 +43,10 @@ export class CreateUserDto {
   @IsOptional()
   email?: string;
 
+  // Password is now optional — backend generates it if not provided
   @IsString()
-  @MinLength(8, { message: 'Password must be at least 8 characters' })
-  @Matches(/(?=.*[A-Z])/, {
-    message: 'Password must contain at least one uppercase letter',
-  })
-  @Matches(/(?=.*[a-z])/, {
-    message: 'Password must contain at least one lowercase letter',
-  })
-  @Matches(/(?=.*\d)/, {
-    message: 'Password must contain at least one number',
-  })
-  @Matches(/(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?])/, {
-    message: 'Password must contain at least one special character',
-  })
-  password: string;
+  @IsOptional()
+  password?: string;
 
   @IsEnum(Role, { message: 'Role must be ADMIN, TEACHER, STUDENT, or PARENT' })
   role: Role;
@@ -87,6 +76,10 @@ export class CreateUserDto {
   @IsString()
   @IsOptional()
   rfidCard?: string;
+
+  @IsString()
+  @IsOptional()
+  phoneNumber?: string;
 
   @IsString()
   @IsOptional()

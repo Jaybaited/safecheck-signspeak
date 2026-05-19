@@ -9,8 +9,12 @@ import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
 import { LoginResponse } from './types';
 
-const MAX_ATTEMPTS = 5;
-const WINDOW_MINUTES = 15;
+const MAX_ATTEMPTS    = 5;
+const WINDOW_MINUTES  = 15;
+
+// ── JWT secrets resolved once at module load time ─────────────────────────────
+const JWT_SECRET         = process.env.JWT_SECRET         ?? 'a114f225-4e4e-4e54-831c-90d8751864fb';
+const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET ?? 'refresh-secret-change-in-production';
 
 @Injectable()
 export class AuthService {
@@ -36,7 +40,7 @@ export class AuthService {
       );
     }
 
-    const user = await this.prisma.user.findUnique({ where: { username } });
+    const user    = await this.prisma.user.findUnique({ where: { username } });
     const isValid = user ? await bcrypt.compare(password, user.password) : false;
 
     await this.prisma.loginAttempt.create({
@@ -50,19 +54,19 @@ export class AuthService {
     const payload = { sub: user.id, username: user.username, role: user.role };
 
     const accessToken = this.jwtService.sign(payload, {
-      secret: process.env.JWT_SECRET || 'a114f225-4e4e-4e54-831c-90d8751864fb',
+      secret:    JWT_SECRET,
       expiresIn: '15m',
     });
 
     const refreshToken = this.jwtService.sign(payload, {
-      secret: process.env.JWT_REFRESH_SECRET || 'refresh-secret-change-in-production',
+      secret:    JWT_REFRESH_SECRET,
       expiresIn: '7d',
     });
 
     await this.prisma.refreshToken.create({
       data: {
-        userId: user.id,
-        token: refreshToken,
+        userId:    user.id,
+        token:     refreshToken,
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },
     });
@@ -71,11 +75,12 @@ export class AuthService {
       accessToken,
       refreshToken,
       user: {
-        id: user.id,
-        username: user.username,
-        role: user.role,
-        firstName: user.firstName,
-        lastName: user.lastName,
+        id:                 user.id,
+        username:           user.username,
+        role:               user.role,
+        firstName:          user.firstName,
+        lastName:           user.lastName,
+        mustChangePassword: user.mustChangePassword,
       },
     };
   }
@@ -96,8 +101,9 @@ export class AuthService {
     if (!user) throw new UnauthorizedException('User not found');
 
     const payload = { sub: user.id, username: user.username, role: user.role };
+
     const accessToken = this.jwtService.sign(payload, {
-      secret: process.env.JWT_SECRET || 'a114f225-4e4e-4e54-831c-90d8751864fb',
+      secret:    JWT_SECRET,
       expiresIn: '15m',
     });
 
@@ -112,14 +118,16 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
-        id: true,
-        username: true,
-        firstName: true,
-        lastName: true,
-        role: true,
-        gradeLevel: true,
-        rfidCard: true,
-        createdAt: true,
+        id:                true,
+        username:          true,
+        firstName:         true,
+        lastName:          true,
+        role:              true,
+        gradeLevel:        true,
+        rfidCard:          true,
+        phoneNumber:       true,
+        mustChangePassword: true,
+        createdAt:         true,
       },
     });
     if (!user) throw new NotFoundException('User not found');

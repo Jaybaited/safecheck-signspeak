@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react'; // ← added useEffect
-import { X, CheckCircle, CreditCard } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { X, CheckCircle, CreditCard, Copy, Check, User, Users } from 'lucide-react';
 import { CreateUserDto } from '@/lib/api';
 import { useRfidScanner } from '@/hooks/useRfidScanner';
 
@@ -14,8 +14,18 @@ const GRADE_LEVELS = [
 interface AddUserModalProps {
   isOpen:   boolean;
   onClose:  () => void;
-  onSubmit: (data: CreateUserDto) => Promise<void>;
-  error:    string | null;
+  onSubmit: (data: CreateUserDto) => Promise<{
+    generatedPassword: string;
+    parentAccount?: { username: string; generatedPassword: string };
+  }>;
+  error: string | null;
+}
+
+interface GeneratedCredentials {
+  studentUsername: string;
+  studentPassword: string;
+  parentUsername?: string;
+  parentPassword?: string;
 }
 
 const INPUT_CLS =
@@ -30,73 +40,91 @@ const INPUT_CLS =
 const LABEL_CLS =
   'block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-1.5';
 
-// ── Auto-generate username: lastname.last6ofRFID ← added
-function generateUsername(lastName: string, rfidCard: string): string {
+function buildUsername(lastName: string, rfidCard: string): string {
   const cleanLast = lastName.trim().toLowerCase().replace(/\s+/g, '');
-  const last6     = rfidCard.replace(/\s+/g, '').slice(-6).padStart(6, '0');
+  const last6 = rfidCard.replace(/\s+/g, '').slice(-6).padStart(6, '0');
   return `${cleanLast}.${last6}`;
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  return (
+    <button
+      onClick={handleCopy}
+      className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+    >
+      {copied ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+      {copied ? 'Copied!' : 'Copy'}
+    </button>
+  );
 }
 
 export default function AddUserModal({
   isOpen, onClose, onSubmit, error,
 }: AddUserModalProps) {
-  const [formData, setFormData] = useState<CreateUserDto>({
-    username:   '',
-    email:      '',
-    password:   '',
-    role:       'STUDENT',
-    firstName:  '',
-    lastName:   '',
-    gradeLevel: '',
-    rfidCard:   '',
+  const [formData, setFormData] = useState<Omit<CreateUserDto, 'password'>>({
+    username:    '',
+    email:       '',
+    role:        'STUDENT',
+    firstName:   '',
+    lastName:    '',
+    gradeLevel:  '',
+    rfidCard:    '',
+    phoneNumber: '',
   });
   const [submitting, setSubmitting] = useState(false);
+  const [credentials, setCredentials] = useState<GeneratedCredentials | null>(null);
 
   const {
     isScanning, scannedRfid,
     error: rfidError, startScan, resetScan,
   } = useRfidScanner();
 
-  // ── Auto-generate username whenever lastName or RFID changes ← added
-  useEffect(() => {
-    const rfid = scannedRfid || formData.rfidCard || '';
-    if (formData.lastName.trim() && rfid) {
-      setFormData((prev) => ({
-        ...prev,
-        username: generateUsername(formData.lastName, rfid),
-      }));
-    }
-  }, [formData.lastName, formData.rfidCard, scannedRfid]);
+  // Auto-preview username
+  const rfidPreview = scannedRfid || formData.rfidCard || '';
+  const userPreview = formData.lastName.trim() && rfidPreview
+    ? buildUsername(formData.lastName, rfidPreview)
+    : null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // ── Frontend validations ← added
-    if (!formData.firstName.trim()) return;
-    if (!formData.lastName.trim())  return;
-    if (!formData.password || formData.password.length < 6) return;
+    if (!formData.firstName.trim() || !formData.lastName.trim()) return;
 
     if (formData.role === 'STUDENT' && !scannedRfid) {
       startScan();
       return;
     }
 
-    const rfid     = scannedRfid || formData.rfidCard || undefined;
-    const username = generateUsername(
+    const rfid = scannedRfid || formData.rfidCard || undefined;
+    const username = buildUsername(
       formData.lastName,
-      rfid ?? Date.now().toString() // fallback if no RFID (non-student)
+      rfid ?? String(Date.now()),
     );
 
     setSubmitting(true);
     try {
-      await onSubmit({
+      const result = await onSubmit({
         ...formData,
-        username,                              // ← always auto-generated
-        email:      formData.email      || undefined,
-        gradeLevel: formData.gradeLevel || undefined,
-        rfidCard:   rfid,
+        username,
+        email:       formData.email      || undefined,
+        gradeLevel:  formData.gradeLevel || undefined,
+        rfidCard:    rfid,
+        phoneNumber: formData.phoneNumber || undefined,
+      } as CreateUserDto);
+
+      // Show credentials modal
+      setCredentials({
+        studentUsername: username,
+        studentPassword: result.generatedPassword,
+        parentUsername:  result.parentAccount?.username,
+        parentPassword:  result.parentAccount?.generatedPassword,
       });
-      handleClose();
     } catch {
       // Error handled by parent
     } finally {
@@ -106,32 +134,117 @@ export default function AddUserModal({
 
   const handleClose = () => {
     setFormData({
-      username: '', email: '', password: '',
-      role: 'STUDENT', firstName: '', lastName: '',
-      gradeLevel: '', rfidCard: '',
+      username: '', email: '', role: 'STUDENT',
+      firstName: '', lastName: '', gradeLevel: '',
+      rfidCard: '', phoneNumber: '',
     });
+    setCredentials(null);
     resetScan();
     onClose();
   };
 
   if (!isOpen) return null;
 
-  // ── Preview generated username ← added
-  const rfidPreview  = scannedRfid || formData.rfidCard || '';
-  const userPreview  = formData.lastName.trim() && rfidPreview
-    ? generateUsername(formData.lastName, rfidPreview)
-    : null;
+  // ── Credentials Modal (shown after successful creation) ──────────────────
+  if (credentials) {
+    return (
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl w-full max-w-md shadow-2xl">
+          <div className="px-6 pt-6 pb-4 border-b border-gray-200 dark:border-gray-800">
+            <div className="flex items-center gap-3 mb-1">
+              <div className="w-8 h-8 bg-emerald-100 dark:bg-emerald-500/10 rounded-full flex items-center justify-center">
+                <CheckCircle className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <h2 className="text-lg font-bold text-gray-900 dark:text-white">User Created Successfully</h2>
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-11">
+              Save these credentials — the password will not be shown again.
+            </p>
+          </div>
 
+          <div className="p-6 space-y-4">
+            {/* Student Credentials */}
+            <div className="rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+                <User className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" />
+                <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest">Student Account</span>
+              </div>
+              <div className="p-4 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mb-0.5">Username</p>
+                    <p className="text-sm font-mono font-semibold text-gray-900 dark:text-white truncate">{credentials.studentUsername}</p>
+                  </div>
+                  <CopyButton text={credentials.studentUsername} />
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mb-0.5">Password</p>
+                    <p className="text-sm font-mono font-semibold text-gray-900 dark:text-white">{credentials.studentPassword}</p>
+                  </div>
+                  <CopyButton text={credentials.studentPassword} />
+                </div>
+              </div>
+            </div>
+
+            {/* Parent Credentials (only for students) */}
+            {credentials.parentUsername && (
+              <div className="rounded-xl border border-blue-200 dark:border-blue-500/30 overflow-hidden">
+                <div className="flex items-center gap-2 px-4 py-2.5 bg-blue-50 dark:bg-blue-500/10 border-b border-blue-200 dark:border-blue-500/30">
+                  <Users className="w-3.5 h-3.5 text-blue-500 dark:text-blue-400" />
+                  <span className="text-xs font-semibold text-blue-500 dark:text-blue-400 uppercase tracking-widest">Parent Account</span>
+                </div>
+                <div className="p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs text-gray-400 dark:text-gray-500 mb-0.5">Username</p>
+                      <p className="text-sm font-mono font-semibold text-gray-900 dark:text-white truncate">{credentials.parentUsername}</p>
+                    </div>
+                    <CopyButton text={credentials.parentUsername} />
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs text-gray-400 dark:text-gray-500 mb-0.5">Password</p>
+                      <p className="text-sm font-mono font-semibold text-gray-900 dark:text-white">{credentials.parentPassword}</p>
+                    </div>
+                    <CopyButton text={credentials.parentPassword!} />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-xl">
+              <span className="text-amber-500 text-sm mt-0.5">⚠️</span>
+              <p className="text-xs text-amber-700 dark:text-amber-400">
+                The user will be required to change their password on first login. Share these credentials via Viber or Messenger.
+              </p>
+            </div>
+          </div>
+
+          <div className="px-6 pb-6">
+            <button
+              onClick={handleClose}
+              className="w-full h-11 bg-gray-900 hover:bg-gray-700 dark:bg-white dark:hover:bg-gray-100 text-white dark:text-gray-900 rounded-full text-sm font-semibold transition-colors"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Main Creation Form ───────────────────────────────────────────────────
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
 
-        {/* ── Header ── */}
+        {/* Header */}
         <div className="sticky top-0 z-10 px-6 py-4 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 flex items-center justify-between rounded-t-2xl">
           <div>
             <h2 className="text-lg font-bold text-gray-900 dark:text-white">Add New User</h2>
             <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-              Fill in the details below to create a new account.
+              A secure password will be generated automatically.
             </p>
           </div>
           <button
@@ -142,10 +255,9 @@ export default function AddUserModal({
           </button>
         </div>
 
-        {/* ── Form ── */}
+        {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
 
-          {/* Error */}
           {(error || rfidError) && (
             <div className="flex items-start gap-3 p-3.5 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 text-sm text-red-600 dark:text-red-400">
               {error || rfidError}
@@ -176,7 +288,7 @@ export default function AddUserModal({
             </div>
           </div>
 
-          {/* ── Auto-generated username preview ← added */}
+          {/* Auto-generated username preview */}
           {userPreview && (
             <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-slate-50 dark:bg-gray-800 border border-slate-200 dark:border-gray-700">
               <div className="flex-1">
@@ -193,27 +305,15 @@ export default function AddUserModal({
             </div>
           )}
 
-          {/* Email */}
+          {/* Phone Number */}
           <div>
-            <label className={LABEL_CLS}>Email <span className="normal-case text-gray-400">(optional)</span></label>
+            <label className={LABEL_CLS}>Phone Number <span className="normal-case text-gray-400">(optional)</span></label>
             <input
-              type="email"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              type="tel"
+              value={formData.phoneNumber}
+              onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
               className={INPUT_CLS}
-              placeholder="e.g. juan@psd.edu.ph"
-            />
-          </div>
-
-          {/* Password */}
-          <div>
-            <label className={LABEL_CLS}>Password * <span className="normal-case text-gray-400">(min. 6 characters)</span></label>
-            <input
-              type="password" required minLength={6}
-              value={formData.password}
-              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-              className={INPUT_CLS}
-              placeholder="••••••••"
+              placeholder="e.g. 09171234567"
             />
           </div>
 
@@ -265,7 +365,17 @@ export default function AddUserModal({
             </div>
           )}
 
-          {/* RFID scanned success — students */}
+          {/* Password note */}
+          <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20">
+            <span className="text-blue-500 text-sm">🔐</span>
+            <p className="text-xs text-blue-700 dark:text-blue-400">
+              {formData.role === 'STUDENT' && (scannedRfid || formData.rfidCard)
+                ? 'Password will be set to the student\'s full RFID card number.'
+                : 'A secure 6-digit password will be auto-generated after creation.'}
+            </p>
+          </div>
+
+          {/* RFID scanned success */}
           {formData.role === 'STUDENT' && scannedRfid && (
             <div className="flex items-center gap-3 p-4 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30">
               <CheckCircle className="w-5 h-5 text-emerald-500 shrink-0" />
@@ -290,7 +400,7 @@ export default function AddUserModal({
             </div>
           )}
 
-          {/* ── Actions ── */}
+          {/* Actions */}
           <div className="flex gap-3 pt-2">
             <button
               type="button"

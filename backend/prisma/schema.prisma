@@ -66,19 +66,21 @@ enum FSLCategory {
 }
 
 model User {
-  id          String      @id @default(uuid())
-  username    String      @unique
-  email       String?     @unique
-  password    String
-  role        Role
-  firstName   String
-  lastName    String
-  gradeLevel  GradeLevel?
-  rfidCard    String?     @unique
-  photoUrl    String?
-  pushToken   String?
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  id                 String      @id @default(uuid())
+  username           String      @unique
+  email              String?     @unique
+  password           String
+  role               Role
+  firstName          String
+  lastName           String
+  gradeLevel         GradeLevel?
+  rfidCard           String?     @unique
+  phoneNumber        String?
+  photoUrl           String?
+  pushToken          String?
+  mustChangePassword Boolean     @default(true)
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
 
   attendances Attendance[]
   fslProgress FSLProgress[]
@@ -130,7 +132,7 @@ model FSLWord {
   videoUrl  String
   createdAt DateTime    @default(now())
 
-  progress  FSLProgress[]
+  progress FSLProgress[]
 
   @@map("fsl_words")
 }
@@ -193,4 +195,38 @@ model RefreshToken {
 
   @@index([userId])
   @@map("refresh_tokens")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String
+  changedBy  String
+  oldRole    Role
+  newRole    Role
+  changedAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([changedBy])
+  @@map("audit_logs")
+}
+
+enum ResetRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model PasswordResetRequest {
+  id           String             @id @default(uuid())
+  username     String
+  userId       String
+  status       ResetRequestStatus @default(PENDING)
+  requestedAt  DateTime           @default(now())
+  resolvedAt   DateTime?
+  resolvedBy   String?
+  generatedPassword String?
+
+  @@index([status])
+  @@index([userId])
+  @@map("password_reset_requests")
 }
