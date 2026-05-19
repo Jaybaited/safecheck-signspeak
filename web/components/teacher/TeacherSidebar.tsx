@@ -3,14 +3,15 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { FlaskConical, User, LogOut, GraduationCap } from 'lucide-react';
+import { FlaskConical, User, LogOut, GraduationCap, ClipboardList } from 'lucide-react';
 import LogoutModal from '@/components/shared/LogoutModal';
 
 interface TeacherSidebarProps { onLogout: () => void; }
 
 const NAV_ITEMS = [
-  { name: 'Assessment', href: '/teacher/assessment', icon: FlaskConical },
-  { name: 'Profile',    href: '/teacher/profile',    icon: User         },
+  { name: 'Assessment', href: '/teacher/assessment', icon: FlaskConical  },
+  { name: 'Attendance', href: '/teacher/attendance', icon: ClipboardList },
+  { name: 'Profile',    href: '/teacher/profile',    icon: User          },
 ];
 
 const ACTIVE   = 'bg-[#7B1113]/10 dark:bg-[#7B1113]/20 text-[#7B1113] dark:text-[#E8C96A] font-medium';

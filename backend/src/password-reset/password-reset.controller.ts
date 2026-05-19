@@ -4,6 +4,7 @@ import {
 } from '@nestjs/common';
 import { PasswordResetService } from './password-reset.service';
 import { JwtAuthGuard } from '../auth/jwt.guard';
+import { RequestPasswordResetDto } from './dto/password-reset-request.dto';  // ← add this
 
 @Controller('password-reset')
 export class PasswordResetController {
@@ -11,8 +12,8 @@ export class PasswordResetController {
 
   // Public — no JWT required
   @Post('request')
-  request(@Body('username') username: string) {
-    return this.service.requestReset(username);
+  request(@Body() dto: RequestPasswordResetDto) {                            // ← change Body()
+    return this.service.requestReset(dto.username);                          // ← use dto.username
   }
 
   // Admin only

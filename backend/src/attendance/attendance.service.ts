@@ -230,4 +230,67 @@ export class AttendanceService {
       orderBy: { timeIn: 'asc' },
     });
   }
+
+  // ── Revision 16: Filtered attendance for Teacher/Admin portal ─────────────
+  async getFilteredAttendance(query: {
+    studentId?:  string;
+    date?:       string;
+    dateFrom?:   string;
+    dateTo?:     string;
+    status?:     string;
+    gradeLevel?: string;
+    page?:       string;
+    limit?:      string;
+  }) {
+    const page  = Math.max(1, parseInt(query.page  ?? '1',  10));
+    const limit = Math.min(100, Math.max(1, parseInt(query.limit ?? '20', 10)));
+    const skip  = (page - 1) * limit;
+
+    let dateFilter: { gte?: Date; lt?: Date } | undefined;
+
+    if (query.date) {
+      const exact = new Date(`${query.date}T00:00:00.000Z`);
+      dateFilter = { gte: exact, lt: new Date(exact.getTime() + 86400_000) };
+    } else if (query.dateFrom || query.dateTo) {
+      dateFilter = {};
+      if (query.dateFrom) dateFilter.gte = new Date(`${query.dateFrom}T00:00:00.000Z`);
+      if (query.dateTo)   dateFilter.lt  = new Date(
+        new Date(`${query.dateTo}T00:00:00.000Z`).getTime() + 86400_000,
+      );
+    }
+
+    const where: Record<string, unknown> = {};
+    if (query.studentId)  where.studentId = query.studentId;
+    if (dateFilter)       where.date      = dateFilter;
+    if (query.status)     where.status    = query.status;
+    if (query.gradeLevel) where.student   = { gradeLevel: query.gradeLevel };
+
+    const [records, total] = await Promise.all([
+      this.prisma.attendance.findMany({
+        where,
+        orderBy: { date: 'desc' },
+        skip,
+        take: limit,
+        include: {
+          student: {
+            select: {
+              id:         true,
+              firstName:  true,
+              lastName:   true,
+              gradeLevel: true,
+            },
+          },
+        },
+      }),
+      this.prisma.attendance.count({ where }),
+    ]);
+
+    return {
+      data:       records,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
 }

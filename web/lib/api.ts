@@ -25,7 +25,6 @@ async function apiFetch<T>(path: string, options?: ApiFetchOptions): Promise<T> 
     },
   });
 
-  // Handle 204 No Content (e.g. DELETE) — res.json() throws on empty body
   if (res.status === 204) {
     return undefined as T;
   }
@@ -60,7 +59,6 @@ async function apiFetch<T>(path: string, options?: ApiFetchOptions): Promise<T> 
           }
         }
 
-        // Refresh token missing, expired, or invalid — clear session and redirect
         localStorage.removeItem('token');
         localStorage.removeItem('refreshToken');
         localStorage.removeItem('user');
@@ -129,10 +127,45 @@ export interface LoginResponse {
 export interface AttendanceRecord {
   id:        string;
   studentId: string;
-  status:    'PRESENT' | 'ABSENT' | 'LATE';
+  status:    string | null;
   timeIn?:   string | null;
   timeOut?:  string | null;
   date:      string;
+}
+
+// ── Filtered attendance record — includes joined student data ─────────────────
+export interface FilteredAttendanceRecord {
+  id:        string;
+  studentId: string;
+  date:      string;
+  timeIn:    string | null;
+  timeOut:   string | null;
+  status:    string | null;
+  student: {
+    id:         string;
+    firstName:  string;
+    lastName:   string;
+    gradeLevel: string | null;
+  };
+}
+
+export interface AttendanceQueryParams {
+  studentId?:  string;
+  date?:       string;
+  dateFrom?:   string;
+  dateTo?:     string;
+  status?:     string;
+  gradeLevel?: string;
+  page?:       number;
+  limit?:      number;
+}
+
+export interface PaginatedAttendance {
+  data:       FilteredAttendanceRecord[];
+  total:      number;
+  page:       number;
+  limit:      number;
+  totalPages: number;
 }
 
 export interface AttendanceStats {
@@ -267,6 +300,19 @@ export const getStudentStats = (studentId: string) =>
 export const getTodayAttendance = (studentId: string) =>
   apiFetch<AttendanceRecord | null>(`/attendance/student/${studentId}/today`);
 
+export const getFilteredAttendance = (params: AttendanceQueryParams) => {
+  const q = new URLSearchParams();
+  if (params.studentId)  q.set('studentId',  params.studentId);
+  if (params.date)       q.set('date',       params.date);
+  if (params.dateFrom)   q.set('dateFrom',   params.dateFrom);
+  if (params.dateTo)     q.set('dateTo',     params.dateTo);
+  if (params.status)     q.set('status',     params.status);
+  if (params.gradeLevel) q.set('gradeLevel', params.gradeLevel);
+  if (params.page)       q.set('page',       String(params.page));
+  if (params.limit)      q.set('limit',      String(params.limit));
+  return apiFetch<PaginatedAttendance>(`/attendance?${q.toString()}`);
+};
+
 // ─── Notifications ────────────────────────────────────────────────────────────
 
 export interface NotificationRecord {
@@ -360,6 +406,7 @@ export const api = {
   getStudentAttendance,
   getStudentStats,
   getTodayAttendance,
+  getFilteredAttendance,                // ← new
 
   // Notifications
   getMyNotifications,

@@ -1,18 +1,13 @@
 import {
   Controller, Get, Post, Body, Param,
-  BadRequestException, UseGuards,
+  Query, UseGuards,
 } from '@nestjs/common';
 import { AttendanceService } from './attendance.service';
-import { IsString, IsNotEmpty } from 'class-validator';
+import { RfidTapDto } from './dto/rfid-tap.dto';
+import { AttendanceQueryDto } from './dto/attendance-query.dto';
 import { JwtAuthGuard } from '../auth/jwt.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
-
-export class RfidTapDto {
-  @IsString()
-  @IsNotEmpty()
-  rfidCard: string;
-}
 
 @Controller('attendance')
 export class AttendanceController {
@@ -21,7 +16,6 @@ export class AttendanceController {
   // ✅ Intentionally public — called by RFID hardware device
   @Post('rfid-tap')
   async handleRfidTap(@Body() body: RfidTapDto) {
-    if (!body.rfidCard) throw new BadRequestException('rfidCard is required');
     return this.attendanceService.handleRfidTap(body.rfidCard);
   }
 
@@ -30,11 +24,19 @@ export class AttendanceController {
   async getNetworkTime() {
     const networkTime = await this.attendanceService.getNetworkTime();
     return {
-      networkTime: networkTime.toISOString(),
+      networkTime:     networkTime.toISOString(),
       serverLocalTime: new Date().toISOString(),
-      source: 'timeapi.io (Asia/Manila)',
-      note: 'Attendance timestamps use networkTime — immune to local clock tampering',
+      source:          'timeapi.io (Asia/Manila)',
+      note:            'Attendance timestamps use networkTime — immune to local clock tampering',
     };
+  }
+
+  // ── Revision 16: Filtered attendance — ADMIN + TEACHER only ──────────────
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'TEACHER')
+  @Get()
+  async getFilteredAttendance(@Query() query: AttendanceQueryDto) {
+    return this.attendanceService.getFilteredAttendance(query);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -58,7 +60,6 @@ export class AttendanceController {
     return this.attendanceService.getTodayAttendance(studentId);
   }
 
-  // ── Item 14: Students who tapped in but never tapped out today ────────────
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'TEACHER')
   @Get('no-tap-out')

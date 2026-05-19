@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { X, CheckCircle, CreditCard, Copy, Check, User, Users } from 'lucide-react';
 import { CreateUserDto } from '@/lib/api';
 import { useRfidScanner } from '@/hooks/useRfidScanner';
@@ -28,6 +28,13 @@ interface GeneratedCredentials {
   parentPassword?: string;
 }
 
+interface FormErrors {
+  firstName?:   string;
+  lastName?:    string;
+  phoneNumber?: string;
+  gradeLevel?:  string;
+}
+
 const INPUT_CLS =
   'w-full px-4 py-2.5 rounded-xl border text-sm ' +
   'bg-gray-50 dark:bg-gray-800 ' +
@@ -36,6 +43,10 @@ const INPUT_CLS =
   'placeholder:text-gray-400 dark:placeholder:text-gray-500 ' +
   'focus:outline-none focus:ring-2 focus:ring-[#7B1113]/30 focus:border-[#7B1113] ' +
   'transition-colors';
+
+const INPUT_ERROR_CLS =
+  'border-red-400 dark:border-red-500 bg-red-50 dark:bg-red-500/5 ' +
+  'focus:ring-red-300/30 focus:border-red-400';
 
 const LABEL_CLS =
   'block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-1.5';
@@ -77,7 +88,8 @@ export default function AddUserModal({
     rfidCard:    '',
     phoneNumber: '',
   });
-  const [submitting, setSubmitting] = useState(false);
+  const [formErrors,  setFormErrors]  = useState<FormErrors>({});
+  const [submitting,  setSubmitting]  = useState(false);
   const [credentials, setCredentials] = useState<GeneratedCredentials | null>(null);
 
   const {
@@ -94,14 +106,35 @@ export default function AddUserModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.firstName.trim() || !formData.lastName.trim()) return;
+    // ── Client-side validation ────────────────────────────────────────────
+    const errs: FormErrors = {};
 
+    if (!formData.firstName.trim())
+      errs.firstName = 'First name is required.';
+    else if (!/^[a-zA-Z\s\-'.]+$/.test(formData.firstName.trim()))
+      errs.firstName = 'Only letters, spaces, hyphens, apostrophes, and periods allowed.';
+
+    if (!formData.lastName.trim())
+      errs.lastName = 'Last name is required.';
+    else if (!/^[a-zA-Z\s\-'.]+$/.test(formData.lastName.trim()))
+      errs.lastName = 'Only letters, spaces, hyphens, apostrophes, and periods allowed.';
+
+    if (formData.phoneNumber && !/^[0-9+\-\s()]{7,15}$/.test(formData.phoneNumber))
+      errs.phoneNumber = 'Please enter a valid phone number.';
+
+    if (formData.role === 'STUDENT' && !formData.gradeLevel)
+      errs.gradeLevel = 'Grade level is required for students.';
+
+    if (Object.keys(errs).length > 0) { setFormErrors(errs); return; }
+    setFormErrors({});
+
+    // ── RFID gate for students ────────────────────────────────────────────
     if (formData.role === 'STUDENT' && !scannedRfid) {
       startScan();
       return;
     }
 
-    const rfid = scannedRfid || formData.rfidCard || undefined;
+    const rfid     = scannedRfid || formData.rfidCard || undefined;
     const username = buildUsername(
       formData.lastName,
       rfid ?? String(Date.now()),
@@ -112,13 +145,12 @@ export default function AddUserModal({
       const result = await onSubmit({
         ...formData,
         username,
-        email:       formData.email      || undefined,
-        gradeLevel:  formData.gradeLevel || undefined,
+        email:       formData.email       || undefined,
+        gradeLevel:  formData.gradeLevel  || undefined,
         rfidCard:    rfid,
         phoneNumber: formData.phoneNumber || undefined,
       } as CreateUserDto);
 
-      // Show credentials modal
       setCredentials({
         studentUsername: username,
         studentPassword: result.generatedPassword,
@@ -139,13 +171,14 @@ export default function AddUserModal({
       rfidCard: '', phoneNumber: '',
     });
     setCredentials(null);
+    setFormErrors({});
     resetScan();
     onClose();
   };
 
   if (!isOpen) return null;
 
-  // ── Credentials Modal (shown after successful creation) ──────────────────
+  // ── Credentials Modal ────────────────────────────────────────────────────
   if (credentials) {
     return (
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -187,7 +220,7 @@ export default function AddUserModal({
               </div>
             </div>
 
-            {/* Parent Credentials (only for students) */}
+            {/* Parent Credentials */}
             {credentials.parentUsername && (
               <div className="rounded-xl border border-blue-200 dark:border-blue-500/30 overflow-hidden">
                 <div className="flex items-center gap-2 px-4 py-2.5 bg-blue-50 dark:bg-blue-500/10 border-b border-blue-200 dark:border-blue-500/30">
@@ -269,22 +302,38 @@ export default function AddUserModal({
             <div>
               <label className={LABEL_CLS}>First Name *</label>
               <input
-                type="text" required
+                type="text"
                 value={formData.firstName}
-                onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-                className={INPUT_CLS}
+                onChange={(e) => {
+                  setFormData({ ...formData, firstName: e.target.value });
+                  if (formErrors.firstName) setFormErrors((p) => ({ ...p, firstName: undefined }));
+                }}
+                className={`${INPUT_CLS} ${formErrors.firstName ? INPUT_ERROR_CLS : ''}`}
                 placeholder="e.g. Juan"
               />
+              {formErrors.firstName && (
+                <p className="mt-1 text-xs text-red-500 flex items-center gap-1">
+                  <span>⚠</span> {formErrors.firstName}
+                </p>
+              )}
             </div>
             <div>
               <label className={LABEL_CLS}>Last Name *</label>
               <input
-                type="text" required
+                type="text"
                 value={formData.lastName}
-                onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                className={INPUT_CLS}
+                onChange={(e) => {
+                  setFormData({ ...formData, lastName: e.target.value });
+                  if (formErrors.lastName) setFormErrors((p) => ({ ...p, lastName: undefined }));
+                }}
+                className={`${INPUT_CLS} ${formErrors.lastName ? INPUT_ERROR_CLS : ''}`}
                 placeholder="e.g. Dela Cruz"
               />
+              {formErrors.lastName && (
+                <p className="mt-1 text-xs text-red-500 flex items-center gap-1">
+                  <span>⚠</span> {formErrors.lastName}
+                </p>
+              )}
             </div>
           </div>
 
@@ -311,10 +360,18 @@ export default function AddUserModal({
             <input
               type="tel"
               value={formData.phoneNumber}
-              onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
-              className={INPUT_CLS}
+              onChange={(e) => {
+                setFormData({ ...formData, phoneNumber: e.target.value });
+                if (formErrors.phoneNumber) setFormErrors((p) => ({ ...p, phoneNumber: undefined }));
+              }}
+              className={`${INPUT_CLS} ${formErrors.phoneNumber ? INPUT_ERROR_CLS : ''}`}
               placeholder="e.g. 09171234567"
             />
+            {formErrors.phoneNumber && (
+              <p className="mt-1 text-xs text-red-500 flex items-center gap-1">
+                <span>⚠</span> {formErrors.phoneNumber}
+              </p>
+            )}
           </div>
 
           {/* Role + Grade row */}
@@ -327,6 +384,9 @@ export default function AddUserModal({
                 onChange={(e) => {
                   setFormData({ ...formData, role: e.target.value as 'ADMIN' | 'TEACHER' | 'STUDENT' | 'PARENT' });
                   resetScan();
+                  // Clear grade error if role changes away from STUDENT
+                  if (e.target.value !== 'STUDENT')
+                    setFormErrors((p) => ({ ...p, gradeLevel: undefined }));
                 }}
                 className={INPUT_CLS}
               >
@@ -337,17 +397,30 @@ export default function AddUserModal({
               </select>
             </div>
             <div>
-              <label className={LABEL_CLS}>Grade Level</label>
+              <label className={LABEL_CLS}>
+                Grade Level
+                {formData.role === 'STUDENT' && (
+                  <span className="text-red-400 normal-case font-normal"> *</span>
+                )}
+              </label>
               <select
                 value={formData.gradeLevel}
-                onChange={(e) => setFormData({ ...formData, gradeLevel: e.target.value })}
-                className={INPUT_CLS}
+                onChange={(e) => {
+                  setFormData({ ...formData, gradeLevel: e.target.value });
+                  if (formErrors.gradeLevel) setFormErrors((p) => ({ ...p, gradeLevel: undefined }));
+                }}
+                className={`${INPUT_CLS} ${formErrors.gradeLevel ? INPUT_ERROR_CLS : ''}`}
               >
                 <option value="">Select Grade</option>
                 {GRADE_LEVELS.map((g) => (
                   <option key={g} value={g}>{g.replace('GRADE_', 'Grade ')}</option>
                 ))}
               </select>
+              {formErrors.gradeLevel && (
+                <p className="mt-1 text-xs text-red-500 flex items-center gap-1">
+                  <span>⚠</span> {formErrors.gradeLevel}
+                </p>
+              )}
             </div>
           </div>
 
@@ -370,7 +443,7 @@ export default function AddUserModal({
             <span className="text-blue-500 text-sm">🔐</span>
             <p className="text-xs text-blue-700 dark:text-blue-400">
               {formData.role === 'STUDENT' && (scannedRfid || formData.rfidCard)
-                ? 'Password will be set to the student\'s full RFID card number.'
+                ? "Password will be set to the student's full RFID card number."
                 : 'A secure 6-digit password will be auto-generated after creation.'}
             </p>
           </div>
