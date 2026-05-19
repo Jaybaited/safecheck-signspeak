@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Calendar, Clock, Download,
-  ChevronLeft, ChevronRight, Bell, AlertCircle,
+  ChevronLeft, ChevronRight, Bell, AlertCircle, AlertTriangle,
 } from 'lucide-react';
 import ParentSidebar from '@/components/parent/ParentSidebar';
 import ThemeToggle from '@/components/ThemeToggle';
@@ -33,12 +33,12 @@ export default function ParentAttendancePage() {
   const [parent,        setParent]        = useState<ParentUser | null>(null);
   const [child,         setChild]         = useState<ChildInfo | null>(null);
   const [records,       setRecords]       = useState<AttendanceRecord[]>([]);
+  const [todayRecord,   setTodayRecord]   = useState<AttendanceRecord | null>(null); // ── Item 14
   const [authLoading,   setAuthLoading]   = useState(true);
   const [dataLoading,   setDataLoading]   = useState(false);
   const [error,         setError]         = useState('');
   const [selectedMonth, setSelectedMonth] = useState(new Date());
 
-  // ── Bell badge — reads from localStorage, syncs across pages
   const unreadCount = usePersistedUnreadCount(parent?.id);
 
   useEffect(() => {
@@ -57,8 +57,14 @@ export default function ParentAttendancePage() {
           const firstChild = children[0];
           setChild(firstChild);
           setDataLoading(true);
-          return api.getStudentAttendance(firstChild.id)
-            .then(setRecords)
+          return Promise.all([
+            api.getStudentAttendance(firstChild.id).catch(() => [] as AttendanceRecord[]),
+            api.getTodayAttendance(firstChild.id).catch(() => null), // ── Item 14
+          ])
+            .then(([attendance, todayData]) => {
+              setRecords(attendance);
+              setTodayRecord(todayData);             // ── Item 14
+            })
             .catch(() => setError('Failed to load attendance records.'))
             .finally(() => setDataLoading(false));
         })
@@ -122,6 +128,10 @@ export default function ParentAttendancePage() {
     ? { id: child.id, firstName: child.firstName, lastName: child.lastName, gradeLevel: child.gradeLevel }
     : PLACEHOLDER_CHILD;
 
+  // ── Item 14: no tap-out warning ──────────────────────────────────────────
+  const isPastDismissal     = new Date().getHours() >= 17;
+  const showNoTapOutWarning = todayRecord?.timeIn && !todayRecord?.timeOut && isPastDismissal;
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-gray-950 text-slate-900 dark:text-white transition-colors duration-200">
       <ParentSidebar onLogout={handleLogout} parent={parent} child={sidebarChild} unreadCount={unreadCount} />
@@ -137,7 +147,6 @@ export default function ParentAttendancePage() {
           </div>
           <div className="flex items-center gap-4">
             <ThemeToggle />
-            
             <button
               onClick={() => router.push('/parent/profile')}
               className="w-10 h-10 bg-gradient-to-br from-[#9B2020] to-[#7B1113] rounded-full flex items-center justify-center font-bold text-white shadow-md select-none hover:brightness-110 transition-all active:scale-95"
@@ -151,6 +160,22 @@ export default function ParentAttendancePage() {
           <div className="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-xl mb-6">
             <AlertCircle className="w-5 h-5 text-red-500 shrink-0" />
             <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
+          </div>
+        )}
+
+        {/* ── Item 14: No Tap-Out Warning Banner ── */}
+        {showNoTapOutWarning && (
+          <div className="flex items-start gap-3 p-4 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800/50 rounded-xl mb-6">
+            <AlertTriangle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-rose-700 dark:text-rose-300">
+                ⚠️ {child?.firstName} has not tapped out today
+              </p>
+              <p className="text-xs text-rose-600 dark:text-rose-400 mt-0.5">
+                {child?.firstName} tapped in at {formatTime(todayRecord?.timeIn)} but no tap-out has been recorded.
+                Please verify their whereabouts or contact the school.
+              </p>
+            </div>
           </div>
         )}
 

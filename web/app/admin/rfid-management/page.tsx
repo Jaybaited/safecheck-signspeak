@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, Plus, Edit, Trash2, User, X, RefreshCw, Activity, Clock } from 'lucide-react';
+import { Search, Plus, Edit, Trash2, User, X, RefreshCw, Activity, Clock, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 import Sidebar from '@/components/admin/Sidebar';
 import ThemeToggle from '@/components/ThemeToggle';
 import EditRfidModal from '@/components/admin/EditRfidModal';
@@ -39,6 +39,19 @@ interface AttendanceRecord {
   status:    string;
 }
 
+// ── Item 14: No tap-out record shape ────────────────────────────────────────
+interface NoTapOutRecord {
+  id:        string;
+  studentId: string;
+  timeIn:    string | null;
+  student: {
+    id:         string;
+    firstName:  string;
+    lastName:   string;
+    gradeLevel: string | null;
+  };
+}
+
 const API = process.env.NEXT_PUBLIC_API_URL ?? '';
 
 async function apiFetch<T>(path: string, token: string): Promise<T> {
@@ -56,18 +69,22 @@ async function apiFetch<T>(path: string, token: string): Promise<T> {
 export default function RfidManagement() {
   const router = useRouter();
 
-  const [authUser,    setAuthUser]    = useState<AuthUser | null>(null);
-  const [rfidCards,   setRfidCards]   = useState<RfidCard[]>([]);
-  const [searchTerm,  setSearchTerm]  = useState('');
-  const [loading,     setLoading]     = useState(true);
-  const [refreshing,  setRefreshing]  = useState(false);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const [recentLogs,  setRecentLogs]  = useState<ActivityLog[]>([]);
-  const [logsLoading, setLogsLoading] = useState(true);
+  const [authUser,      setAuthUser]      = useState<AuthUser | null>(null);
+  const [rfidCards,     setRfidCards]     = useState<RfidCard[]>([]);
+  const [searchTerm,    setSearchTerm]    = useState('');
+  const [loading,       setLoading]       = useState(true);
+  const [refreshing,    setRefreshing]    = useState(false);
+  const [lastUpdated,   setLastUpdated]   = useState<Date | null>(null);
+  const [recentLogs,    setRecentLogs]    = useState<ActivityLog[]>([]);
+  const [logsLoading,   setLogsLoading]   = useState(true);
   const [stats, setStats] = useState({
     totalStudents: 0, assignedCards: 0,
     unassignedCards: 0, safetyAlerts: 0,
   });
+
+  // ── Item 14 state ──────────────────────────────────────────────────────────
+  const [noTapOutList,     setNoTapOutList]     = useState<NoTapOutRecord[]>([]);
+  const [noTapOutExpanded, setNoTapOutExpanded] = useState(true);
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -97,7 +114,6 @@ export default function RfidManagement() {
       const users    = await api.getUsers();
       const students = users.filter((u: any) => u.role === 'STUDENT');
 
-      // ── RFID cards
       const cards: RfidCard[] = students.map((s: any) => ({
         id:          s.id,
         rfidNumber:  s.rfidCard ?? null,
@@ -114,7 +130,6 @@ export default function RfidManagement() {
         safetyAlerts:    cards.filter((c) => c.status === 'unassigned').length,
       });
 
-      // ── Recent attendance logs — today, up to 10 students
       const nameMap: Record<string, string> = {};
       students.forEach((s: any) => {
         nameMap[s.id] = `${s.firstName} ${s.lastName}`;
@@ -142,13 +157,21 @@ export default function RfidManagement() {
         }
       });
 
-      // Sort: present first, then late, then absent
       liveLogs.sort((a, b) => {
         const order = { present: 0, late: 1, absent: 2 };
         return order[a.status] - order[b.status];
       });
 
       setRecentLogs(liveLogs);
+
+      // ── Item 14: fetch no-tap-out students ────────────────────────────────
+      try {
+        const noTapOut = await apiFetch<NoTapOutRecord[]>('/attendance/no-tap-out', token);
+        setNoTapOutList(noTapOut);
+      } catch {
+        setNoTapOutList([]);
+      }
+
       setLastUpdated(new Date());
     } catch (err) {
       console.error('Failed to fetch RFID data:', err);
@@ -205,7 +228,8 @@ export default function RfidManagement() {
     { label: 'Total Students',   value: stats.totalStudents,   color: 'text-slate-900 dark:text-white'         },
     { label: 'Assigned Cards',   value: stats.assignedCards,   color: 'text-emerald-600 dark:text-emerald-400' },
     { label: 'Unassigned Cards', value: stats.unassignedCards, color: 'text-orange-600 dark:text-orange-400'   },
-    { label: 'Safety Alerts',    value: stats.safetyAlerts,    color: 'text-rose-600 dark:text-red-400'        },
+    // ── Item 14: safety alerts now reflects no-tap-out count ────────────────
+    { label: 'No Tap-Out',       value: noTapOutList.length,   color: noTapOutList.length > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white' },
   ];
 
   return (
@@ -259,10 +283,73 @@ export default function RfidManagement() {
           ))}
         </div>
 
-        {/* ── Today's Attendance Logs — full width ── */}
+        {/* ── Item 14: No Tap-Out Warning Panel ── */}
+        {noTapOutList.length > 0 && (
+          <div className="mb-6 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800/50 rounded-xl overflow-hidden">
+            <button
+              onClick={() => setNoTapOutExpanded((v) => !v)}
+              className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-rose-100/50 dark:hover:bg-rose-900/20 transition-colors"
+            >
+              <div className="flex items-center gap-2.5">
+                <AlertTriangle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
+                <span className="text-sm font-semibold text-rose-700 dark:text-rose-300">
+                  {noTapOutList.length} student{noTapOutList.length > 1 ? 's have' : ' has'} not tapped out today
+                </span>
+                <span className="px-2 py-0.5 rounded-full bg-rose-600 text-white text-[10px] font-bold">
+                  {noTapOutList.length}
+                </span>
+              </div>
+              {noTapOutExpanded
+                ? <ChevronUp className="w-4 h-4 text-rose-500" />
+                : <ChevronDown className="w-4 h-4 text-rose-500" />
+              }
+            </button>
+
+            {noTapOutExpanded && (
+              <div className="px-5 pb-4 border-t border-rose-200 dark:border-rose-800/50">
+                <p className="text-xs text-rose-600 dark:text-rose-400 mt-3 mb-3">
+                  These students tapped in but never tapped out. Please verify their whereabouts.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {noTapOutList.map((record) => (
+                    <div
+                      key={record.id}
+                      className="flex items-center gap-3 p-3 bg-white dark:bg-gray-900/50
+                        rounded-lg border border-rose-200 dark:border-rose-800/40"
+                    >
+                      <div className="w-8 h-8 bg-rose-100 dark:bg-rose-900/40 rounded-full
+                        flex items-center justify-center shrink-0">
+                        <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400">
+                          {record.student.firstName[0]}{record.student.lastName[0]}
+                        </span>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-slate-900 dark:text-white truncate">
+                          {record.student.firstName} {record.student.lastName}
+                        </p>
+                        <p className="text-[10px] text-slate-500 dark:text-gray-400 flex items-center gap-1 mt-0.5">
+                          <Clock className="w-2.5 h-2.5 shrink-0" />
+                          Tapped in: {formatTime(record.timeIn)} ·{' '}
+                          {formatGradeLevel(record.student.gradeLevel)}
+                        </p>
+                      </div>
+                      <span className="ml-auto shrink-0 px-2 py-0.5 rounded-full text-[10px]
+                        font-bold bg-rose-100 dark:bg-rose-900/40
+                        text-rose-600 dark:text-rose-400 border
+                        border-rose-200 dark:border-rose-800/40">
+                        No Out
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Today's Attendance Logs ── */}
         <div className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800
           p-5 rounded-xl shadow-sm mb-6">
-
           <div className="flex items-center justify-between mb-4">
             <div>
               <div className="flex items-center gap-2">
@@ -343,7 +430,6 @@ export default function RfidManagement() {
             </div>
           )}
 
-          {/* Summary bar */}
           {!logsLoading && recentLogs.length > 0 && (
             <div className="flex items-center gap-4 mt-4 pt-4 border-t border-slate-100 dark:border-gray-800 text-xs text-slate-500 dark:text-gray-400">
               <span className="flex items-center gap-1.5">
@@ -371,7 +457,6 @@ export default function RfidManagement() {
         {/* ── Student Directory ── */}
         <div className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800
           p-5 rounded-xl shadow-sm">
-
           <div className="flex justify-between items-center mb-5">
             <div>
               <h2 className="text-base font-bold">Student Directory</h2>
@@ -379,7 +464,6 @@ export default function RfidManagement() {
                 Manage enrolled students and their RFID assignments
               </p>
             </div>
-
             <div className="flex items-center gap-2">
               <div className="relative">
                 <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -403,7 +487,6 @@ export default function RfidManagement() {
                   </button>
                 )}
               </div>
-
               <button
                 onClick={() => router.push('/admin/users')}
                 className="flex items-center gap-2 px-4 py-2 bg-[#7B1113] hover:bg-[#9B2020]

@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NetworkTimeService } from '../common/services/network-time.service';
@@ -44,11 +45,9 @@ export class AttendanceService {
     if (user.role !== 'STUDENT')
       throw new NotFoundException('Only students can use attendance system');
 
-    // ✅ Always use network time — immune to local machine clock tampering
     const serverNow = await this.networkTime.getNow();
 
-    // Compute Manila date components from network time
-    const manilaOffset = 8 * 60; // UTC+8 in minutes
+    const manilaOffset = 8 * 60;
     const manilaMs = serverNow.getTime() + manilaOffset * 60 * 1000;
     const manilaDate = new Date(manilaMs);
 
@@ -56,8 +55,6 @@ export class AttendanceService {
     const manilaMonth = manilaDate.getUTCMonth();
     const manilaDay   = manilaDate.getUTCDate();
 
-    // ✅ Store date as Manila date string at midnight UTC
-    // e.g. May 18 Manila → "2026-05-18T00:00:00.000Z" → displays as 2026-05-18 in Supabase
     const attendanceDate = new Date(
       `${manilaYear}-${String(manilaMonth + 1).padStart(2, '0')}-${String(manilaDay).padStart(2, '0')}T00:00:00.000Z`,
     );
@@ -75,7 +72,6 @@ export class AttendanceService {
       },
     });
 
-    // Determine LATE: 8:00 AM Manila time and beyond
     const manilaHour   = manilaDate.getUTCHours();
     const manilaMinute = manilaDate.getUTCMinutes();
     const isLate = manilaHour > 8 || (manilaHour === 8 && manilaMinute > 0);
@@ -85,23 +81,19 @@ export class AttendanceService {
     let action: AttendanceAction;
 
     if (!attendance) {
-      // First tap = Check In
       attendance = await this.prisma.attendance.create({
         data: {
           studentId: user.id,
           timeIn: serverNow,
-          date: attendanceDate,  // ✅ correct Manila date
+          date: attendanceDate,
           status,
         },
       });
       action = 'CHECK_IN';
     } else if (!attendance.timeOut) {
-      // Second tap = Check Out
       attendance = await this.prisma.attendance.update({
         where: { id: attendance.id },
-        data: {
-          timeOut: serverNow,
-        },
+        data: { timeOut: serverNow },
       });
       action = 'CHECK_OUT';
     } else {
@@ -110,7 +102,6 @@ export class AttendanceService {
       );
     }
 
-    // Notify parent (fire and forget)
     this.notificationsService
       .notifyParentOnRFID(
         user.id,
@@ -152,12 +143,9 @@ export class AttendanceService {
 
     const totalDays = attendanceRecords.length;
     const present = attendanceRecords.filter((r) => r.timeIn !== null).length;
-
-    // ✅ Use stored status — no recalculation from timeIn hours
     const late = attendanceRecords.filter(
       (record) => record.status === 'LATE',
     ).length;
-
     const absent = totalDays - present;
     const attendanceRate =
       totalDays > 0 ? Math.round((present / totalDays) * 100) : 0;
@@ -180,10 +168,66 @@ export class AttendanceService {
     });
   }
 
-  /**
-   * Exposes network time for the debug/demo endpoint.
-   */
   async getNetworkTime(): Promise<Date> {
     return this.networkTime.getNow();
+  }
+
+  // ── Item 14: Cron — runs every day at 6:00 PM Manila time ─────────────────
+  @Cron('0 18 * * *', { timeZone: 'Asia/Manila' })
+  async markNoTapOutStudents() {
+    const now = new Date();
+    const todayStart = new Date(
+      `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-${String(now.getUTCDate()).padStart(2, '0')}T00:00:00.000Z`,
+    );
+    const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
+
+    const noTapOut = await this.prisma.attendance.findMany({
+      where: {
+        date: { gte: todayStart, lt: todayEnd },
+        timeIn: { not: null },
+        timeOut: null,
+      },
+      include: {
+        student: {
+          select: { id: true, firstName: true, lastName: true },
+        },
+      },
+    });
+
+    for (const record of noTapOut) {
+      await this.prisma.attendance.update({
+        where: { id: record.id },
+        data: { status: 'UNCONFIRMED_OUT' },
+      });
+
+      this.notificationsService
+        .notifyParentOnRFID(record.studentId, 'RFID_NO_TIMEOUT')
+        .catch(console.error);
+    }
+
+    console.log(`[Item 14] Marked ${noTapOut.length} students as UNCONFIRMED_OUT`);
+  }
+
+  // ── Item 14: Returns students with timeIn but no timeOut today ────────────
+  async getNoTapOutStudents() {
+    const now = new Date();
+    const todayStart = new Date(
+      `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-${String(now.getUTCDate()).padStart(2, '0')}T00:00:00.000Z`,
+    );
+    const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
+
+    return this.prisma.attendance.findMany({
+      where: {
+        date: { gte: todayStart, lt: todayEnd },
+        timeIn: { not: null },
+        timeOut: null,
+      },
+      include: {
+        student: {
+          select: { id: true, firstName: true, lastName: true, gradeLevel: true },
+        },
+      },
+      orderBy: { timeIn: 'asc' },
+    });
   }
 }

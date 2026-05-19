@@ -1,15 +1,13 @@
 import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Param,
-  BadRequestException,
+  Controller, Get, Post, Body, Param,
+  BadRequestException, UseGuards,
 } from '@nestjs/common';
 import { AttendanceService } from './attendance.service';
 import { IsString, IsNotEmpty } from 'class-validator';
+import { JwtAuthGuard } from '../auth/jwt.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
 
-// ✅ Only rfidCard accepted — NO client timestamp, NO date, NO timeIn
 export class RfidTapDto {
   @IsString()
   @IsNotEmpty()
@@ -20,51 +18,14 @@ export class RfidTapDto {
 export class AttendanceController {
   constructor(private readonly attendanceService: AttendanceService) {}
 
-  /**
-   * POST /attendance/rfid-tap
-   * Accepts rfidCard only. All timestamps are computed server-side using network time.
-   */
+  // ✅ Intentionally public — called by RFID hardware device
   @Post('rfid-tap')
   async handleRfidTap(@Body() body: RfidTapDto) {
-    if (!body.rfidCard) {
-      throw new BadRequestException('rfidCard is required');
-    }
+    if (!body.rfidCard) throw new BadRequestException('rfidCard is required');
     return this.attendanceService.handleRfidTap(body.rfidCard);
   }
 
-  /**
-   * GET /attendance/student/:studentId
-   * Returns last 30 attendance records for a student.
-   */
-  @Get('student/:studentId')
-  async getStudentAttendance(@Param('studentId') studentId: string) {
-    return this.attendanceService.getStudentAttendance(studentId);
-  }
-
-  /**
-   * GET /attendance/student/:studentId/stats
-   * Returns present/late/absent/rate stats.
-   */
-  @Get('student/:studentId/stats')
-  async getStudentStats(@Param('studentId') studentId: string) {
-    return this.attendanceService.getStudentStats(studentId);
-  }
-
-  /**
-   * GET /attendance/student/:studentId/today
-   * Returns today's attendance record (Manila-timezone aware).
-   */
-  @Get('student/:studentId/today')
-  async getTodayAttendance(@Param('studentId') studentId: string) {
-    return this.attendanceService.getTodayAttendance(studentId);
-  }
-
-  /**
-   * GET /attendance/network-time
-   * ✅ Demo/debug endpoint — proves the system uses real network time.
-   * Shows networkTime vs serverLocalTime so panelists can verify
-   * that even if the machine clock is tampered, attendance uses real time.
-   */
+  // ✅ Intentionally public — demo/debug for panelists
   @Get('network-time')
   async getNetworkTime() {
     const networkTime = await this.attendanceService.getNetworkTime();
@@ -74,5 +35,34 @@ export class AttendanceController {
       source: 'timeapi.io (Asia/Manila)',
       note: 'Attendance timestamps use networkTime — immune to local clock tampering',
     };
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'TEACHER', 'PARENT', 'STUDENT')
+  @Get('student/:studentId')
+  async getStudentAttendance(@Param('studentId') studentId: string) {
+    return this.attendanceService.getStudentAttendance(studentId);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'TEACHER', 'PARENT', 'STUDENT')
+  @Get('student/:studentId/stats')
+  async getStudentStats(@Param('studentId') studentId: string) {
+    return this.attendanceService.getStudentStats(studentId);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'TEACHER', 'PARENT', 'STUDENT')
+  @Get('student/:studentId/today')
+  async getTodayAttendance(@Param('studentId') studentId: string) {
+    return this.attendanceService.getTodayAttendance(studentId);
+  }
+
+  // ── Item 14: Students who tapped in but never tapped out today ────────────
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'TEACHER')
+  @Get('no-tap-out')
+  async getNoTapOutStudents() {
+    return this.attendanceService.getNoTapOutStudents();
   }
 }

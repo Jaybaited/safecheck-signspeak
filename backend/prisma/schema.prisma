@@ -41,6 +41,7 @@ enum AttendanceStatus {
   PRESENT
   LATE
   ABSENT
+  UNCONFIRMED_OUT
 }
 
 enum NotificationType {
