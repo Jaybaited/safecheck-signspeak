@@ -10,6 +10,7 @@ import { AttendanceModule } from './attendance/attendance.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { AppConfigModule } from './config/config.module';
 import { PasswordResetModule } from './password-reset/password-reset.module';
+import { AssessmentsModule } from './assessments/assessments.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { PasswordResetModule } from './password-reset/password-reset.module';
     NotificationsModule,
     AppConfigModule,
     PasswordResetModule,
+    AssessmentsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

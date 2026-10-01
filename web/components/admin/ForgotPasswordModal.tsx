@@ -1,13 +1,16 @@
 'use client';
 
+
 import { useState } from 'react';
 import { X, Send, CheckCircle, XCircle, Loader2, KeyRound } from 'lucide-react';
 import { requestPasswordReset } from '@/lib/api';
+
 
 interface ForgotPasswordModalProps {
   isOpen:  boolean;
   onClose: () => void;
 }
+
 
 export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordModalProps) {
   const [username,   setUsername]   = useState('');
@@ -15,7 +18,9 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg,   setErrorMsg]   = useState<string | null>(null);
 
+
   if (!isOpen) return null;
+
 
   const handleClose = () => {
     setUsername('');
@@ -23,6 +28,7 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
     setErrorMsg(null);
     onClose();
   };
+
 
   const handleSubmit = async () => {
     if (!username.trim()) { setErrorMsg('Please enter your username.'); return; }
@@ -35,9 +41,12 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
       setUsername('');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Something went wrong.';
-      if (msg.toLowerCase().includes('no account'))
-        setErrorMsg('No account found with that username. Please check and try again.');
-      else if (msg.toLowerCase().includes('pending'))
+      const lower = msg.toLowerCase();
+      if (msg.includes('ThrottlerException') || lower.includes('too many requests'))
+        setErrorMsg('Too many attempts. Please wait about 15 minutes before trying again.');
+      else if (lower.includes('incorrect username') || lower.includes('no account'))
+        setErrorMsg('Incorrect username, please try again.');
+      else if (lower.includes('pending'))
         setErrorMsg('You already have a pending request. Please wait for your admin to approve it.');
       else
         setErrorMsg(msg);
@@ -46,10 +55,12 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
     }
   };
 
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={handleClose} />
       <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm border border-gray-100 overflow-hidden">
+
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
@@ -66,6 +77,7 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
             <X className="w-4 h-4 text-gray-400" />
           </button>
         </div>
+
 
         {/* Body */}
         <div className="px-6 py-5 space-y-4">
@@ -105,6 +117,7 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
             </div>
           )}
         </div>
+
 
         {/* Footer */}
         <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-2">

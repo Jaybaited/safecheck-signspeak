@@ -1,5 +1,6 @@
 'use client';
 
+
 import { useState, useEffect } from 'react';
 import { useRouter }           from 'next/navigation';
 import {
@@ -10,19 +11,24 @@ import ParentSidebar from '@/components/parent/ParentSidebar';
 import ThemeToggle   from '@/components/ThemeToggle';
 import { api }       from '@/lib/api';
 import type { ChildInfo } from '@/lib/api';
+import { validateNewPassword, PASSWORD_HINT } from '@/lib/password';
+
 
 interface ParentUser {
   id: string; username: string; role: string;
   firstName: string; lastName: string;
 }
 
+
 const formatGradeLevel = (gl: string | null) =>
   gl ? gl.replace('GRADE_', 'Grade ') : 'N/A';
+
 
 // Placeholder child so ParentSidebar never receives undefined
 const PLACEHOLDER_CHILD = {
   id: '', firstName: '—', lastName: '', gradeLevel: null,
 };
+
 
 export default function ParentProfilePage() {
   const router = useRouter();
@@ -30,6 +36,7 @@ export default function ParentProfilePage() {
   const [authLoading,    setAuthLoading]    = useState(true);
   const [children,       setChildren]       = useState<ChildInfo[]>([]);
   const [childrenLoading,setChildrenLoading]= useState(false);
+
 
   // Password
   const [currentPassword, setCurrentPassword] = useState('');
@@ -42,6 +49,7 @@ export default function ParentProfilePage() {
   const [pwError,         setPwError]         = useState('');
   const [pwSuccess,       setPwSuccess]       = useState(false);
 
+
   useEffect(() => {
     const token    = localStorage.getItem('token');
     const userData = localStorage.getItem('user');
@@ -52,6 +60,7 @@ export default function ParentProfilePage() {
       setParent(p);
       setAuthLoading(false);
 
+
       // Fetch real children
       setChildrenLoading(true);
       api.getParentChildren(p.id)
@@ -59,13 +68,16 @@ export default function ParentProfilePage() {
         .catch(() => setChildren([]))
         .finally(() => setChildrenLoading(false));
 
+
     } catch { router.push('/login'); setAuthLoading(false); }
   }, [router]);
+
 
   const handleLogout = () => {
     localStorage.removeItem('token'); localStorage.removeItem('user');
     router.push('/login');
   };
+
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,11 +85,13 @@ export default function ParentProfilePage() {
     if (!currentPassword || !newPassword || !confirmPassword) {
       setPwError('All fields are required.'); return;
     }
-    if (newPassword.length < 8) {
-      setPwError('Password must be at least 8 characters.'); return;
-    }
+    const ruleError = validateNewPassword(newPassword);
+    if (ruleError) { setPwError(ruleError); return; }
     if (newPassword !== confirmPassword) {
       setPwError('New passwords do not match.'); return;
+    }
+    if (newPassword === currentPassword) {
+      setPwError('New password must be different from your current password.'); return;
     }
     setIsSaving(true);
     try {
@@ -90,20 +104,24 @@ export default function ParentProfilePage() {
     } finally { setIsSaving(false); }
   };
 
+
   if (authLoading || !parent) return (
     <div className="min-h-screen bg-slate-50 dark:bg-gray-950 flex items-center justify-center">
       <div className="w-8 h-8 border-4 border-[#7B1113] border-t-transparent rounded-full animate-spin" />
     </div>
   );
 
+
   // Pass first real child to sidebar (or placeholder while loading)
   const sidebarChild = children[0]
     ? { id: children[0].id, firstName: children[0].firstName, lastName: children[0].lastName, gradeLevel: children[0].gradeLevel }
     : PLACEHOLDER_CHILD;
 
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-gray-950 text-slate-900 dark:text-white transition-colors duration-200">
       <ParentSidebar onLogout={handleLogout} parent={parent} child={sidebarChild} />
+
 
       <main className="ml-64 p-8">
         {/* Header */}
@@ -120,6 +138,7 @@ export default function ParentProfilePage() {
           </div>
         </div>
 
+
         {pwSuccess && (
           <div className="flex items-center gap-3 p-4 bg-green-50 dark:bg-green-500/10 border border-green-200 dark:border-green-500/20 rounded-xl mb-6">
             <CheckCircle className="w-5 h-5 text-green-500 shrink-0" />
@@ -127,10 +146,13 @@ export default function ParentProfilePage() {
           </div>
         )}
 
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
 
           {/* ── Left: Avatar + Account Details + Children ── */}
           <div className="space-y-6">
+
 
             {/* Avatar Card */}
             <div className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 rounded-xl p-6 shadow-sm dark:shadow-none transition-colors duration-200 flex flex-col items-center text-center">
@@ -143,6 +165,7 @@ export default function ParentProfilePage() {
                 Parent
               </span>
             </div>
+
 
             {/* Account Details */}
             <div className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 rounded-xl p-6 shadow-sm dark:shadow-none transition-colors duration-200">
@@ -166,12 +189,14 @@ export default function ParentProfilePage() {
               </div>
             </div>
 
+
             {/* Children List */}
             <div className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 rounded-xl p-6 shadow-sm dark:shadow-none transition-colors duration-200">
               <h3 className="font-semibold mb-4 flex items-center gap-2">
                 <Users className="w-4 h-4 text-slate-400 dark:text-gray-500" />
                 Linked Children
               </h3>
+
 
               {childrenLoading ? (
                 <div className="space-y-3 animate-pulse">
@@ -226,6 +251,7 @@ export default function ParentProfilePage() {
             </div>
           </div>
 
+
           {/* ── Right: Change Password Only ── */}
           <div className="lg:col-span-2">
             <div className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 rounded-xl p-6 shadow-sm dark:shadow-none transition-colors duration-200">
@@ -239,17 +265,18 @@ export default function ParentProfilePage() {
                 </div>
               </div>
 
+
               <form onSubmit={handleChangePassword} className="space-y-4 max-w-md">
-                {/* Current Password */}
                 {[
-                  { label: 'Current Password',    val: currentPassword, set: setCurrentPassword, show: showOld,     toggle: () => setShowOld(!showOld)         },
-                  { label: 'New Password',         val: newPassword,     set: setNewPassword,     show: showNew,     toggle: () => setShowNew(!showNew)         },
-                  { label: 'Confirm New Password', val: confirmPassword, set: setConfirmPassword, show: showConfirm, toggle: () => setShowConfirm(!showConfirm) },
-                ].map(({ label, val, set, show, toggle }) => (
+                  { label: 'Current Password',    name: 'currentPassword', auto: 'current-password', val: currentPassword, set: setCurrentPassword, show: showOld,     toggle: () => setShowOld(!showOld)         },
+                  { label: 'New Password',         name: 'newPassword',     auto: 'new-password',     val: newPassword,     set: setNewPassword,     show: showNew,     toggle: () => setShowNew(!showNew)         },
+                  { label: 'Confirm New Password', name: 'confirmPassword', auto: 'new-password',     val: confirmPassword, set: setConfirmPassword, show: showConfirm, toggle: () => setShowConfirm(!showConfirm) },
+                ].map(({ label, name, auto, val, set, show, toggle }) => (
                   <div key={label}>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1.5">{label}</label>
+                    <label htmlFor={name} className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1.5">{label}</label>
                     <div className="relative">
                       <input
+                        id={name} name={name} autoComplete={auto}
                         type={show ? 'text' : 'password'} value={val}
                         onChange={(e) => set(e.target.value)}
                         className={`w-full px-4 py-2.5 pr-10 bg-slate-50 dark:bg-gray-800 border rounded-lg text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#7B1113] focus:border-transparent transition-colors ${
@@ -264,12 +291,17 @@ export default function ParentProfilePage() {
                   </div>
                 ))}
 
+
+                <p className="text-xs text-slate-400 dark:text-gray-500">{PASSWORD_HINT}</p>
+
+
                 {pwError && (
                   <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-lg">
                     <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
                     <p className="text-sm text-red-600 dark:text-red-400">{pwError}</p>
                   </div>
                 )}
+
 
                 <div className="flex justify-end pt-2">
                   <button

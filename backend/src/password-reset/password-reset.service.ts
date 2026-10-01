@@ -10,23 +10,22 @@ import * as bcrypt from 'bcrypt';
 export class PasswordResetService {
   constructor(private readonly prisma: PrismaService) {}
 
- private generatePassword(): string {
-  const crypto = require('crypto') as typeof import('crypto');
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-  let result = '';
-  const bytes = crypto.randomBytes(10);
-  for (let i = 0; i < 10; i++) {
-    result += chars[bytes[i] % chars.length];
+  private generatePassword(): string {
+    const crypto = require('crypto') as typeof import('crypto');
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+    let result = '';
+    const bytes = crypto.randomBytes(10);
+    for (let i = 0; i < 10; i++) {
+      result += chars[bytes[i] % chars.length];
+    }
+    return result;
   }
-  return result;
-}
 
   // ── POST /password-reset/request ─────────────────────────────────────────
   async requestReset(username: string) {
     const user = await this.prisma.user.findUnique({ where: { username } });
-    if (!user) throw new NotFoundException('No account found with that username.');
+    if (!user) throw new NotFoundException('Incorrect username, please try again.');
 
-    // Prevent duplicate pending requests
     const existing = await this.prisma.passwordResetRequest.findFirst({
       where: { userId: user.id, status: 'PENDING' },
     });
@@ -49,7 +48,6 @@ export class PasswordResetService {
       orderBy: { requestedAt: 'desc' },
     });
 
-    // Enrich with user info (firstName, lastName, role)
     const enriched = await Promise.all(
       requests.map(async (r) => {
         const user = await this.prisma.user.findUnique({
@@ -80,26 +78,29 @@ export class PasswordResetService {
     if (request.status !== 'PENDING')
       throw new BadRequestException('This request has already been resolved.');
 
-   // was: const plainPassword = this.generate6DigitCode();
-const plainPassword = this.generatePassword();
+    const targetUser = await this.prisma.user.findUnique({
+      where: { id: request.userId },
+      select: { id: true },
+    });
+    if (!targetUser) throw new NotFoundException('The account for this request no longer exists.');
+
+    const plainPassword = this.generatePassword();
     const hashed = await bcrypt.hash(plainPassword, 10);
 
-    // Update the user's password and force change on next login
-    await this.prisma.user.update({
-      where: { id: request.userId },
-      data: { password: hashed, mustChangePassword: true },
-    });
-
-    // Mark request approved
-    await this.prisma.passwordResetRequest.update({
-      where: { id: requestId },
-      data: {
-        status: 'APPROVED',
-        resolvedAt: new Date(),
-        resolvedBy: adminId,
-        generatedPassword: plainPassword, // store plain temporarily for display
-      },
-    });
+    // All three changes succeed together or not at all.
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: request.userId },
+        data: { password: hashed, mustChangePassword: true },
+      }),
+      // End every existing login session for this account.
+      this.prisma.refreshToken.deleteMany({ where: { userId: request.userId } }),
+      // The temporary password is NOT stored. It is returned once below.
+      this.prisma.passwordResetRequest.update({
+        where: { id: requestId },
+        data: { status: 'APPROVED', resolvedAt: new Date(), resolvedBy: adminId },
+      }),
+    ]);
 
     return {
       message: 'Password reset approved.',

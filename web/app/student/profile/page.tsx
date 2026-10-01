@@ -10,6 +10,8 @@ import StudentSidebar from '@/components/student/StudentSidebar';
 import ThemeToggle    from '@/components/ThemeToggle';
 import { api }        from '@/lib/api';
 import type { ParentInfo } from '@/lib/api';
+import { validateNewPassword, PASSWORD_HINT } from '@/lib/password';
+
 
 interface UserProfile {
   id: string; username: string; role: string;
@@ -17,17 +19,57 @@ interface UserProfile {
   gradeLevel: string | null; rfidCard: string | null;
 }
 
+
 const formatGradeLevel = (gl: string | null) =>
   gl ? gl.replace('GRADE_', 'Grade ') : 'Not Set';
 
+
+// ── Reusable password input (defined OUTSIDE the page so typing keeps focus) ──
+interface PasswordInputProps {
+  label: string;
+  name: string;
+  value: string;
+  show: boolean;
+  autoComplete: 'current-password' | 'new-password';
+  onChange: (v: string) => void;
+  onToggle: () => void;
+  placeholder: string;
+}
+
+function PasswordInput({
+  label, name, value, show, autoComplete, onChange, onToggle, placeholder,
+}: PasswordInputProps) {
+  return (
+    <div>
+      <label htmlFor={name} className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-2">{label}</label>
+      <div className="relative">
+        <input
+          id={name} name={name}
+          type={show ? 'text' : 'password'} value={value}
+          autoComplete={autoComplete}
+          onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
+          className="w-full pr-10 px-4 py-3 bg-slate-50 dark:bg-gray-800 border border-slate-200 dark:border-gray-700 rounded-lg text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#7B1113] focus:border-transparent transition-colors"
+        />
+        <button type="button" onClick={onToggle}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-gray-500 hover:text-slate-600 dark:hover:text-gray-300 transition-colors">
+          {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+
 export default function StudentProfilePage() {
   const router = useRouter();
+
 
   const [user,           setUser]           = useState<UserProfile | null>(null);
   const [authLoading,    setAuthLoading]    = useState(true);
   const [profileLoading, setProfileLoading] = useState(false);
   const [parent,         setParent]         = useState<ParentInfo | null>(null);
   const [parentLoading,  setParentLoading]  = useState(false);
+
 
   // Password fields
   const [currentPassword,  setCurrentPassword]  = useState('');
@@ -40,17 +82,21 @@ export default function StudentProfilePage() {
   const [passwordError,    setPasswordError]    = useState('');
   const [passwordSuccess,  setPasswordSuccess]  = useState(false);
 
+
   useEffect(() => {
     const token    = localStorage.getItem('token');
     const userData = localStorage.getItem('user');
     if (!token || !userData) { router.push('/login'); return; }
 
+
     try {
       const cached = JSON.parse(userData) as UserProfile;
       if (cached.role !== 'STUDENT') { router.push('/login'); return; }
 
+
       setUser(cached);
       setAuthLoading(false);
+
 
       // Fetch fresh profile (ensures rfidCard is current)
       setProfileLoading(true);
@@ -62,6 +108,7 @@ export default function StudentProfilePage() {
         .catch(() => {})
         .finally(() => setProfileLoading(false));
 
+
       // Fetch linked parent
       setParentLoading(true);
       api.getStudentParent(cached.id)
@@ -69,11 +116,13 @@ export default function StudentProfilePage() {
         .catch(() => setParent(null))
         .finally(() => setParentLoading(false));
 
+
     } catch {
       router.push('/login');
       setAuthLoading(false);
     }
   }, [router]);
+
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -81,17 +130,20 @@ export default function StudentProfilePage() {
     router.push('/login');
   };
 
+
   const handleChangePassword = async () => {
     setPasswordError('');
     setPasswordSuccess(false);
     if (!currentPassword || !newPassword || !confirmPassword) {
       setPasswordError('All fields are required.'); return;
     }
-    if (newPassword.length < 8) {
-      setPasswordError('New password must be at least 8 characters.'); return;
-    }
+    const ruleError = validateNewPassword(newPassword);
+    if (ruleError) { setPasswordError(ruleError); return; }
     if (newPassword !== confirmPassword) {
       setPasswordError('New passwords do not match.'); return;
+    }
+    if (newPassword === currentPassword) {
+      setPasswordError('New password must be different from your current password.'); return;
     }
     setIsSaving(true);
     try {
@@ -106,38 +158,18 @@ export default function StudentProfilePage() {
     }
   };
 
+
   if (authLoading || !user) return (
     <div className="min-h-screen bg-slate-50 dark:bg-gray-950 flex items-center justify-center">
       <div className="w-8 h-8 border-4 border-[#7B1113] border-t-transparent rounded-full animate-spin" />
     </div>
   );
 
-  // ── Reusable password input ─────────────────────────────────────────────
-  const PasswordInput = ({
-    label, value, show, onChange, onToggle, placeholder,
-  }: {
-    label: string; value: string; show: boolean;
-    onChange: (v: string) => void; onToggle: () => void; placeholder: string;
-  }) => (
-    <div>
-      <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-2">{label}</label>
-      <div className="relative">
-        <input
-          type={show ? 'text' : 'password'} value={value}
-          onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
-          className="w-full pr-10 px-4 py-3 bg-slate-50 dark:bg-gray-800 border border-slate-200 dark:border-gray-700 rounded-lg text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#7B1113] focus:border-transparent transition-colors"
-        />
-        <button type="button" onClick={onToggle}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-gray-500 hover:text-slate-600 dark:hover:text-gray-300 transition-colors">
-          {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-        </button>
-      </div>
-    </div>
-  );
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-gray-950 text-slate-900 dark:text-white transition-colors duration-200">
       <StudentSidebar onLogout={handleLogout} student={user} />
+
 
       <main className="ml-64 p-8">
         {/* Header */}
@@ -156,10 +188,13 @@ export default function StudentProfilePage() {
           </div>
         </div>
 
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
 
           {/* ── Left Column ── */}
           <div className="space-y-6">
+
 
             {/* Avatar Card */}
             <div className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 rounded-xl p-6 shadow-sm dark:shadow-none text-center transition-colors duration-200">
@@ -172,6 +207,7 @@ export default function StudentProfilePage() {
                 <GraduationCap className="w-3 h-3" /> {formatGradeLevel(user.gradeLevel)}
               </div>
             </div>
+
 
             {/* Account Details */}
             <div className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 rounded-xl p-6 shadow-sm dark:shadow-none transition-colors duration-200">
@@ -193,6 +229,7 @@ export default function StudentProfilePage() {
                 ))}
               </div>
             </div>
+
 
             {/* Parent Info */}
             <div className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 rounded-xl p-6 shadow-sm dark:shadow-none transition-colors duration-200">
@@ -226,6 +263,7 @@ export default function StudentProfilePage() {
                 </div>
               )}
             </div>
+
 
             {/* RFID Card */}
             <div className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 rounded-xl p-6 shadow-sm dark:shadow-none transition-colors duration-200">
@@ -265,6 +303,7 @@ export default function StudentProfilePage() {
             </div>
           </div>
 
+
           {/* ── Right Column: Password Only ── */}
           <div className="lg:col-span-2">
             <div className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 rounded-xl p-6 shadow-sm dark:shadow-none transition-colors duration-200">
@@ -273,10 +312,12 @@ export default function StudentProfilePage() {
                 Make sure to use a strong password you don&apos;t reuse elsewhere.
               </p>
               <div className="space-y-4 max-w-md">
-                <PasswordInput label="Current Password"     value={currentPassword} show={showCurrent} onChange={setCurrentPassword} onToggle={() => setShowCurrent(v => !v)} placeholder="Enter current password" />
-                <PasswordInput label="New Password"         value={newPassword}     show={showNew}     onChange={setNewPassword}     onToggle={() => setShowNew(v => !v)}     placeholder="Min. 8 characters" />
-                <PasswordInput label="Confirm New Password" value={confirmPassword} show={showConfirm} onChange={setConfirmPassword} onToggle={() => setShowConfirm(v => !v)} placeholder="Re-enter new password" />
+                <PasswordInput label="Current Password"     name="currentPassword" autoComplete="current-password" value={currentPassword} show={showCurrent} onChange={setCurrentPassword} onToggle={() => setShowCurrent(v => !v)} placeholder="Enter current password" />
+                <PasswordInput label="New Password"         name="newPassword"     autoComplete="new-password"     value={newPassword}     show={showNew}     onChange={setNewPassword}     onToggle={() => setShowNew(v => !v)}     placeholder="Min. 8 characters" />
+                <PasswordInput label="Confirm New Password" name="confirmPassword" autoComplete="new-password"     value={confirmPassword} show={showConfirm} onChange={setConfirmPassword} onToggle={() => setShowConfirm(v => !v)} placeholder="Re-enter new password" />
+                <p className="text-xs text-slate-400 dark:text-gray-500">{PASSWORD_HINT}</p>
               </div>
+
 
               {passwordError && (
                 <div className="mt-4 flex items-center gap-2 p-3 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-lg text-sm text-red-700 dark:text-red-400 max-w-md">
@@ -288,6 +329,7 @@ export default function StudentProfilePage() {
                   <CheckCircle className="w-4 h-4 shrink-0" /> Password changed successfully!
                 </div>
               )}
+
 
               <button
                 onClick={handleChangePassword} disabled={isSaving}

@@ -8,85 +8,31 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-enum Role {
-  ADMIN
-  TEACHER
-  PARENT
-  STUDENT
-}
-
-enum GradeLevel {
-  GRADE_1
-  GRADE_2
-  GRADE_3
-  GRADE_4
-  GRADE_5
-  GRADE_6
-  GRADE_7
-  GRADE_8
-  GRADE_9
-  GRADE_10
-  GRADE_11
-  GRADE_12
-}
-
-enum CardStatus {
-  ACTIVE
-  LOST
-  REPLACED
-  SUSPENDED
-}
-
-enum AttendanceStatus {
-  PRESENT
-  LATE
-  ABSENT
-  UNCONFIRMED_OUT
-}
-
-enum NotificationType {
-  ANNOUNCEMENT
-  ATTENDANCE
-  FSL
-  SYSTEM
-}
-
-enum NotificationStatus {
-  READ
-  UNREAD
-}
-
-enum FSLCategory {
-  ALPHABET
-  NUMBERS
-  GREETINGS
-  FAMILY
-  ACTIONS
-  OBJECTS
-  COLORS
-}
-
 model User {
-  id                 String      @id @default(uuid())
-  username           String      @unique
-  email              String?     @unique
+  id                 String          @id @default(uuid())
+  username           String          @unique
+  email              String?         @unique
   password           String
   role               Role
   firstName          String
   lastName           String
   gradeLevel         GradeLevel?
-  rfidCard           String?     @unique
-  phoneNumber        String?
+  rfidCard           String?         @unique
   photoUrl           String?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
   pushToken          String?
-  mustChangePassword Boolean     @default(true)
-  createdAt          DateTime    @default(now())
-  updatedAt          DateTime    @updatedAt
+  mustChangePassword Boolean         @default(true)
+  phoneNumber        String?
+  attendances        Attendance[]
+  fslProgress        FSLProgress[]
+  parentLinks        ParentStudent[] @relation("ParentUser")
+  childLinks         ParentStudent[] @relation("StudentUser")
 
-  attendances Attendance[]
-  fslProgress FSLProgress[]
-  parentLinks ParentStudent[] @relation("ParentUser")
-  childLinks  ParentStudent[] @relation("StudentUser")
+  // Phase 1 additions
+  assessmentsCreated Assessment[]         @relation("AssessmentCreator")
+  assessmentAttempts AssessmentAttempt[]
+  announcements      Announcement[]       @relation("AnnouncementCreator")
 
   @@map("users")
 }
@@ -95,9 +41,9 @@ model ParentStudent {
   id        String   @id @default(uuid())
   parentId  String
   studentId String
+  createdAt DateTime @default(now())
   parent    User     @relation("ParentUser", fields: [parentId], references: [id], onDelete: Cascade)
   student   User     @relation("StudentUser", fields: [studentId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
 
   @@unique([parentId, studentId])
   @@map("parent_students")
@@ -117,37 +63,40 @@ model RFIDCard {
 model Attendance {
   id        String           @id @default(uuid())
   studentId String
-  student   User             @relation(fields: [studentId], references: [id], onDelete: Cascade)
   timeIn    DateTime?
   timeOut   DateTime?
   date      DateTime         @default(now()) @db.Date
   status    AttendanceStatus @default(PRESENT)
+  student   User             @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@map("attendances")
 }
 
 model FSLWord {
-  id        String      @id @default(uuid())
-  word      String      @unique
+  id        String        @id @default(uuid())
+  word      String        @unique
+  videoUrl  String?
+  createdAt DateTime      @default(now())
   category  FSLCategory
-  videoUrl  String
-  createdAt DateTime    @default(now())
+  isDynamic Boolean       @default(false)
+  progress  FSLProgress[]
 
-  progress FSLProgress[]
+  // Phase 1 addition — link words to gesture-identification / fill-in-blank questions
+  assessmentQuestions AssessmentQuestion[]
 
   @@map("fsl_words")
 }
 
 model FSLProgress {
-  id            String   @id @default(uuid())
+  id            String            @id @default(uuid())
   studentId     String
-  student       User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
   wordId        String
-  word          FSLWord  @relation(fields: [wordId], references: [id], onDelete: Cascade)
-  accuracy      Float    @default(0)
-  attempts      Int      @default(0)
-  completed     Boolean  @default(false)
-  lastPracticed DateTime @default(now())
+  accuracy      Float             @default(0)
+  attempts      Int               @default(0)
+  status        FSLProgressStatus @default(NOT_STARTED)
+  lastPracticed DateTime?
+  student       User              @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  word          FSLWord           @relation(fields: [wordId], references: [id], onDelete: Cascade)
 
   @@unique([studentId, wordId])
   @@map("fsl_progress")
@@ -156,9 +105,9 @@ model FSLProgress {
 model Notification {
   id      String             @id @default(uuid())
   userId  String
-  type    NotificationType
   message String
   sentAt  DateTime           @default(now())
+  type    NotificationType
   status  NotificationStatus @default(UNREAD)
 
   @@map("notifications")
@@ -199,16 +148,190 @@ model RefreshToken {
 }
 
 model AuditLog {
-  id         String   @id @default(uuid())
-  userId     String
-  changedBy  String
-  oldRole    Role
-  newRole    Role
-  changedAt  DateTime @default(now())
+  id        String   @id @default(uuid())
+  userId    String
+  changedBy String
+  oldRole   Role
+  newRole   Role
+  changedAt DateTime @default(now())
 
   @@index([userId])
   @@index([changedBy])
   @@map("audit_logs")
+}
+
+model PasswordResetRequest {
+  id                String             @id @default(uuid())
+  username          String
+  userId            String
+  status            ResetRequestStatus @default(PENDING)
+  requestedAt       DateTime           @default(now())
+  resolvedAt        DateTime?
+  resolvedBy        String?
+  generatedPassword String?
+
+  @@index([status])
+  @@index([userId])
+  @@map("password_reset_requests")
+}
+
+// ─────────────────────────────────────────────
+// PHASE 1 ADDITIONS — Assessments
+// ─────────────────────────────────────────────
+
+model Assessment {
+  id          String             @id @default(uuid())
+  title       String
+  audience    AssessmentAudience
+  type        AssessmentType
+  gradeLevel  GradeLevel?
+  isActive    Boolean            @default(false)
+  isPublished Boolean            @default(false)
+  createdBy   String
+  creator     User               @relation("AssessmentCreator", fields: [createdBy], references: [id])
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  questions AssessmentQuestion[]
+  attempts  AssessmentAttempt[]
+
+  @@index([audience, type])
+  @@map("assessments")
+}
+
+model AssessmentQuestion {
+  id            String       @id @default(uuid())
+  assessmentId  String
+  assessment    Assessment   @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  order         Int
+  type          QuestionType
+  prompt        String
+  mediaUrl      String?
+  wordId        String?
+  word          FSLWord?     @relation(fields: [wordId], references: [id])
+  choices       Json?
+  correctAnswer String?
+
+  responses AssessmentResponse[]
+
+  @@unique([assessmentId, order])
+  @@map("assessment_questions")
+}
+
+model AssessmentAttempt {
+  id                 String        @id @default(uuid())
+  assessmentId       String
+  assessment         Assessment    @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  userId             String
+  user               User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status             AttemptStatus @default(IN_PROGRESS)
+  score              Float?
+  scoreVisibleToUser Boolean       @default(true)
+  reviewedByAdminId  String?
+  reviewedAt         DateTime?
+  startedAt          DateTime      @default(now())
+  submittedAt        DateTime?
+
+  responses AssessmentResponse[]
+
+  @@index([userId])
+  @@index([assessmentId])
+  @@map("assessment_attempts")
+}
+
+model AssessmentResponse {
+  id            String             @id @default(uuid())
+  attemptId     String
+  attempt       AssessmentAttempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  questionId    String
+  question      AssessmentQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  submittedSign String?
+  isCorrect     Boolean?
+  answeredAt    DateTime           @default(now())
+
+  @@unique([attemptId, questionId])
+  @@map("assessment_responses")
+}
+
+// ─────────────────────────────────────────────
+// PHASE 1 ADDITIONS — Announcements
+// ─────────────────────────────────────────────
+
+model Announcement {
+  id        String               @id @default(uuid())
+  title     String
+  message   String
+  audience  AnnouncementAudience @default(ALL)
+  createdBy String
+  creator   User                 @relation("AnnouncementCreator", fields: [createdBy], references: [id])
+  createdAt DateTime             @default(now())
+
+  @@index([audience])
+  @@map("announcements")
+}
+
+// ─────────────────────────────────────────────
+// ENUMS — existing
+// ─────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  TEACHER
+  PARENT
+  STUDENT
+}
+
+enum GradeLevel {
+  GRADE_1
+  GRADE_2
+  GRADE_3
+  GRADE_4
+  GRADE_5
+  GRADE_6
+  GRADE_7
+  GRADE_8
+  GRADE_9
+  GRADE_10
+  GRADE_11
+  GRADE_12
+}
+
+enum CardStatus {
+  ACTIVE
+  LOST
+  REPLACED
+  SUSPENDED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  LATE
+  ABSENT
+  UNCONFIRMED_OUT
+}
+
+enum NotificationType {
+  ANNOUNCEMENT
+  ATTENDANCE
+  FSL
+  ASSESSMENT
+  SYSTEM
+}
+
+enum NotificationStatus {
+  READ
+  UNREAD
+}
+
+enum FSLCategory {
+  ALPHABET
+  NUMBERS
+  GREETINGS
+  FAMILY
+  ACTIONS
+  OBJECTS
+  COLORS
+  PHRASES
 }
 
 enum ResetRequestStatus {
@@ -217,17 +340,44 @@ enum ResetRequestStatus {
   REJECTED
 }
 
-model PasswordResetRequest {
-  id           String             @id @default(uuid())
-  username     String
-  userId       String
-  status       ResetRequestStatus @default(PENDING)
-  requestedAt  DateTime           @default(now())
-  resolvedAt   DateTime?
-  resolvedBy   String?
-  generatedPassword String?
+// ─────────────────────────────────────────────
+// ENUMS — Phase 1 additions
+// ─────────────────────────────────────────────
 
-  @@index([status])
-  @@index([userId])
-  @@map("password_reset_requests")
+enum FSLProgressStatus {
+  LOCKED
+  NOT_STARTED
+  IN_PROGRESS
+  MASTERED
+}
+
+enum AssessmentAudience {
+  TEACHER
+  STUDENT
+}
+
+enum AssessmentType {
+  COGNITIVE
+  GESTURE_IDENTIFICATION
+  FILL_IN_THE_BLANK
+  STORYBOOK
+}
+
+enum QuestionType {
+  MULTIPLE_CHOICE
+  VIDEO_IDENTIFY
+  SIGN_RESPONSE
+  STORY_PROMPT
+}
+
+enum AttemptStatus {
+  IN_PROGRESS
+  SUBMITTED
+  GRADED
+}
+
+enum AnnouncementAudience {
+  ALL
+  STUDENTS
+  PARENTS
 }

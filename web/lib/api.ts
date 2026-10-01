@@ -1,14 +1,39 @@
 // web/lib/api.ts
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL;
+
+// ─── Base URL ─────────────────────────────────────────────────────────────────
+// Normalize: strip trailing slash so paths starting with "/" always join cleanly.
+// Guard: if NEXT_PUBLIC_API_URL is missing, every call throws a clear error
+// instead of silently fetching "undefined/users" → TypeError: Failed to fetch.
+const _RAW_BASE = process.env.NEXT_PUBLIC_API_URL;
+const BASE_URL = _RAW_BASE ? _RAW_BASE.replace(/\/$/, '') : '';
+
+if (!_RAW_BASE && typeof window !== 'undefined') {
+  console.error(
+    '[api.ts] ⚠️  NEXT_PUBLIC_API_URL is not defined.\n' +
+    'Add it to your web/.env.local:\n' +
+    '  NEXT_PUBLIC_API_URL=http://localhost:3000\n' +
+    'All API calls will fail until this is set.',
+  );
+}
+
 
 // ─── Core Fetcher ─────────────────────────────────────────────────────────────
+
 
 interface ApiFetchOptions extends RequestInit {
   skipAuthRedirect?: boolean;
 }
 
+
 async function apiFetch<T>(path: string, options?: ApiFetchOptions): Promise<T> {
+  // Guard: fail fast with a useful message if the env var is missing
+  if (!BASE_URL) {
+    throw new Error(
+      'API base URL is not configured. Set NEXT_PUBLIC_API_URL in web/.env.local.',
+    );
+  }
+
   const token =
     typeof window !== 'undefined'
       ? (localStorage.getItem('token') ?? localStorage.getItem('accessToken'))
@@ -16,7 +41,10 @@ async function apiFetch<T>(path: string, options?: ApiFetchOptions): Promise<T> 
 
   const { headers: extraHeaders, skipAuthRedirect, ...restOptions } = options ?? {};
 
-  const res = await fetch(`${BASE_URL}${path}`, {
+  // Ensure exactly one slash between BASE_URL and path regardless of leading slash
+  const url = `${BASE_URL}/${path.replace(/^\//, '')}`;
+
+  const res = await fetch(url, {
     ...restOptions,
     headers: {
       'Content-Type': 'application/json',
@@ -25,9 +53,11 @@ async function apiFetch<T>(path: string, options?: ApiFetchOptions): Promise<T> 
     },
   });
 
+
   if (res.status === 204) {
     return undefined as T;
   }
+
 
   if (!res.ok) {
     const error = await res.json().catch(() => ({}));
@@ -38,6 +68,7 @@ async function apiFetch<T>(path: string, options?: ApiFetchOptions): Promise<T> 
       : '';
     const meta = error?.meta?.message ?? error?.meta?.target ?? '';
     const combined = [raw, meta].filter(Boolean).join(' ');
+
 
     if (res.status === 401) {
       if (!skipAuthRedirect && typeof window !== 'undefined') {
@@ -59,24 +90,31 @@ async function apiFetch<T>(path: string, options?: ApiFetchOptions): Promise<T> 
           }
         }
 
+
         localStorage.removeItem('token');
         localStorage.removeItem('refreshToken');
         localStorage.removeItem('user');
         window.location.href = '/login?reason=expired';
 
+
         return new Promise<never>(() => {});
       }
+
 
       throw new Error(combined || 'Unauthorized');
     }
 
+
     throw new Error(combined || `Request failed: ${res.status}`);
   }
+
 
   return res.json();
 }
 
+
 // ─── Types ────────────────────────────────────────────────────────────────────
+
 
 export interface User {
   id:                  string;
@@ -92,6 +130,7 @@ export interface User {
   createdAt:           string;
 }
 
+
 export interface CreateUserDto {
   username:     string;
   firstName:    string;
@@ -104,10 +143,12 @@ export interface CreateUserDto {
   role:         'ADMIN' | 'TEACHER' | 'STUDENT' | 'PARENT';
 }
 
+
 export interface UserStats {
   admins: number; teachers: number; students: number;
   parents: number; total: number;
 }
+
 
 export interface AuthUser {
   id:                  string;
@@ -118,11 +159,13 @@ export interface AuthUser {
   mustChangePassword?: boolean;
 }
 
+
 export interface LoginResponse {
   accessToken:  string;
   refreshToken: string;
   user:         AuthUser;
 }
+
 
 export interface AttendanceRecord {
   id:        string;
@@ -132,6 +175,7 @@ export interface AttendanceRecord {
   timeOut?:  string | null;
   date:      string;
 }
+
 
 // ── Filtered attendance record — includes joined student data ─────────────────
 export interface FilteredAttendanceRecord {
@@ -149,6 +193,7 @@ export interface FilteredAttendanceRecord {
   };
 }
 
+
 export interface AttendanceQueryParams {
   studentId?:  string;
   date?:       string;
@@ -160,6 +205,7 @@ export interface AttendanceQueryParams {
   limit?:      number;
 }
 
+
 export interface PaginatedAttendance {
   data:       FilteredAttendanceRecord[];
   total:      number;
@@ -168,10 +214,12 @@ export interface PaginatedAttendance {
   totalPages: number;
 }
 
+
 export interface AttendanceStats {
   totalDays: number; present: number; absent: number;
   late: number; attendanceRate: number;
 }
+
 
 export interface RfidTapResponse {
   success: boolean;
@@ -188,9 +236,11 @@ export interface RfidTapResponse {
   };
 }
 
+
 export interface ParentInfo {
   id: string; firstName: string; lastName: string;
 }
+
 
 export interface ChildInfo {
   id:         string;
@@ -201,7 +251,9 @@ export interface ChildInfo {
   photoUrl:   string | null;
 }
 
+
 // ─── Password Reset Types ─────────────────────────────────────────────────────
+
 
 export interface PasswordResetRequest {
   id:                 string;
@@ -219,7 +271,9 @@ export interface PasswordResetRequest {
   } | null;
 }
 
+
 // ─── Auth ─────────────────────────────────────────────────────────────────────
+
 
 export const login = async (username: string, password: string) => {
   const res = await apiFetch<LoginResponse>('/auth/login', {
@@ -228,25 +282,30 @@ export const login = async (username: string, password: string) => {
     skipAuthRedirect: true,
   });
   if (typeof window !== 'undefined') {
-    localStorage.setItem('token', res.accessToken);
-    localStorage.setItem('accessToken', res.accessToken);
+    localStorage.setItem('token',        res.accessToken);
+    localStorage.setItem('accessToken',  res.accessToken);
     localStorage.setItem('refreshToken', res.refreshToken);
   }
   return res;
 };
 
+
 export const getMe = () => apiFetch<User>('/auth/me');
+
 
 // ─── Users ────────────────────────────────────────────────────────────────────
 
+
 export const getAllUsers = () => {
-  const userData = typeof window !== 'undefined' ? localStorage.getItem('user') : null;
+  const userData      = typeof window !== 'undefined' ? localStorage.getItem('user') : null;
   const currentUserId = userData ? JSON.parse(userData).id : '';
   return apiFetch<User[]>(`/users?excludeId=${currentUserId}`);
 };
 
-export const getUserStats  = () => apiFetch<UserStats>('/users/stats');
-export const getUserById   = (id: string) => apiFetch<User>(`/users/${id}`);
+
+export const getUserStats = () => apiFetch<UserStats>('/users/stats');
+export const getUserById  = (id: string) => apiFetch<User>(`/users/${id}`);
+
 
 export const createUser = (data: CreateUserDto) =>
   apiFetch<{
@@ -255,11 +314,14 @@ export const createUser = (data: CreateUserDto) =>
     parentAccount?: { username: string; generatedPassword: string };
   }>('/users', { method: 'POST', body: JSON.stringify(data) });
 
+
 export const updateUser = (id: string, data: Partial<CreateUserDto>) =>
   apiFetch<User>(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
 
+
 export const deleteUser = (id: string) =>
   apiFetch<void>(`/users/${id}`, { method: 'DELETE' });
+
 
 export const changePassword = (
   userId: string,
@@ -271,19 +333,31 @@ export const changePassword = (
     body: JSON.stringify({ currentPassword, newPassword }),
   });
 
+
 export const forceChangePassword = (userId: string, newPassword: string) =>
   apiFetch<{ message: string }>(`/users/${userId}/force-change-password`, {
     method: 'POST',
     body: JSON.stringify({ newPassword }),
   });
 
+
 export const getStudentParent  = (studentId: string) =>
   apiFetch<ParentInfo | null>(`/users/student-parent/${studentId}`);
+
 
 export const getParentChildren = (parentId: string) =>
   apiFetch<ChildInfo[]>(`/users/my-children/${parentId}`);
 
+
+// ── Real-time RFID availability check — used by AddUserModal onBlur ──────────
+export const checkRfidAvailable = (rfid: string) =>
+  apiFetch<{ available: boolean }>(
+    `/users/check-rfid?rfid=${encodeURIComponent(rfid)}`,
+  );
+
+
 // ─── Attendance ───────────────────────────────────────────────────────────────
+
 
 export const handleRfidTap = (rfidCard: string) =>
   apiFetch<RfidTapResponse>('/attendance/rfid-tap', {
@@ -291,14 +365,18 @@ export const handleRfidTap = (rfidCard: string) =>
     body: JSON.stringify({ rfidCard }),
   });
 
+
 export const getStudentAttendance = (studentId: string) =>
   apiFetch<AttendanceRecord[]>(`/attendance/student/${studentId}`);
+
 
 export const getStudentStats = (studentId: string) =>
   apiFetch<AttendanceStats>(`/attendance/student/${studentId}/stats`);
 
+
 export const getTodayAttendance = (studentId: string) =>
   apiFetch<AttendanceRecord | null>(`/attendance/student/${studentId}/today`);
+
 
 export const getFilteredAttendance = (params: AttendanceQueryParams) => {
   const q = new URLSearchParams();
@@ -313,7 +391,9 @@ export const getFilteredAttendance = (params: AttendanceQueryParams) => {
   return apiFetch<PaginatedAttendance>(`/attendance?${q.toString()}`);
 };
 
+
 // ─── Notifications ────────────────────────────────────────────────────────────
+
 
 export interface NotificationRecord {
   id:      string;
@@ -324,17 +404,22 @@ export interface NotificationRecord {
   status:  'UNREAD' | 'READ';
 }
 
-export const getMyNotifications      = () =>
+
+export const getMyNotifications       = () =>
   apiFetch<NotificationRecord[]>('/notifications/my-notifications');
 
-export const getUnreadNotifications  = () =>
+
+export const getUnreadNotifications   = () =>
   apiFetch<NotificationRecord[]>('/notifications/unread');
+
 
 export const markAllNotificationsRead = () =>
   apiFetch<void>('/notifications/mark-all-read', { method: 'PATCH' });
 
+
 export const markNotificationRead = (id: string) =>
   apiFetch<NotificationRecord>(`/notifications/${id}/read`, { method: 'PATCH' });
+
 
 export const registerPushToken = (token: string) =>
   apiFetch<void>('/notifications/register-token', {
@@ -342,7 +427,9 @@ export const registerPushToken = (token: string) =>
     body: JSON.stringify({ token }),
   });
 
+
 // ─── Config ───────────────────────────────────────────────────────────────────
+
 
 export interface AppConfigItem {
   id:        string;
@@ -353,9 +440,12 @@ export interface AppConfigItem {
   sortOrder: number;
 }
 
+
 export const getAppConfig = () => apiFetch<AppConfigItem[]>('/config');
 
+
 // ─── Password Reset ───────────────────────────────────────────────────────────
+
 
 export const requestPasswordReset = (username: string) =>
   apiFetch<{ message: string }>('/password-reset/request', {
@@ -364,11 +454,14 @@ export const requestPasswordReset = (username: string) =>
     skipAuthRedirect: true,
   });
 
+
 export const getPendingResetCount = () =>
   apiFetch<{ count: number }>('/password-reset/requests/pending-count');
 
+
 export const getAllResetRequests = () =>
   apiFetch<PasswordResetRequest[]>('/password-reset/requests');
+
 
 export const approveResetRequest = (id: string) =>
   apiFetch<{ message: string; username: string; generatedPassword: string }>(
@@ -376,17 +469,21 @@ export const approveResetRequest = (id: string) =>
     { method: 'POST' },
   );
 
+
 export const rejectResetRequest = (id: string) =>
   apiFetch<{ message: string }>(`/password-reset/requests/${id}/reject`, {
     method: 'POST',
   });
 
+
 // ─── API Object ───────────────────────────────────────────────────────────────
+
 
 export const api = {
   // Auth
   login,
   getMe,
+
 
   // Users
   getUsers:              getAllUsers,
@@ -399,6 +496,8 @@ export const api = {
   forceChangePassword,
   getStudentParent,
   getParentChildren,
+  checkRfidAvailable,
+
 
   // Attendance
   handleRfidTap,
@@ -406,7 +505,8 @@ export const api = {
   getStudentAttendance,
   getStudentStats,
   getTodayAttendance,
-  getFilteredAttendance,                // ← new
+  getFilteredAttendance,
+
 
   // Notifications
   getMyNotifications,
@@ -414,6 +514,7 @@ export const api = {
   markAllNotificationsRead,
   markNotificationRead,
   registerPushToken,
+
 
   // Config
   getAppConfig,

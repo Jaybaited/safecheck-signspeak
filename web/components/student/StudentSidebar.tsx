@@ -35,7 +35,7 @@ const FSL_GROUP = {
   children: [
     { name: 'FSL Learning',   href: '/student/fsl',      icon: BookOpen      },
     { name: 'FSL Games',      href: '/student/games',    icon: Gamepad2      },
-    { name: 'FSL Assessment', href: '/student/quiz',     icon: ClipboardList },
+    { name: 'FSL Assessment', href: '/student/assessment',     icon: ClipboardList },
     { name: 'My Progress',    href: '/student/progress', icon: TrendingUp    },
   ],
 };

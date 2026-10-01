@@ -1,5 +1,6 @@
 'use client';
 
+
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
@@ -13,10 +14,13 @@ import {
 import Sidebar from '@/components/admin/Sidebar';
 import ThemeToggle from '@/components/ThemeToggle';
 
+
 type ApproveResult = { username: string; generatedPassword: string } | null;
+
 
 export default function PasswordRequestsPage() {
   const router = useRouter();
+
 
   const [adminUser,    setAdminUser]    = useState<any>(null);
   const [requests,     setRequests]     = useState<PasswordResetRequest[]>([]);
@@ -24,7 +28,9 @@ export default function PasswordRequestsPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [approveResult, setApproveResult] = useState<ApproveResult>(null);
   const [copied,       setCopied]       = useState(false);
+  const [hasCopied,    setHasCopied]    = useState(false);
   const [error,        setError]        = useState<string | null>(null);
+
 
   useEffect(() => {
     const token    = localStorage.getItem('token');
@@ -39,6 +45,33 @@ export default function PasswordRequestsPage() {
     finally  { setLoading(false); }
   }, [router]);
 
+
+  // Warn before leaving while a new password has not been copied
+  useEffect(() => {
+    if (!approveResult || hasCopied) return;
+
+    const warnUnload = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
+
+    const guardLinks = (e: MouseEvent) => {
+      const link = (e.target as HTMLElement).closest('a[href]') as HTMLAnchorElement | null;
+      if (!link || link.target === '_blank') return;
+      const url = new URL(link.href, window.location.href);
+      if (url.origin !== window.location.origin || url.pathname === window.location.pathname) return;
+      if (!window.confirm('The new password has not been copied and will be lost if you leave. Leave anyway?')) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+
+    window.addEventListener('beforeunload', warnUnload);
+    document.addEventListener('click', guardLinks, true);
+    return () => {
+      window.removeEventListener('beforeunload', warnUnload);
+      document.removeEventListener('click', guardLinks, true);
+    };
+  }, [approveResult, hasCopied]);
+
+
   const fetchRequests = async () => {
     try {
       setRequests(await getAllResetRequests());
@@ -48,19 +81,27 @@ export default function PasswordRequestsPage() {
     }
   };
 
+
   const handleLogout = () => {
+    if (approveResult && !hasCopied &&
+        !window.confirm('The new password has not been copied and will be lost. Sign out anyway?')) return;
     localStorage.removeItem('token');
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('user');
     router.push('/login');
   };
 
+
   const handleApprove = async (id: string) => {
+    if (approveResult && !hasCopied &&
+        !window.confirm('The previous password has not been copied and will be lost. Continue?')) return;
     setActionLoading(id);
     setError(null);
     try {
       const result = await approveResetRequest(id);
       setApproveResult({ username: result.username, generatedPassword: result.generatedPassword });
+      setHasCopied(false);
+      setCopied(false);
       await fetchRequests();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to approve request.');
@@ -68,6 +109,7 @@ export default function PasswordRequestsPage() {
       setActionLoading(null);
     }
   };
+
 
   const handleReject = async (id: string) => {
     if (!window.confirm('Are you sure you want to reject this password reset request?')) return;
@@ -83,15 +125,31 @@ export default function PasswordRequestsPage() {
     }
   };
 
-  const handleCopy = () => {
+
+  const handleCopy = async () => {
     if (!approveResult) return;
-    navigator.clipboard.writeText(approveResult.generatedPassword);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(approveResult.generatedPassword);
+      setCopied(true);
+      setHasCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setError('Could not copy automatically. Select the password and copy it manually.');
+    }
   };
+
+
+  const handleCloseBanner = () => {
+    if (!hasCopied && !window.confirm('This password will not be shown again. Close without copying it?')) return;
+    setApproveResult(null);
+    setHasCopied(false);
+    setCopied(false);
+  };
+
 
   const pending  = requests.filter((r) => r.status === 'PENDING');
   const resolved = requests.filter((r) => r.status !== 'PENDING');
+
 
   const formatDate = (d: string) =>
     new Date(d).toLocaleDateString('en-US', {
@@ -99,11 +157,13 @@ export default function PasswordRequestsPage() {
       hour: '2-digit', minute: '2-digit',
     });
 
+
   const roleBadge = (role?: string) => {
     if (role === 'TEACHER') return 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20';
     if (role === 'STUDENT') return 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20';
     return 'bg-[#C4972A]/10 text-[#8B6818] border-[#C4972A]/20 dark:text-[#E8C96A]';
   };
+
 
   if (loading || !adminUser) {
     return (
@@ -113,11 +173,14 @@ export default function PasswordRequestsPage() {
     );
   }
 
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-gray-950 text-slate-900 dark:text-white transition-colors duration-200">
       <Sidebar onLogout={handleLogout} admin={adminUser} />
 
+
       <main className="ml-64 p-6">
+
 
         {/* Header */}
         <div className="flex justify-between items-center mb-6">
@@ -130,6 +193,7 @@ export default function PasswordRequestsPage() {
           <ThemeToggle />
         </div>
 
+
         {/* Error */}
         {error && (
           <div className="mb-5 flex items-center gap-3 p-3.5 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-xl text-sm">
@@ -137,6 +201,7 @@ export default function PasswordRequestsPage() {
             <span className="text-red-700 dark:text-red-400">{error}</span>
           </div>
         )}
+
 
         {/* ── Approve result banner ── */}
         {approveResult && (
@@ -161,7 +226,7 @@ export default function PasswordRequestsPage() {
                 {copied ? <><Check className="w-3.5 h-3.5" /> Copied!</> : <><Copy className="w-3.5 h-3.5" /> Copy</>}
               </button>
               <button
-                onClick={() => setApproveResult(null)}
+                onClick={handleCloseBanner}
                 className="p-2 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 rounded-lg transition-colors"
               >
                 <XCircle className="w-4 h-4 text-emerald-500" />
@@ -169,6 +234,7 @@ export default function PasswordRequestsPage() {
             </div>
           </div>
         )}
+
 
         {/* ── Pending requests ── */}
         <div className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 rounded-xl p-5 shadow-sm dark:shadow-none mb-5">
@@ -183,6 +249,7 @@ export default function PasswordRequestsPage() {
               </span>
             )}
           </div>
+
 
           {pending.length === 0 ? (
             <div className="text-center py-10">
@@ -243,6 +310,7 @@ export default function PasswordRequestsPage() {
             </div>
           )}
         </div>
+
 
         {/* ── Resolved requests ── */}
         {resolved.length > 0 && (
