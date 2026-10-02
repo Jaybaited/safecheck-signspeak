@@ -70,6 +70,25 @@ async function apiFetch<T>(path: string, options?: ApiFetchOptions): Promise<T> 
     const combined = [raw, meta].filter(Boolean).join(' ');
 
 
+    // Server-side mustChangePassword enforcement: the API blocks every route
+    // except the forced password change until the user sets a new password.
+    if (res.status === 403 && error?.code === 'PASSWORD_CHANGE_REQUIRED') {
+      if (typeof window !== 'undefined') {
+        try {
+          const cached = JSON.parse(localStorage.getItem('user') ?? '{}');
+          cached.mustChangePassword = true;
+          localStorage.setItem('user', JSON.stringify(cached));
+        } catch {
+          // malformed cache - the change-password page will handle it
+        }
+        if (window.location.pathname !== '/change-password') {
+          window.location.href = '/change-password';
+        }
+        return new Promise<never>(() => {});
+      }
+      throw new Error(combined || 'Password change required.');
+    }
+
     if (res.status === 401) {
       if (!skipAuthRedirect && typeof window !== 'undefined') {
         const storedRefresh = localStorage.getItem('refreshToken');
@@ -424,7 +443,7 @@ export const markNotificationRead = (id: string) =>
 export const registerPushToken = (token: string) =>
   apiFetch<void>('/notifications/register-token', {
     method: 'POST',
-    body: JSON.stringify({ token }),
+    body: JSON.stringify({ pushToken: token }),
   });
 
 

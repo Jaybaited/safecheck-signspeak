@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ShieldCheck, Eye, EyeOff, AlertCircle, CheckCircle } from 'lucide-react';
+import { api } from '@/lib/api';
+import { validateNewPassword } from '@/lib/password';
 
 const ROLE_DASHBOARD: Record<string, string> = {
   ADMIN:   '/admin/dashboard',
@@ -41,13 +43,8 @@ export default function ChangePasswordPage() {
   }, [router]);
 
   const validate = () => {
-    if (!newPassword) return 'New password is required.';
-    if (newPassword.length < 8) return 'Password must be at least 8 characters.';
-    if (!/[A-Z]/.test(newPassword)) return 'Password must contain at least one uppercase letter.';
-    if (!/[a-z]/.test(newPassword)) return 'Password must contain at least one lowercase letter.';
-    if (!/\d/.test(newPassword)) return 'Password must contain at least one number.';
-    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(newPassword))
-      return 'Password must contain at least one special character.';
+    const ruleError = validateNewPassword(newPassword);
+    if (ruleError) return ruleError;
     if (newPassword !== confirm) return 'Passwords do not match.';
     return null;
   };
@@ -60,22 +57,7 @@ export default function ChangePasswordPage() {
 
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/users/${userId}/force-change-password`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-          body: JSON.stringify({ newPassword }),
-        },
-      );
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data?.message || 'Failed to change password.');
-      }
+      await api.forceChangePassword(userId, newPassword);
 
       // Update local user cache — clear mustChangePassword flag
       const userData = localStorage.getItem('user');
@@ -174,7 +156,7 @@ export default function ChangePasswordPage() {
               ['One uppercase letter', /[A-Z]/.test(newPassword)],
               ['One lowercase letter', /[a-z]/.test(newPassword)],
               ['One number', /\d/.test(newPassword)],
-              ['One special character', /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(newPassword)],
+              ['One special character', /[^A-Za-z0-9]/.test(newPassword)],
             ].map(([label, met]) => (
               <li key={label as string} className={`flex items-center gap-1.5 ${met ? 'text-emerald-500' : 'text-gray-400'}`}>
                 <span>{met ? '✓' : '·'}</span> {label as string}
