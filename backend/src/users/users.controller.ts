@@ -8,11 +8,16 @@ import { NewPasswordDto, ChangePasswordDto } from './dto/password.dto';
 import { JwtAuthGuard }   from '../auth/jwt.guard';
 import { RolesGuard }     from '../auth/roles.guard';
 import { Roles }          from '../auth/roles.decorator';
+import { PrismaService }  from '../prisma/prisma.service';
+import { assertCanAccessStudent, getAuthUser } from '../common/access.util';
 
 @Controller('users')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   // A user may only change their OWN password.
   private assertSelf(req: any, id: string) {
@@ -20,6 +25,23 @@ export class UsersController {
     if (!callerId || callerId !== id) {
       throw new ForbiddenException('You can only change your own password.');
     }
+  }
+
+  // ADMIN: any user. Everyone else: themselves, or a student they may access
+  // (linked parent / teacher).
+  private async assertCanViewUser(req: any, id: string) {
+    const user = getAuthUser(req);
+    if (user.role === 'ADMIN' || user.id === id) return;
+
+    const target = await this.prisma.user.findUnique({
+      where:  { id },
+      select: { role: true },
+    });
+    if (target?.role === 'STUDENT') {
+      await assertCanAccessStudent(this.prisma, user, id);
+      return;
+    }
+    throw new ForbiddenException('You do not have access to this user.');
   }
 
   // ── IMPORTANT: All named/specific routes must come BEFORE /:id ────────────
@@ -44,13 +66,18 @@ export class UsersController {
 
   @Get('student-parent/:studentId')
   @Roles('ADMIN', 'PARENT', 'TEACHER', 'STUDENT')
-  getStudentParent(@Param('studentId') studentId: string) {
+  async getStudentParent(@Param('studentId') studentId: string, @Req() req: any) {
+    await assertCanAccessStudent(this.prisma, getAuthUser(req), studentId);
     return this.usersService.getStudentParent(studentId);
   }
 
   @Get('my-children/:parentId')
   @Roles('ADMIN', 'PARENT')
-  getMyChildren(@Param('parentId') parentId: string) {
+  getMyChildren(@Param('parentId') parentId: string, @Req() req: any) {
+    const user = getAuthUser(req);
+    if (user.role !== 'ADMIN' && user.id !== parentId) {
+      throw new ForbiddenException('You can only view your own children.');
+    }
     return this.usersService.getMyChildren(parentId);
   }
 
@@ -69,7 +96,8 @@ export class UsersController {
 
   @Get(':id')
   @Roles('ADMIN', 'TEACHER', 'PARENT', 'STUDENT')
-  findOne(@Param('id') id: string) {
+  async findOne(@Param('id') id: string, @Req() req: any) {
+    await this.assertCanViewUser(req, id);
     return this.usersService.findOne(id);
   }
 

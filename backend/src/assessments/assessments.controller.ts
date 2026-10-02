@@ -35,15 +35,16 @@ export class AssessmentsController {
 
   @Get(':id')
   @Roles('ADMIN', 'TEACHER', 'STUDENT')
-  getWithQuestions(@Param('id') id: string) {
-    return this.assessmentsService.getWithQuestions(id);
+  getWithQuestions(@Param('id') id: string, @Req() req: any) {
+    const userId = req.user.id ?? req.user.sub;
+    return this.assessmentsService.getWithQuestions(id, { id: userId, role: req.user.role });
   }
 
   @Post(':id/attempts')
   @Roles('TEACHER', 'STUDENT')
   startAttempt(@Param('id') id: string, @Req() req: any) {
     const userId = req.user.id ?? req.user.sub;
-    return this.assessmentsService.startAttempt(id, userId);
+    return this.assessmentsService.startAttempt(id, { id: userId, role: req.user.role });
   }
 
   @Post('attempts/:attemptId/responses')

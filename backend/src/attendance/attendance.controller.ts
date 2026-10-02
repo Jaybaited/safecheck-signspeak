@@ -1,6 +1,6 @@
 import {
   Controller, Get, Post, Body, Param,
-  Query, UseGuards,
+  Query, Req, UseGuards,
 } from '@nestjs/common';
 import { AttendanceService } from './attendance.service';
 import { RfidTapDto } from './dto/rfid-tap.dto';
@@ -8,10 +8,15 @@ import { AttendanceQueryDto } from './dto/attendance-query.dto';
 import { JwtAuthGuard } from '../auth/jwt.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
+import { PrismaService } from '../prisma/prisma.service';
+import { assertCanAccessStudent, getAuthUser } from '../common/access.util';
 
 @Controller('attendance')
 export class AttendanceController {
-  constructor(private readonly attendanceService: AttendanceService) {}
+  constructor(
+    private readonly attendanceService: AttendanceService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   // ✅ Intentionally public — called by RFID hardware device
   @Post('rfid-tap')
@@ -39,24 +44,28 @@ export class AttendanceController {
     return this.attendanceService.getFilteredAttendance(query);
   }
 
+  // ── Per-student routes: owner, linked parent, teacher, or admin only ─────
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'TEACHER', 'PARENT', 'STUDENT')
   @Get('student/:studentId')
-  async getStudentAttendance(@Param('studentId') studentId: string) {
+  async getStudentAttendance(@Param('studentId') studentId: string, @Req() req: any) {
+    await assertCanAccessStudent(this.prisma, getAuthUser(req), studentId);
     return this.attendanceService.getStudentAttendance(studentId);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'TEACHER', 'PARENT', 'STUDENT')
   @Get('student/:studentId/stats')
-  async getStudentStats(@Param('studentId') studentId: string) {
+  async getStudentStats(@Param('studentId') studentId: string, @Req() req: any) {
+    await assertCanAccessStudent(this.prisma, getAuthUser(req), studentId);
     return this.attendanceService.getStudentStats(studentId);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'TEACHER', 'PARENT', 'STUDENT')
   @Get('student/:studentId/today')
-  async getTodayAttendance(@Param('studentId') studentId: string) {
+  async getTodayAttendance(@Param('studentId') studentId: string, @Req() req: any) {
+    await assertCanAccessStudent(this.prisma, getAuthUser(req), studentId);
     return this.attendanceService.getTodayAttendance(studentId);
   }
 

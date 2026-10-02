@@ -59,42 +59,77 @@ export class AssessmentsService {
   }
 
   async findForRole(role: string) {
-  const audience = role === 'TEACHER' ? AssessmentAudience.TEACHER : AssessmentAudience.STUDENT;
+    const audience = role === 'TEACHER' ? AssessmentAudience.TEACHER : AssessmentAudience.STUDENT;
 
-  return this.prisma.assessment.findMany({
-    where: {
-      audience,
-      isPublished: true,
-      ...(audience === AssessmentAudience.STUDENT
-        ? { OR: [{ type: { not: AssessmentType.STORYBOOK } }, { isActive: true }] }
-        : {}),
-    },
-    orderBy: { createdAt: 'desc' },
-  });
-}
+    return this.prisma.assessment.findMany({
+      where: {
+        audience,
+        isPublished: true,
+        ...(audience === AssessmentAudience.STUDENT
+          ? { OR: [{ type: { not: AssessmentType.STORYBOOK } }, { isActive: true }] }
+          : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
 
-  async getWithQuestions(id: string) {
+  async getWithQuestions(id: string, user: { id: string; role: string }) {
     const assessment = await this.prisma.assessment.findUnique({
       where: { id },
       include: { questions: { orderBy: { order: 'asc' } } },
     });
     if (!assessment) throw new NotFoundException('Assessment not found');
-    return assessment;
+
+    // Admin and the creator see everything, including correct answers.
+    if (user.role === 'ADMIN' || assessment.createdBy === user.id) return assessment;
+
+    // Everyone else: published only, and never the correct answers.
+    if (!assessment.isPublished) throw new NotFoundException('Assessment not found');
+
+    if (user.role === 'STUDENT') {
+      if (assessment.audience !== AssessmentAudience.STUDENT) {
+        throw new NotFoundException('Assessment not found');
+      }
+      if (assessment.type === AssessmentType.STORYBOOK && !assessment.isActive) {
+        throw new NotFoundException('Assessment not found');
+      }
+    }
+
+    return {
+      ...assessment,
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      questions: assessment.questions.map(({ correctAnswer, ...rest }) => rest),
+    };
   }
 
-  async startAttempt(assessmentId: string, userId: string) {
+  async startAttempt(assessmentId: string, user: { id: string; role: string }) {
     const assessment = await this.prisma.assessment.findUnique({ where: { id: assessmentId } });
-    if (!assessment) throw new NotFoundException('Assessment not found');
+    if (!assessment || !assessment.isPublished) {
+      throw new NotFoundException('Assessment not found');
+    }
+
+    const expectedAudience =
+      user.role === 'TEACHER' ? AssessmentAudience.TEACHER : AssessmentAudience.STUDENT;
+    if (assessment.audience !== expectedAudience) {
+      throw new ForbiddenException('This assessment is not available for your role');
+    }
+    if (
+      user.role === 'STUDENT' &&
+      assessment.type === AssessmentType.STORYBOOK &&
+      !assessment.isActive
+    ) {
+      throw new NotFoundException('Assessment not found');
+    }
 
     const existing = await this.prisma.assessmentAttempt.findFirst({
-      where: { assessmentId, userId, status: AttemptStatus.IN_PROGRESS },
+      where: { assessmentId, userId: user.id, status: AttemptStatus.IN_PROGRESS },
     });
     if (existing) return existing;
 
     return this.prisma.assessmentAttempt.create({
       data: {
         assessmentId,
-        userId,
+        userId: user.id,
         status: AttemptStatus.IN_PROGRESS,
         scoreVisibleToUser: assessment.audience !== AssessmentAudience.TEACHER,
       },
@@ -112,7 +147,10 @@ export class AssessmentsService {
     const question = await this.prisma.assessmentQuestion.findUnique({
       where: { id: dto.questionId },
     });
-    if (!question) throw new NotFoundException('Question not found');
+    // The question must belong to the assessment this attempt is for.
+    if (!question || question.assessmentId !== attempt.assessmentId) {
+      throw new NotFoundException('Question not found in this assessment');
+    }
 
     const isCorrect = dto.submittedSign
       ? dto.submittedSign.trim().toLowerCase() === (question.correctAnswer ?? '').trim().toLowerCase()
