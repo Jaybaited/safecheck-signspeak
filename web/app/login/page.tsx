@@ -6,8 +6,9 @@ import Link from 'next/link'
 import { login } from '@/lib/api'
 import { ShieldCheck, Eye, EyeOff, AlertCircle, ArrowRight } from 'lucide-react'
 import ForgotPasswordModal from '@/components/admin/ForgotPasswordModal'
+import { Suspense } from 'react';
 
-export default function LoginPage() {
+function LoginPageContent() {
   const router       = useRouter()
   const searchParams = useSearchParams()
 
@@ -231,4 +232,12 @@ export default function LoginPage() {
       <ForgotPasswordModal isOpen={showForgotPassword} onClose={() => setShowForgotPassword(false)} />
     </div>
   )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginPageContent />
+    </Suspense>
+  );
 }
