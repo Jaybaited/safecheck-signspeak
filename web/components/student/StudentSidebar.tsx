@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Calendar, BookOpen, TrendingUp,
   User, LogOut, Wifi, GraduationCap, Gamepad2,
-  ClipboardList, Megaphone, ChevronDown, Hand,
+  ClipboardList, ChevronDown, Hand,
 } from 'lucide-react';
 import LogoutModal from '@/components/shared/LogoutModal';
 
@@ -22,7 +22,6 @@ interface StudentSidebarProps {
 const TOP_NAV = [
   { name: 'Dashboard',     href: '/student/dashboard',     icon: LayoutDashboard },
   { name: 'My Attendance', href: '/student/attendance',    icon: Calendar        },
-  { name: 'Announcements', href: '/student/announcements', icon: Megaphone       },
 ];
 
 const BOTTOM_NAV = [
