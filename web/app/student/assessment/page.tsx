@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Construction } from 'lucide-react';
 import StudentSidebar from '@/components/student/StudentSidebar';
 import ThemeToggle from '@/components/ThemeToggle';
+import { logout } from '@/lib/auth';
 
 interface User {
   id: string;
@@ -34,8 +35,7 @@ export default function AssessmentPage() {
   }, [router]);
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    logout();
     router.push('/login');
   };
 

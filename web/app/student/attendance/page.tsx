@@ -15,6 +15,7 @@ import {
 import StudentSidebar from '@/components/student/StudentSidebar';
 import ThemeToggle from '@/components/ThemeToggle';
 import { api } from '@/lib/api';
+import { logout } from '@/lib/auth';
 
 interface User {
   id: string;
@@ -72,8 +73,7 @@ export default function StudentAttendancePage() {
   const handleRefresh = () => { if (user) fetchData(user.id, true); };
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    logout();
     router.push('/login');
   };
 

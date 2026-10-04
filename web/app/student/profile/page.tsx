@@ -11,6 +11,7 @@ import ThemeToggle    from '@/components/ThemeToggle';
 import { api }        from '@/lib/api';
 import type { ParentInfo } from '@/lib/api';
 import { validateNewPassword, PASSWORD_HINT } from '@/lib/password';
+import { logout } from '@/lib/auth';
 
 
 interface UserProfile {
@@ -125,8 +126,7 @@ export default function StudentProfilePage() {
 
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    logout();
     router.push('/login');
   };
 

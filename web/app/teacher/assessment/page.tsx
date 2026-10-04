@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { FlaskConical, Construction } from 'lucide-react';
 import TeacherSidebar from '@/components/teacher/TeacherSidebar';
 import ThemeToggle from '@/components/ThemeToggle';
+import { logout } from '@/lib/auth';
 
 interface TeacherUser {
   id: string; username: string; role: string; firstName: string; lastName: string;
@@ -28,8 +29,7 @@ export default function TeacherAssessmentPage() {
   }, [router]);
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    logout();
     router.push('/login');
   };
 

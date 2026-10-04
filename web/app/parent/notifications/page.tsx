@@ -8,6 +8,7 @@ import ThemeToggle from '@/components/ThemeToggle';
 import { api } from '@/lib/api';
 import { useUnreadCount } from '@/hooks/useUnreadCount';
 import type { ChildInfo, AttendanceRecord } from '@/lib/api';
+import { logout } from '@/lib/auth';
 
 interface ParentUser {
   id: string; username: string; role: string;
@@ -94,7 +95,7 @@ export default function ParentNotificationsPage() {
   }, [router]);
 
   const handleLogout = () => {
-    localStorage.removeItem('token'); localStorage.removeItem('user');
+    logout();
     router.push('/login');
   };
 

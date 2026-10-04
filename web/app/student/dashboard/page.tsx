@@ -17,6 +17,7 @@ import {
   type AttendanceRecord,
   type AttendanceStats,
 } from '@/lib/api';
+import { logout } from '@/lib/auth';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -218,8 +219,7 @@ export default function StudentDashboardPage() {
   }
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    logout();
     router.push('/login');
   };
 

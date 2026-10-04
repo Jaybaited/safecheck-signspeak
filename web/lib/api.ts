@@ -1,4 +1,5 @@
 // web/lib/api.ts
+import { clearSession } from './auth';
 
 
 // ─── Base URL ─────────────────────────────────────────────────────────────────
@@ -110,9 +111,7 @@ async function apiFetch<T>(path: string, options?: ApiFetchOptions): Promise<T> 
         }
 
 
-        localStorage.removeItem('token');
-        localStorage.removeItem('refreshToken');
-        localStorage.removeItem('user');
+        clearSession();
         window.location.href = '/login?reason=expired';
 
 

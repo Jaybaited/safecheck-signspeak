@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { FlaskConical, Construction } from 'lucide-react';
 import Sidebar from '@/components/admin/Sidebar';
 import ThemeToggle from '@/components/ThemeToggle';
+import { logout } from '@/lib/auth';
 
 interface AdminUser {
   id: string;
@@ -35,8 +36,7 @@ export default function FSLProgressPage() {
   }, [router]);
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    logout();
     router.push('/login');
   };
 

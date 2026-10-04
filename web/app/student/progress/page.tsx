@@ -13,6 +13,7 @@ import ThemeToggle from '@/components/ThemeToggle';
 import { studentStorage } from '@/lib/storage';
 import { api } from '@/lib/api';
 import type { AttendanceRecord, AttendanceStats } from '@/lib/api';
+import { logout } from '@/lib/auth';
 
 interface User {
   id: string; username: string; role: string;
@@ -114,8 +115,7 @@ export default function StudentProgressPage() {
 
   const handleRefresh = () => { if (user) loadData(user.id, true); };
   const handleLogout  = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    logout();
     router.push('/login');
   };
 

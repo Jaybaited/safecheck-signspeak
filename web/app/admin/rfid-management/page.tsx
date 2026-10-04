@@ -7,6 +7,7 @@ import Sidebar from '@/components/admin/Sidebar';
 import ThemeToggle from '@/components/ThemeToggle';
 import EditRfidModal from '@/components/admin/EditRfidModal';
 import { api } from '@/lib/api';
+import { logout } from '@/lib/auth';
 
 interface AuthUser {
   id: string; username: string; role: string;
@@ -196,8 +197,7 @@ export default function RfidManagement() {
   }, [router, fetchData]);
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    logout();
     router.push('/login');
   };
 

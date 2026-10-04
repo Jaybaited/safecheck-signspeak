@@ -13,6 +13,7 @@ import {
 } from '@/lib/api';
 import Sidebar from '@/components/admin/Sidebar';
 import ThemeToggle from '@/components/ThemeToggle';
+import { logout } from '@/lib/auth';
 
 
 type ApproveResult = { username: string; generatedPassword: string } | null;
@@ -85,9 +86,7 @@ export default function PasswordRequestsPage() {
   const handleLogout = () => {
     if (approveResult && !hasCopied &&
         !window.confirm('The new password has not been copied and will be lost. Sign out anyway?')) return;
-    localStorage.removeItem('token');
-    localStorage.removeItem('refreshToken');
-    localStorage.removeItem('user');
+    logout();
     router.push('/login');
   };
 

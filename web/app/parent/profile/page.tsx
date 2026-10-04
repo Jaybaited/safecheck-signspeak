@@ -12,6 +12,7 @@ import ThemeToggle   from '@/components/ThemeToggle';
 import { api }       from '@/lib/api';
 import type { ChildInfo } from '@/lib/api';
 import { validateNewPassword, PASSWORD_HINT } from '@/lib/password';
+import { logout } from '@/lib/auth';
 
 
 interface ParentUser {
@@ -74,7 +75,7 @@ export default function ParentProfilePage() {
 
 
   const handleLogout = () => {
-    localStorage.removeItem('token'); localStorage.removeItem('user');
+    logout();
     router.push('/login');
   };
 

@@ -13,6 +13,7 @@ import AddUserModal from '@/components/admin/AddUserModal';
 import DeleteUserModal from '@/components/admin/DeleteUserModal';
 import EditUserModal from '@/components/admin/EditUserModal';
 import ThemeToggle from '@/components/ThemeToggle';
+import { logout } from '@/lib/auth';
 
 interface User {
   id: string; username: string; role: string;
@@ -124,9 +125,7 @@ export default function ManageUsersPage() {
 };
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('refreshToken');
-    localStorage.removeItem('user');
+    logout();
     router.push('/login');
   };
 

@@ -16,6 +16,7 @@ import ThemeToggle from '@/components/ThemeToggle';
 import FSLCamera from '@/components/fsl/FSLCamera';
 import type { FSLPrediction } from '@/types/fsl';
 import { studentStorage } from '@/lib/storage';
+import { logout } from '@/lib/auth';
 
 interface User {
   id: string;
@@ -94,8 +95,7 @@ export default function FSLLearningPage() {
   }, [router]);
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    logout();
     router.push('/login');
   };
 

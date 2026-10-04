@@ -10,6 +10,7 @@ import {
 import Sidebar from '@/components/admin/Sidebar';
 import ThemeToggle from '@/components/ThemeToggle';
 import { api } from '@/lib/api';
+import { logout } from '@/lib/auth';
 
 
 interface AuthUser {
@@ -198,8 +199,7 @@ export default function ReportsPage() {
 
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    logout();
     router.push('/login');
   };
 

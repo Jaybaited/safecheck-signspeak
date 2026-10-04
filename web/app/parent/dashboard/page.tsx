@@ -11,6 +11,7 @@ import ThemeToggle from '@/components/ThemeToggle';
 import { api } from '@/lib/api';
 import type { ChildInfo, AttendanceRecord, AttendanceStats } from '@/lib/api';
 import { usePersistedUnreadCount } from '@/hooks/usePersistedUnreadCount';
+import { logout } from '@/lib/auth';
 
 interface ParentUser {
   id: string; username: string; role: string;
@@ -73,7 +74,7 @@ export default function ParentDashboardPage() {
   }, [router]);
 
   const handleLogout = () => {
-    localStorage.removeItem('token'); localStorage.removeItem('user');
+    logout();
     router.push('/login');
   };
 

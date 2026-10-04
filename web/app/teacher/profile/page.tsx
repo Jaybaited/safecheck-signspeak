@@ -9,6 +9,7 @@ import {
 import TeacherSidebar from '@/components/teacher/TeacherSidebar';
 import ThemeToggle    from '@/components/ThemeToggle';
 import { api }        from '@/lib/api';
+import { logout } from '@/lib/auth';
 
 interface TeacherUser {
   id: string; username: string; role: string;
@@ -42,7 +43,7 @@ export default function TeacherProfilePage() {
   }, [router]);
 
   const handleLogout = () => {
-    localStorage.removeItem('token'); localStorage.removeItem('user');
+    logout();
     router.push('/login');
   };
 

@@ -12,6 +12,7 @@ import { api } from '@/lib/api';
 import { useFSLProgress } from '@/hooks/useFSLProgress';
 import { usePersistedUnreadCount } from '@/hooks/usePersistedUnreadCount';
 import type { ChildInfo } from '@/lib/api';
+import { logout } from '@/lib/auth';
 
 interface ParentUser {
   id: string; username: string; role: string;
@@ -61,7 +62,7 @@ export default function ParentFSLProgressPage() {
   }, [router]);
 
   const handleLogout = () => {
-    localStorage.removeItem('token'); localStorage.removeItem('user');
+    logout();
     router.push('/login');
   };
 

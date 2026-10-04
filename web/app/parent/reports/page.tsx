@@ -10,6 +10,7 @@ import ParentSidebar from '@/components/parent/ParentSidebar';
 import ThemeToggle from '@/components/ThemeToggle';
 import { api } from '@/lib/api';
 import type { ChildInfo, AttendanceRecord } from '@/lib/api';
+import { logout } from '@/lib/auth';
 
 interface ParentUser {
   id: string; username: string; role: string;
@@ -70,7 +71,7 @@ export default function ParentReportsPage() {
   }, [router]);
 
   const handleLogout = () => {
-    localStorage.removeItem('token'); localStorage.removeItem('user');
+    logout();
     router.push('/login');
   };
 
