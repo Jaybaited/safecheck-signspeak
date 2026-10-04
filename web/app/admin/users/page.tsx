@@ -130,7 +130,7 @@ export default function ManageUsersPage() {
   };
 
   const handleAddUser = async (formData: CreateUserDto) => {
-    if (isSubmitting) return;
+    if (isSubmitting) throw new Error('The previous request is still running. Please wait.');
     setIsSubmitting(true);
     setError(null);
     try {

@@ -102,7 +102,12 @@ export default function StudentProfilePage() {
       // Fetch fresh profile (ensures rfidCard is current)
       setProfileLoading(true);
       api.getUserById(cached.id)
-        .then((fresh: UserProfile) => {
+        .then((res) => {
+          const fresh: UserProfile = {
+            ...res,
+            gradeLevel: res.gradeLevel ?? null,
+            rfidCard: res.rfidCard ?? null,
+          };
           setUser(fresh);
           localStorage.setItem('user', JSON.stringify(fresh));
         })

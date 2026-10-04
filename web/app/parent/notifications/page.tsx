@@ -34,7 +34,7 @@ const formatTime = (iso: string | null | undefined): string | null => {
   return isNaN(d.getTime()) ? iso : d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 };
 
-const getTimestamp = (iso: string, timeIn: string | null): string => {
+const getTimestamp = (iso: string, timeIn?: string | null): string => {
   const recordDate = new Date(iso);
   const today      = new Date();
   const yesterday  = new Date(); yesterday.setDate(yesterday.getDate() - 1);

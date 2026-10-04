@@ -262,7 +262,7 @@ export default function FSLLearningPage() {
                 <button
                   onClick={goToPrev}
                   disabled={currentIdx <= 0}
-                  style={{ outline: 'none' }}
+                  style={{ outline: 'none', backgroundColor: 'rgba(239,68,68,0.08)' }}
                   onMouseEnter={e => {
                     if (!e.currentTarget.disabled) {
                       e.currentTarget.style.boxShadow = 'inset 0 0 0 2px #f87171';
@@ -277,7 +277,6 @@ export default function FSLLearningPage() {
                     text-red-500 dark:text-red-400
                     border-r border-slate-200 dark:border-gray-800
                     disabled:opacity-30 disabled:cursor-not-allowed transition-colors min-w-[120px]"
-                  style={{ backgroundColor: 'rgba(239,68,68,0.08)' }}
                 >
                   <ChevronLeft className="w-5 h-5" />
                   Previous
