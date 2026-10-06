@@ -151,16 +151,15 @@ export class AttendanceService {
   }
 
   async getTodayAttendance(studentId: string) {
-    const now     = new Date();
-    const today   = new Date(now);
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    // Same Manila "today" as the RFID tap, so the result does not depend on the server time zone.
+    const serverNow  = await this.networkTime.getNow();
+    const manilaDate = new Date(serverNow.getTime() + 8 * 60 * 60 * 1000);
+    const { todayStart, todayEnd } = getManilaToday(manilaDate);
 
     return this.prisma.attendance.findFirst({
       where: {
         studentId,
-        date: { gte: today, lt: tomorrow },
+        date: { gte: todayStart, lt: todayEnd },
       },
     });
   }
