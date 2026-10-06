@@ -317,9 +317,9 @@ export default function ReportsPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           {[
             { label: 'Total Records', value: total,          color: 'text-slate-900 dark:text-white'         },
-            { label: 'Tapped In',     value: stats.tappedIn, color: 'text-emerald-600 dark:text-emerald-400' },
-            { label: 'Tapped Out',    value: stats.tappedOut,color: 'text-blue-600 dark:text-blue-400'       },
-            { label: 'Late',          value: stats.late,     color: stats.late > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-900 dark:text-white' },
+            { label: 'Tapped In (this page)',     value: stats.tappedIn, color: 'text-emerald-600 dark:text-emerald-400' },
+            { label: 'Tapped Out (this page)',    value: stats.tappedOut,color: 'text-blue-600 dark:text-blue-400'       },
+            { label: 'Late (this page)',          value: stats.late,     color: stats.late > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-900 dark:text-white' },
           ].map(({ label, value, color }) => (
             <div
               key={label}

@@ -142,17 +142,35 @@ export class AttendanceService {
   }
 
   async getStudentStats(studentId: string) {
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const serverNow = await this.networkTime.getNow();
+    const manilaNow = new Date(serverNow.getTime() + 8 * 60 * 60 * 1000);
+    const todayMs   = Date.UTC(manilaNow.getUTCFullYear(), manilaNow.getUTCMonth(), manilaNow.getUTCDate());
+    const DAY       = 24 * 60 * 60 * 1000;
 
-    const attendanceRecords = await this.prisma.attendance.findMany({
-      where: { studentId, date: { gte: thirtyDaysAgo } },
+    const records = await this.prisma.attendance.findMany({
+      where: {
+        studentId,
+        date: { gte: new Date(todayMs - 29 * DAY), lte: new Date(todayMs) },
+      },
+      orderBy: { date: 'asc' },
     });
 
-    const totalDays      = attendanceRecords.length;
-    const present        = attendanceRecords.filter((r) => r.timeIn !== null).length;
-    const late           = attendanceRecords.filter((r) => r.status === 'LATE').length;
-    const absent         = totalDays - present;
+    const present = records.filter((r) => r.timeIn !== null).length;
+    const late    = records.filter((r) => r.status === 'LATE').length;
+
+    // School days = Monday to Friday from the student's first record in the window up to
+    // yesterday, plus today if the student has already tapped. Holidays are not known.
+    let schoolDays = 0;
+    if (records.length > 0) {
+      for (let t = records[0].date.getTime(); t < todayMs; t += DAY) {
+        const dow = new Date(t).getUTCDay();
+        if (dow !== 0 && dow !== 6) schoolDays++;
+      }
+      if (records.some((r) => r.date.getTime() === todayMs)) schoolDays++;
+    }
+
+    const totalDays      = Math.max(schoolDays, present);
+    const absent         = Math.max(0, totalDays - present);
     const attendanceRate = totalDays > 0 ? Math.round((present / totalDays) * 100) : 0;
 
     return { totalDays, present, late, absent, attendanceRate };

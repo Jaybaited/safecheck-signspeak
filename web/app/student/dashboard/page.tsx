@@ -18,6 +18,8 @@ import {
   type AttendanceStats,
 } from '@/lib/api';
 import { logout } from '@/lib/auth';
+import { getMyFslProgress } from '@/lib/fsl-api';
+import type { FslProgress } from '@/lib/fsl-api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -165,6 +167,7 @@ export default function StudentDashboardPage() {
   const [recentRecords,   setRecentRecords]   = useState<AttendanceRecord[]>([]);
   const [dataLoading,     setDataLoading]     = useState(true);
   const [dataError,       setDataError]       = useState<string | null>(null);
+  const [fslProgress, setFslProgress] = useState<FslProgress | null>(null);
 
   // ── Auth guard
   useEffect(() => {
@@ -198,6 +201,7 @@ export default function StudentDashboardPage() {
         getStudentAttendance(studentId),
       ]);
       setAttendanceStats(stats);
+      getMyFslProgress().then(setFslProgress).catch(() => {});
       // Sort descending by date, take latest 5 for activity feed
       const sorted = [...records].sort(
         (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
@@ -254,17 +258,6 @@ export default function StudentDashboardPage() {
 
           <div className="flex items-center gap-4">
             <ThemeToggle />
-
-            {/* Notification bell */}
-            <button
-              aria-label="Notifications"
-              className="relative p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-gray-800 transition-colors"
-            >
-              <Bell className="w-6 h-6 text-slate-600 dark:text-gray-400" />
-              <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 rounded-full text-[10px] font-bold text-white flex items-center justify-center border-2 border-slate-50 dark:border-gray-950">
-                2
-              </span>
-            </button>
 
             {/* Clickable avatar → profile */}
             <button
@@ -328,7 +321,12 @@ export default function StudentDashboardPage() {
                 <TrendingUp className="w-5 h-5 text-emerald-500 dark:text-green-400" />
               </div>
               <p className="text-slate-500 dark:text-gray-400 text-sm mb-1">FSL Progress</p>
-              <h3 className="text-3xl font-bold text-slate-900 dark:text-white">—</h3>
+              <h3 className="text-3xl font-bold text-slate-900 dark:text-white">
+                {fslProgress ? fslProgress.percent + '%' : '-'}
+              </h3>
+              <p className="text-sm text-slate-500 dark:text-gray-400 mt-1">
+                {fslProgress ? fslProgress.masteredCount + ' of ' + fslProgress.totalLetters + ' letters mastered' : 'No data yet'}
+              </p>
               <button
                 onClick={() => router.push('/student/fsl')}
                 className="text-sm text-[#7B1113] dark:text-[#E8C96A] hover:text-[#9B2020] dark:hover:text-[#C4972A] mt-2 font-medium transition-colors"

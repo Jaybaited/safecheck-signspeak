@@ -82,14 +82,39 @@ export default function ParentReportsPage() {
   });
 
   const tappedIn = filteredRecords.filter((r) => r.timeIn).length;
-  const noTap    = filteredRecords.filter((r) => !r.timeIn).length;
-  const total    = filteredRecords.length;
-  const tapRate  = total > 0 ? Math.round((tappedIn / total) * 100) : 0;
+
+  // School days = Monday to Friday from the first tap of the month up to today (or month end).
+  const schoolDays = (() => {
+    if (tappedIn === 0) return 0;
+    const now = new Date();
+    const lastDay = new Date(selectedYear, selectedMonth + 1, 0).getDate();
+    const isCurrent = now.getFullYear() === selectedYear && now.getMonth() === selectedMonth;
+    const end = isCurrent ? now.getDate() : lastDay;
+    const firstDay = Math.min(
+      ...filteredRecords.filter((r) => r.timeIn).map((r) => new Date(r.date).getDate()),
+    );
+    let count = 0;
+    for (let day = firstDay; day <= end; day++) {
+      const dow = new Date(selectedYear, selectedMonth, day).getDay();
+      if (dow !== 0 && dow !== 6) count++;
+    }
+    return count;
+  })();
+  const total   = Math.max(schoolDays, tappedIn);
+  const noTap   = Math.max(0, total - tappedIn);
+  const tapRate = total > 0 ? Math.round((tappedIn / total) * 100) : 0;
 
   const handleGenerate = async () => {
+    if (!child) return;
     setIsGenerating(true);
-    await new Promise((r) => setTimeout(r, 600));
-    setIsGenerating(false);
+    try {
+      setAllRecords(await api.getStudentAttendance(child.id));
+      setError('');
+    } catch {
+      setError('Failed to load attendance data.');
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const handleExportCSV = () => {
@@ -166,7 +191,7 @@ export default function ParentReportsPage() {
           <div>
             <p className="text-sm font-semibold text-blue-700 dark:text-blue-300">Attendance Reports Only</p>
             <p className="text-sm text-blue-600 dark:text-blue-400 mt-0.5">
-              FSL assessment reports will be available in Phase 2. Currently, you can export your child&apos;s attendance tap records (Date, Time In, Time Out).
+              This report shows your child&apos;s attendance tap records (Date, Time In, Time Out). School days count Monday to Friday from the first tap of the month, and holidays are not known to the system.
             </p>
           </div>
         </div>
