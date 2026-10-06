@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -133,7 +133,22 @@ export class AttendanceService {
     };
   }
 
-  async getStudentAttendance(studentId: string) {
+  async getStudentAttendance(studentId: string, from?: string, to?: string) {
+    // With from/to (YYYY-MM-DD) return every record in that range; otherwise the latest 30.
+    if (from || to) {
+      const valid = (v?: string) => !v || /^\d{4}-\d{2}-\d{2}$/.test(v);
+      if (!valid(from) || !valid(to)) {
+        throw new BadRequestException('from and to must be dates like 2026-09-30.');
+      }
+      const date: { gte?: Date; lte?: Date } = {};
+      if (from) date.gte = new Date(from + 'T00:00:00.000Z');
+      if (to) date.lte = new Date(to + 'T00:00:00.000Z');
+      return this.prisma.attendance.findMany({
+        where:   { studentId, date },
+        orderBy: { date: 'desc' },
+        take:    400,
+      });
+    }
     return this.prisma.attendance.findMany({
       where:   { studentId },
       orderBy: { date: 'desc' },

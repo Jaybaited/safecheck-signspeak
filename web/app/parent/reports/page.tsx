@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import ParentSidebar from '@/components/parent/ParentSidebar';
 import ThemeToggle from '@/components/ThemeToggle';
-import { api } from '@/lib/api';
+import { api, apiFetch } from '@/lib/api';
 import type { ChildInfo, AttendanceRecord } from '@/lib/api';
 import { logout } from '@/lib/auth';
 
@@ -104,11 +104,22 @@ export default function ParentReportsPage() {
   const noTap   = Math.max(0, total - tappedIn);
   const tapRate = total > 0 ? Math.round((tappedIn / total) * 100) : 0;
 
+  const loadMonth = async (childId: string) => {
+    const mm = String(selectedMonth + 1).padStart(2, '0');
+    const lastDay = new Date(selectedYear, selectedMonth + 1, 0).getDate();
+    const records = await apiFetch<AttendanceRecord[]>(
+      '/attendance/student/' + childId +
+        '?from=' + selectedYear + '-' + mm + '-01' +
+        '&to=' + selectedYear + '-' + mm + '-' + String(lastDay).padStart(2, '0'),
+    );
+    setAllRecords(records);
+  };
+
   const handleGenerate = async () => {
     if (!child) return;
     setIsGenerating(true);
     try {
-      setAllRecords(await api.getStudentAttendance(child.id));
+      await loadMonth(child.id);
       setError('');
     } catch {
       setError('Failed to load attendance data.');
@@ -116,6 +127,16 @@ export default function ParentReportsPage() {
       setIsGenerating(false);
     }
   };
+
+  // Load the selected month whenever the child, month, or year changes
+  useEffect(() => {
+    if (!child) return;
+    setDataLoading(true);
+    loadMonth(child.id)
+      .catch(() => setError('Failed to load attendance data.'))
+      .finally(() => setDataLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [child, selectedMonth, selectedYear]);
 
   const handleExportCSV = () => {
     if (!child || filteredRecords.length === 0) return;
