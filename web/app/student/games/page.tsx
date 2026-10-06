@@ -12,6 +12,7 @@ import ThemeToggle from '@/components/ThemeToggle';
 import FSLCamera from '@/components/fsl/FSLCamera';
 import type { FSLPrediction } from '@/types/fsl';
 import { studentStorage } from '@/lib/storage';
+import { getMyFslProgress, recordFslSign, recordFslGame, importLocalFslOnce } from '@/lib/fsl-api';
 import { logout } from '@/lib/auth';
 
 interface User {
@@ -77,6 +78,11 @@ export default function FSLGamesPage() {
       setUser(p);
       const saved = studentStorage.get(p.id, 'fsl_highscore');
       if (saved) setHighScore(parseInt(saved));
+      importLocalFslOnce(p.id).finally(() => {
+        getMyFslProgress()
+          .then((pr) => setHighScore((h) => Math.max(h, pr.highScore)))
+          .catch(() => {});
+      });
     } catch { router.push('/login'); }
     finally { setAuthLoading(false); }
   }, [router]);
@@ -92,6 +98,7 @@ export default function FSLGamesPage() {
       setHighScore(finalScore);
       studentStorage.set(user.id, 'fsl_highscore', String(finalScore));
     }
+    recordFslGame(mode === 'Speed Challenge' ? 'SPEED' : 'STREAK', finalScore, completed.length).catch(() => {});
     setResult({ score: finalScore, mode, lettersCompleted: completed, timeUsed: time });
     setGameMode('result');
   }, [highScore, user]);
@@ -127,6 +134,7 @@ export default function FSLGamesPage() {
 
   const handleCorrect = useCallback((prediction: FSLPrediction) => {
     setFlash('correct');
+    recordFslSign(currentLetter, prediction.confidence, 'GAME').catch(() => {});
     setTimeout(() => setFlash(null), 600);
     const ns = score + Math.round(prediction.confidence * 100);
     const nk = streak + 1;

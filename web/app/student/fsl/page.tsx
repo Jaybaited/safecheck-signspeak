@@ -16,6 +16,7 @@ import ThemeToggle from '@/components/ThemeToggle';
 import FSLCamera from '@/components/fsl/FSLCamera';
 import type { FSLPrediction } from '@/types/fsl';
 import { studentStorage } from '@/lib/storage';
+import { getMyFslProgress, recordFslSign, importLocalFslOnce } from '@/lib/fsl-api';
 import { logout } from '@/lib/auth';
 
 interface User {
@@ -87,6 +88,11 @@ export default function FSLLearningPage() {
       setUser(parsedUser);
       const saved = studentStorage.get(parsedUser.id, 'fsl_completed');
       if (saved) setCompleted(new Set(JSON.parse(saved) as string[]));
+      importLocalFslOnce(parsedUser.id).finally(() => {
+        getMyFslProgress()
+          .then((p) => setCompleted(new Set(p.letters.filter((l) => l.status === 'MASTERED').map((l) => l.word))))
+          .catch(() => {});
+      });
     } catch {
       router.push('/login');
     } finally {
@@ -108,6 +114,7 @@ export default function FSLLearningPage() {
     });
     setJustSigned((prev) => new Set([...prev, selectedLetter]));
     studentStorage.logFslActivity(user.id);
+    recordFslSign(selectedLetter, pred.confidence).catch(() => {});
   }, [user, selectedLetter]);
 
   const handlePrediction = useCallback((pred: FSLPrediction | null) => {

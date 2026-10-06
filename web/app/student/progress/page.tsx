@@ -14,6 +14,7 @@ import { studentStorage } from '@/lib/storage';
 import { api } from '@/lib/api';
 import type { AttendanceRecord, AttendanceStats } from '@/lib/api';
 import { logout } from '@/lib/auth';
+import { getMyFslProgress, importLocalFslOnce } from '@/lib/fsl-api';
 
 interface User {
   id: string; username: string; role: string;
@@ -77,10 +78,17 @@ export default function StudentProgressPage() {
     else setRefreshing(true);
     try {
       const weekDates = getWeekDates();
-      const [stats, records] = await Promise.all([
+      await importLocalFslOnce(studentId);
+      const [stats, records, fslProg] = await Promise.all([
         api.getStudentStats(studentId),
         api.getStudentAttendance(studentId),
+        getMyFslProgress().catch(() => null),
       ]);
+      if (fslProg) {
+        setCompletedLetters(new Set(fslProg.letters.filter((l) => l.status === 'MASTERED').map((l) => l.word)));
+      }
+      const fslByDate: Record<string, number> = {};
+      (fslProg?.daily ?? []).forEach((d) => { fslByDate[d.date] = d.count; });
       setAttendanceStats(stats as AttendanceStats);
 
       const recordsByDate: Record<string, AttendanceRecord> = {};
@@ -90,7 +98,7 @@ export default function StudentProgressPage() {
 
       setWeekDays(weekDates.map(({ label, iso }) => ({
         label, iso,
-        fsl:        studentStorage.getFslActivity(studentId, iso),
+        fsl:        fslByDate[iso] ?? 0,
         hasTimeIn:  !!recordsByDate[iso]?.timeIn,
         hasTimeOut: !!recordsByDate[iso]?.timeOut,
       })));

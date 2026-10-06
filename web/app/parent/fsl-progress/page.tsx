@@ -9,7 +9,8 @@ import {
 import ParentSidebar from '@/components/parent/ParentSidebar';
 import ThemeToggle from '@/components/ThemeToggle';
 import { api } from '@/lib/api';
-import { useFSLProgress } from '@/hooks/useFSLProgress';
+import { getStudentFslProgress } from '@/lib/fsl-api';
+import type { FslProgress } from '@/lib/fsl-api';
 import { usePersistedUnreadCount } from '@/hooks/usePersistedUnreadCount';
 import type { ChildInfo } from '@/lib/api';
 import { logout } from '@/lib/auth';
@@ -21,20 +22,22 @@ interface ParentUser {
 
 const PLACEHOLDER_CHILD = { id: '', firstName: '—', lastName: '', gradeLevel: null };
 
-const weeklyActivity = [
-  { day: 'Mon', count: 4 }, { day: 'Tue', count: 6 },
-  { day: 'Wed', count: 2 }, { day: 'Thu', count: 8 },
-  { day: 'Fri', count: 5 }, { day: 'Sat', count: 3 },
-  { day: 'Sun', count: 0 },
-];
-
 export default function ParentFSLProgressPage() {
   const router = useRouter();
   const [parent,      setParent]      = useState<ParentUser | null>(null);
   const [child,       setChild]       = useState<ChildInfo | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
 
-  const { completedLetters, fslLetters, pct } = useFSLProgress(child?.id);
+  const [fsl, setFsl] = useState<FslProgress | null>(null);
+  const [fslError, setFslError] = useState('');
+  const fslLetters = (fsl?.letters ?? []).map((l) => l.word);
+  const completedLetters = new Set((fsl?.letters ?? []).filter((l) => l.status === 'MASTERED').map((l) => l.word));
+  const pct = fsl?.percent ?? 0;
+  const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const weeklyActivity = (fsl?.daily ?? dayNames.map((d) => ({ date: d, count: 0 }))).map((d, i) => ({
+    day: dayNames[i],
+    count: d.count,
+  }));
 
   // ── Bell badge — reads from localStorage, syncs across pages
   const unreadCount = usePersistedUnreadCount(parent?.id);
@@ -42,7 +45,7 @@ export default function ParentFSLProgressPage() {
   const dynamicAchievements = [
     { title: 'First Sign',        earned: completedLetters.size >= 1,                              icon: Star,    xp: 50  },
     { title: 'Half the Alphabet', earned: completedLetters.size >= Math.ceil(fslLetters.length / 2), icon: BookOpen,xp: 200 },
-    { title: 'Week Streak',       earned: true,                                                    icon: Flame,   xp: 100 },
+    { title: 'Active Week', earned: (fsl?.daily ?? []).filter((d) => d.count > 0).length >= 3,                                                    icon: Flame,   xp: 100 },
     { title: 'Full Alphabet',     earned: completedLetters.size >= fslLetters.length,              icon: Award,   xp: 500 },
   ];
 
@@ -60,6 +63,14 @@ export default function ParentFSLProgressPage() {
         .catch(() => {});
     } catch { router.push('/login'); }
   }, [router]);
+
+  useEffect(() => {
+    if (!child?.id) return;
+    setFslError('');
+    getStudentFslProgress(child.id)
+      .then(setFsl)
+      .catch(() => setFslError('Could not load FSL progress.'));
+  }, [child?.id]);
 
   const handleLogout = () => {
     logout();
@@ -102,12 +113,13 @@ export default function ParentFSLProgressPage() {
           </div>
         </div>
 
+        {fslError && <p className="mb-4 text-sm text-red-600 dark:text-red-400">{fslError}</p>}
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           {[
             { icon: BookOpen,   label: 'Letters Mastered', value: `${completedLetters.size}/${fslLetters.length}`, color: 'text-purple-600 dark:text-purple-400', iconCls: 'text-purple-600 dark:text-purple-400', bg: 'bg-purple-100 dark:bg-purple-500/10',      sub: `${pct}% complete` },
             { icon: TrendingUp, label: 'Overall Progress',  value: `${pct}%`,  color: 'text-[#7B1113] dark:text-[#E8C96A]',      iconCls: 'text-[#7B1113] dark:text-[#E8C96A]',      bg: 'bg-[#7B1113]/10 dark:bg-[#7B1113]/20', sub: 'FSL alphabet' },
-            { icon: Flame,      label: 'Current Streak',    value: '9 days',   color: 'text-orange-500 dark:text-orange-400',     iconCls: 'text-orange-500 dark:text-orange-400',     bg: 'bg-orange-100 dark:bg-orange-500/10',   sub: 'Keep it up! 🔥' },
+            { icon: Flame,      label: 'Practiced This Week', value: String(fsl?.weekTotal ?? 0),   color: 'text-orange-500 dark:text-orange-400',     iconCls: 'text-orange-500 dark:text-orange-400',     bg: 'bg-orange-100 dark:bg-orange-500/10',   sub: 'letters signed this week' },
             { icon: Target,     label: 'Achievements',      value: `${dynamicAchievements.filter((a) => a.earned).length}`, color: 'text-yellow-600 dark:text-yellow-400', iconCls: 'text-yellow-600 dark:text-yellow-400', bg: 'bg-yellow-100 dark:bg-yellow-500/10', sub: 'Badges earned' },
           ].map(({ icon: Icon, label, value, sub, color, iconCls, bg }) => (
             <div key={label} className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 rounded-xl p-6 shadow-sm dark:shadow-none transition-colors duration-200">
