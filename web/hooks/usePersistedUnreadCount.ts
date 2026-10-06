@@ -1,28 +1,46 @@
 import { useState, useEffect } from 'react';
+import { api } from '@/lib/api';
 
-const READ_KEY_PREFIX  = 'parent_notif_read_';
-const TOTAL_KEY_PREFIX = 'parent_notif_total_';
+const READ_KEY_PREFIX = 'parent_notif_read_';
 
+// Unread tap events for the parent's first child. It loads the records itself, so the
+// sidebar badge is correct on every parent page, not only after visiting Notifications.
 export function usePersistedUnreadCount(parentId: string | undefined): number {
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     if (!parentId) return;
+    let cancelled = false;
+    let recordIds: string[] = [];
 
-    const calculate = () => {
+    const readIds = (): string[] => {
       try {
-        const total   = parseInt(localStorage.getItem(`${TOTAL_KEY_PREFIX}${parentId}`) ?? '0', 10);
-        const rawRead = localStorage.getItem(`${READ_KEY_PREFIX}${parentId}`);
-        const readIds = rawRead ? (JSON.parse(rawRead) as string[]) : [];
-        setUnreadCount(Math.max(0, total - readIds.length));
+        const raw = localStorage.getItem(READ_KEY_PREFIX + parentId);
+        const parsed: unknown = raw ? JSON.parse(raw) : [];
+        return Array.isArray(parsed) ? (parsed as string[]) : [];
       } catch {
-        setUnreadCount(0);
+        return [];
       }
     };
 
-    calculate();
-    window.addEventListener('storage', calculate);
-    return () => window.removeEventListener('storage', calculate);
+    const recalc = () => {
+      const read = new Set(readIds());
+      if (!cancelled) setUnreadCount(recordIds.filter((id) => !read.has(id)).length);
+    };
+
+    api.getParentChildren(parentId)
+      .then((children) => (children.length ? api.getStudentAttendance(children[0].id) : []))
+      .then((records) => {
+        recordIds = (records as { id: string }[]).map((r) => r.id);
+        recalc();
+      })
+      .catch(() => {});
+
+    window.addEventListener('storage', recalc);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('storage', recalc);
+    };
   }, [parentId]);
 
   return unreadCount;
