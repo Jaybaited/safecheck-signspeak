@@ -71,3 +71,56 @@ export const completeAssessmentAttempt = (attemptId: string) =>
 
 export const getAssessmentAttempt = (attemptId: string) =>
   apiFetch<AttemptDetail>(`/assessments/attempts/${attemptId}`);
+// ── Admin: review results ─────────────────────────────────────────────────────
+
+export interface AdminAttemptRow {
+  id: string;
+  status: 'IN_PROGRESS' | 'SUBMITTED' | 'GRADED';
+  score: number | null;
+  passed: boolean | null;
+  startedAt: string;
+  submittedAt: string | null;
+  reviewedAt: string | null;
+  reviewedByAdminId: string | null;
+  user: { id: string; firstName: string; lastName: string; gradeLevel: string | null };
+  assessment: { id: string; title: string; level: number | null; passMark: number };
+}
+
+export interface AdminAttemptDetail {
+  id: string;
+  status: 'IN_PROGRESS' | 'SUBMITTED' | 'GRADED';
+  score: number | null;
+  passed: boolean | null;
+  startedAt: string;
+  submittedAt: string | null;
+  reviewedAt: string | null;
+  user: { id: string; firstName: string; lastName: string; username: string; gradeLevel: string | null };
+  responses: { id: string; questionId: string; submittedSign: string | null; isCorrect: boolean | null }[];
+  assessment: {
+    id: string;
+    title: string;
+    level: number | null;
+    passMark: number;
+    questions: {
+      id: string;
+      order: number;
+      prompt: string;
+      choices: Record<string, string> | null;
+      correctAnswer: string | null;
+    }[];
+  };
+}
+
+export const getAdminAttempts = (status?: string) =>
+  apiFetch<AdminAttemptRow[]>(
+    status ? `/assessments/attempts?status=${encodeURIComponent(status)}` : '/assessments/attempts',
+  );
+
+export const getAdminAttempt = (attemptId: string) =>
+  apiFetch<AdminAttemptDetail>(`/assessments/attempts/${attemptId}/admin`);
+
+export const reviewAttempt = (attemptId: string, score?: number) =>
+  apiFetch<AdminAttemptDetail>(`/assessments/attempts/${attemptId}/review`, {
+    method: 'PATCH',
+    body: JSON.stringify(score === undefined ? {} : { score }),
+  });

@@ -178,7 +178,7 @@ export default function AssessmentRunPage() {
     <div className="min-h-screen bg-slate-50 dark:bg-gray-950 text-slate-900 dark:text-white transition-colors duration-200">
       <StudentSidebar onLogout={handleLogout} student={user} />
 
-      <main className="ml-64 flex flex-col p-6 gap-5 max-w-5xl">
+      <main className="ml-64 flex flex-col p-6 gap-5">
         <div className="flex items-center justify-between">
           <div>
             <Link href="/student/assessment" className="text-sm text-slate-500 dark:text-gray-400 hover:underline inline-flex items-center gap-1">
@@ -211,7 +211,7 @@ export default function AssessmentRunPage() {
         {view === 'lesson' && assessment && (
           <div className={CARD + ' flex flex-col gap-5'}>
             <h2 className="text-xl font-bold">Lesson</h2>
-            <VideoBox src={assessment.lessonVideoUrl} captionUrl={null} />
+            <div className="max-w-3xl"><VideoBox src={assessment.lessonVideoUrl} captionUrl={null} /></div>
             {assessment.lessonDescription && (
               <p className="text-lg text-slate-700 dark:text-gray-300">{assessment.lessonDescription}</p>
             )}
@@ -239,10 +239,14 @@ export default function AssessmentRunPage() {
               />
             </div>
 
-            <VideoBox src={q.mediaUrl} captionUrl={q.captionUrl} />
+            <div className="grid grid-cols-1 xl:grid-cols-5 gap-6 items-start">
+              <div className="xl:col-span-3">
+                <VideoBox src={q.mediaUrl} captionUrl={q.captionUrl} />
+              </div>
+              <div className="xl:col-span-2 flex flex-col gap-5">
             <p className="text-lg font-semibold">{q.prompt}</p>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4">
               {choices.map(([letter, text]) => {
                 const selected = answers[q.id] === letter;
                 return (
@@ -263,6 +267,9 @@ export default function AssessmentRunPage() {
                   </button>
                 );
               })}
+            </div>
+
+            </div>
             </div>
 
             <div className="flex items-center justify-between pt-2">
