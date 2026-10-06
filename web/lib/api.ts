@@ -27,7 +27,7 @@ interface ApiFetchOptions extends RequestInit {
 }
 
 
-async function apiFetch<T>(path: string, options?: ApiFetchOptions): Promise<T> {
+export async function apiFetch<T>(path: string, options?: ApiFetchOptions): Promise<T> {
   // Guard: fail fast with a useful message if the env var is missing
   if (!BASE_URL) {
     throw new Error(
