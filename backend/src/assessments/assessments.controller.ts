@@ -4,6 +4,7 @@ import {
 import { AssessmentsService } from './assessments.service';
 import { CreateAssessmentDto } from './dto/create-assessment.dto';
 import { SubmitResponseDto } from './dto/submit-response.dto';
+import { ReviewAttemptDto } from './dto/review-attempt.dto';
 import { JwtAuthGuard } from '../auth/jwt.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -25,6 +26,26 @@ export class AssessmentsController {
   publish(@Param('id') id: string, @Req() req: any) {
     const callerId = req.user.id ?? req.user.sub;
     return this.assessmentsService.publish(id, callerId, req.user.role);
+  }
+
+  // Fixed-path routes must stay above ':id' so they are not read as an id.
+  @Get('levels/me')
+  @Roles('STUDENT')
+  myLevels(@Req() req: any) {
+    const userId = req.user.id ?? req.user.sub;
+    return this.assessmentsService.getLevelsForStudent(userId);
+  }
+
+  @Get('attempts')
+  @Roles('ADMIN')
+  listAttempts(@Query('status') status?: string) {
+    return this.assessmentsService.listAttemptsForAdmin(status);
+  }
+
+  @Get('attempts/:attemptId/admin')
+  @Roles('ADMIN')
+  attemptForAdmin(@Param('attemptId') attemptId: string) {
+    return this.assessmentsService.getAttemptForAdmin(attemptId);
   }
 
   @Get()
@@ -74,8 +95,12 @@ export class AssessmentsController {
 
   @Patch('attempts/:attemptId/review')
   @Roles('ADMIN')
-  adminReviewAttempt(@Param('attemptId') attemptId: string, @Req() req: any) {
+  adminReviewAttempt(
+    @Param('attemptId') attemptId: string,
+    @Body() dto: ReviewAttemptDto,
+    @Req() req: any,
+  ) {
     const adminId = req.user.id ?? req.user.sub;
-    return this.assessmentsService.adminReviewAttempt(attemptId, adminId);
+    return this.assessmentsService.adminReviewAttempt(attemptId, adminId, dto);
   }
 }
