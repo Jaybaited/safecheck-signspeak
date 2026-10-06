@@ -37,6 +37,8 @@ model User {
   assessmentAttempts AssessmentAttempt[]
 
   @@map("users")
+  fslActivities FSLActivity[]
+  fslGameScores FSLGameScore[]
 }
 
 model ParentStudent {
@@ -78,6 +80,7 @@ model FSLWord {
   assessmentQuestions AssessmentQuestion[]
 
   @@map("fsl_words")
+  activities FSLActivity[]
 }
 
 model FSLProgress {
@@ -355,4 +358,36 @@ enum AttemptStatus {
   IN_PROGRESS
   SUBMITTED
   GRADED
+}
+
+enum FSLActivitySource {
+  PRACTICE
+  GAME
+}
+
+model FSLActivity {
+  id         String            @id @default(uuid())
+  studentId  String
+  wordId     String
+  source     FSLActivitySource @default(PRACTICE)
+  confidence Float?
+  createdAt  DateTime          @default(now())
+  student    User              @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  word       FSLWord           @relation(fields: [wordId], references: [id], onDelete: Cascade)
+
+  @@index([studentId, createdAt])
+  @@map("fsl_activity")
+}
+
+model FSLGameScore {
+  id           String   @id @default(uuid())
+  studentId    String
+  mode         String
+  score        Int
+  lettersCount Int      @default(0)
+  createdAt    DateTime @default(now())
+  student      User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId, mode])
+  @@map("fsl_game_scores")
 }

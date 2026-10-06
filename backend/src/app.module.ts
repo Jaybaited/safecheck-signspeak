@@ -11,6 +11,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { AppConfigModule } from './config/config.module';
 import { PasswordResetModule } from './password-reset/password-reset.module';
 import { AssessmentsModule } from './assessments/assessments.module';
+import { FslModule } from './fsl/fsl.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { AssessmentsModule } from './assessments/assessments.module';
     AppConfigModule,
     PasswordResetModule,
     AssessmentsModule,
+    FslModule,
   ],
   controllers: [AppController],
   providers: [AppService],
