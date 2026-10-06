@@ -23,6 +23,14 @@ const formatGrade = (g: string | null) => (g ? g.replace('GRADE_', 'Grade ') : '
 const formatDate = (s: string | null) =>
   s ? new Date(s).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Never';
 
+type FslStatusFilter = 'ALL' | 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED';
+
+function progressStatus(r: FslOverviewRow): Exclude<FslStatusFilter, 'ALL'> {
+  if (r.totalLetters > 0 && r.masteredCount >= r.totalLetters) return 'COMPLETED';
+  if (r.masteredCount > 0 || r.lastPracticed) return 'IN_PROGRESS';
+  return 'NOT_STARTED';
+}
+
 export default function AdminFSLProgressPage() {
   const router = useRouter();
   const [adminUser, setAdminUser] = useState<AdminUser | null>(null);
@@ -33,6 +41,8 @@ export default function AdminFSLProgressPage() {
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<SortKey>('name');
+  const [grade, setGrade] = useState('ALL');
+  const [status, setStatus] = useState<FslStatusFilter>('ALL');
 
   const load = async (silent = false) => {
     if (silent) setRefreshing(true); else setLoading(true);
@@ -70,11 +80,11 @@ export default function AdminFSLProgressPage() {
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const list = rows.filter((r) => `${r.firstName} ${r.lastName}`.toLowerCase().includes(q));
+    const list = rows.filter((r) => `${r.firstName} ${r.lastName}`.toLowerCase().includes(q) && (grade === 'ALL' || r.gradeLevel === grade) && (status === 'ALL' || progressStatus(r) === status));
     if (sort === 'progress') return [...list].sort((a, b) => b.percent - a.percent);
     if (sort === 'activity') return [...list].sort((a, b) => b.weekCount - a.weekCount);
     return list;
-  }, [rows, query, sort]);
+  }, [rows, query, sort, grade, status]);
 
   if (authLoading || !adminUser) {
     return (
@@ -84,6 +94,8 @@ export default function AdminFSLProgressPage() {
     );
   }
 
+  const grades = Array.from(new Set(rows.map((r) => r.gradeLevel).filter((g): g is string => !!g)))
+    .sort((a, b) => a.length - b.length || a.localeCompare(b));
   const avgPercent = rows.length ? Math.round(rows.reduce((s, r) => s + r.percent, 0) / rows.length) : 0;
   const activeThisWeek = rows.filter((r) => r.weekCount > 0).length;
   const signedThisWeek = rows.reduce((s, r) => s + r.weekCount, 0);
@@ -146,6 +158,26 @@ export default function AdminFSLProgressPage() {
                   className="pl-9 pr-3 py-2 text-sm rounded-lg bg-slate-50 dark:bg-gray-800 border border-slate-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-[#7B1113]/40"
                 />
               </div>
+              <select
+                value={grade}
+                onChange={(e) => setGrade(e.target.value)}
+                className="py-2 px-3 text-sm rounded-lg bg-slate-50 dark:bg-gray-800 border border-slate-200 dark:border-gray-700"
+              >
+                <option value="ALL">All grades</option>
+                {grades.map((g) => (
+                  <option key={g} value={g}>{formatGrade(g)}</option>
+                ))}
+              </select>
+              <select
+                value={status}
+                onChange={(e) => setStatus(e.target.value as FslStatusFilter)}
+                className="py-2 px-3 text-sm rounded-lg bg-slate-50 dark:bg-gray-800 border border-slate-200 dark:border-gray-700"
+              >
+                <option value="ALL">All statuses</option>
+                <option value="NOT_STARTED">Not started</option>
+                <option value="IN_PROGRESS">In progress</option>
+                <option value="COMPLETED">Completed</option>
+              </select>
               <select
                 value={sort}
                 onChange={(e) => setSort(e.target.value as SortKey)}

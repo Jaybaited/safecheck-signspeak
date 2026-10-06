@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -81,14 +81,22 @@ export class AttendanceService {
     let action: AttendanceAction;
 
     if (!attendance) {
-      attendance = await this.prisma.attendance.create({
-        data: {
-          studentId: user.id,
-          timeIn:    serverNow,
-          date:      attendanceDate,
-          status,
-        },
-      });
+      try {
+        attendance = await this.prisma.attendance.create({
+          data: {
+            studentId: user.id,
+            timeIn:    serverNow,
+            date:      attendanceDate,
+            status,
+          },
+        });
+      } catch (err: any) {
+        // Two taps for the same card arrived at the same moment (unique student + date).
+        if (err?.code === 'P2002') {
+          throw new ConflictException('This card was just scanned. Please wait a moment and tap again.');
+        }
+        throw err;
+      }
       action = 'CHECK_IN';
     } else if (!attendance.timeOut) {
       attendance = await this.prisma.attendance.update({
@@ -162,6 +170,34 @@ export class AttendanceService {
         date: { gte: todayStart, lt: todayEnd },
       },
     });
+  }
+
+  async getTodaySummary() {
+    const serverNow  = await this.networkTime.getNow();
+    const manilaDate = new Date(serverNow.getTime() + 8 * 60 * 60 * 1000);
+    const { todayStart, todayEnd } = getManilaToday(manilaDate);
+
+    const [totalStudents, records] = await Promise.all([
+      this.prisma.user.count({ where: { role: 'STUDENT' } }),
+      this.prisma.attendance.findMany({
+        where: { date: { gte: todayStart, lt: todayEnd } },
+        select: { status: true, timeIn: true, timeOut: true },
+      }),
+    ]);
+
+    const checkedIn = records.filter((r) => r.timeIn !== null);
+    const late = checkedIn.filter((r) => r.status === 'LATE').length;
+    const unconfirmedOut = checkedIn.filter((r) => r.status === 'UNCONFIRMED_OUT').length;
+
+    return {
+      date: todayStart.toISOString().slice(0, 10),
+      totalStudents,
+      checkedIn: checkedIn.length,
+      late,
+      unconfirmedOut,
+      notCheckedIn: Math.max(0, totalStudents - checkedIn.length),
+      attendanceRate: totalStudents > 0 ? Math.round((checkedIn.length / totalStudents) * 100) : 0,
+    };
   }
 
   async getNetworkTime(): Promise<Date> {
@@ -257,7 +293,7 @@ export class AttendanceService {
     const [records, total] = await Promise.all([
       this.prisma.attendance.findMany({
         where,
-        orderBy: { date: 'desc' },
+        orderBy: [{ date: 'desc' }, { timeIn: 'desc' }],
         skip,
         take: limit,
         include: {

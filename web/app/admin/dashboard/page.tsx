@@ -141,25 +141,20 @@ export default function AdminDashboardPage() {
       nameMap[u.id] = `${u.firstName} ${u.lastName}`;
     });
 
-    // Step 2: fetch today's attendance per student in parallel
-    // Uses GET /attendance/student/:id/today  (exists in your backend)
+    // Step 2: today's numbers come from one summary call that counts every student
     let presentToday = 0;
     let totalToday   = 0;
-
-    if (studentIds.length > 0) {
-      const sample = studentIds.slice(0, 30); // cap to keep it fast
-      const todayResults = await Promise.allSettled(
-        sample.map(id =>
-          apiFetch<AttendanceRecord | null>(`/attendance/student/${id}/today`, token)
-        )
+    let flagged      = 0;
+    try {
+      const summary = await apiFetch<{ checkedIn: number; totalStudents: number; unconfirmedOut: number }>(
+        '/attendance/summary/today',
+        token,
       );
-      todayResults.forEach(r => {
-        if (r.status === 'fulfilled' && r.value) {
-          totalToday++;
-          const s = r.value.status;
-          if (s === 'PRESENT' || s === 'LATE') presentToday++;
-        }
-      });
+      presentToday = summary.checkedIn;
+      totalToday   = summary.totalStudents;
+      flagged      = summary.unconfirmedOut;
+    } catch {
+      // keep zeros; the user and student counts still show
     }
 
     const attendanceRate = totalToday > 0
@@ -169,37 +164,24 @@ export default function AdminDashboardPage() {
     setStats({
       totalUsers:           users.length,
       totalStudents:        students.length,
-      pendingNotifications: 0,
+      pendingNotifications: flagged,
       attendanceRate,
       presentToday,
       totalToday,
     });
 
-    // Step 3: fetch recent attendance logs for first 5 students
-    // Uses GET /attendance/student/:id  (exists in your backend)
-    // Merges, sorts by date desc, takes top 10, attaches names from nameMap
+    // Step 3: the 10 most recent attendance records across all students
     try {
-      const sample = studentIds.slice(0, 5);
-      const logResults = await Promise.allSettled(
-        sample.map(id =>
-          apiFetch<AttendanceRecord[]>(`/attendance/student/${id}`, token)
-        )
+      const page = await apiFetch<{ data: (AttendanceRecord & { student: { firstName: string; lastName: string } })[] }>(
+        '/attendance?limit=10',
+        token,
       );
-      const merged: (AttendanceRecord & { studentName: string })[] = [];
-      logResults.forEach((r, i) => {
-        if (r.status === 'fulfilled') {
-          r.value.forEach(record => {
-            merged.push({
-              ...record,
-              studentName: nameMap[sample[i]] ?? `Student #${sample[i].slice(0, 6)}`,
-            });
-          });
-        }
-      });
-      const sorted = merged.sort(
-        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+      setRecentLogs(
+        page.data.map((r) => ({
+          ...r,
+          studentName: r.student.firstName + ' ' + r.student.lastName,
+        })),
       );
-      setRecentLogs(sorted.slice(0, 10));
     } catch {
       setRecentLogs([]);
     }

@@ -71,6 +71,13 @@ export class AttendanceController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'TEACHER')
+  @Get('summary/today')
+  async getTodaySummary() {
+    return this.attendanceService.getTodaySummary();
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'TEACHER')
   @Get('no-tap-out')
   async getNoTapOutStudents() {
     return this.attendanceService.getNoTapOutStudents();
