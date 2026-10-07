@@ -101,6 +101,7 @@ export default function AddUserModal({ isOpen, onClose, onSubmit, error }: AddUs
 
   const showGrade = ROLES_WITH_GRADE.includes(formData.role);
   const showRfid  = ROLES_WITH_RFID.includes(formData.role);
+  const needsScan = formData.role === 'STUDENT' && !scannedRfid && !(formData.rfidCard ?? '').trim();
 
   const rfidPreview = scannedRfid || formData.rfidCard || '';
   const userPreview = formData.lastName.trim() && rfidPreview
@@ -195,7 +196,7 @@ export default function AddUserModal({ isOpen, onClose, onSubmit, error }: AddUs
     if (Object.keys(errs).length > 0) { setFormErrors(errs); return; }
     setFormErrors({});
 
-    if (formData.role === 'STUDENT' && !scannedRfid) {
+    if (needsScan) {
       startScan();
       return;
     }
@@ -476,7 +477,7 @@ export default function AddUserModal({ isOpen, onClose, onSubmit, error }: AddUs
           {/* RFID manual input — not scanned yet, not scanning */}
           {showRfid && !scannedRfid && !isScanning && (
             <div>
-              <label className={LABEL_CLS}>RFID Card Number <span className="normal-case text-gray-400">(optional — or scan below)</span></label>
+              <label className={LABEL_CLS}>RFID Card Number <span className="normal-case text-gray-400">(type it, or tap the card on the reader)</span></label>
               <div className="relative">
                 <input type="text" value={formData.rfidCard}
                   onChange={(e) => {
@@ -590,9 +591,9 @@ export default function AddUserModal({ isOpen, onClose, onSubmit, error }: AddUs
               Cancel
             </button>
             <button type="submit"
-              disabled={submitting || isScanning || rfidChecking || (showRfid && !!scannedRfid && rfidTaken)}
+              disabled={submitting || isScanning || rfidChecking || (showRfid && rfidTaken)}
               className={`flex-1 h-11 flex items-center justify-center gap-2 rounded-full text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                formData.role === 'STUDENT' && !scannedRfid
+                needsScan
                   ? 'bg-[#7B1113] hover:bg-[#9B2020] text-white'
                   : 'bg-gray-900 hover:bg-gray-700 dark:bg-white dark:hover:bg-gray-100 text-white dark:text-gray-900'
               }`}>
@@ -601,7 +602,7 @@ export default function AddUserModal({ isOpen, onClose, onSubmit, error }: AddUs
                   <span className="w-4 h-4 border-2 border-current/30 border-t-current animate-spin rounded-full" />
                   Creating…
                 </>
-              ) : formData.role === 'STUDENT' && !scannedRfid ? (
+              ) : needsScan ? (
                 <>
                   <CreditCard className="w-4 h-4" /> Scan RFID Card
                 </>

@@ -52,10 +52,10 @@ const TIPS: Record<string, string> = {
   O: 'All fingers and thumb form a circle.',
   P: 'Like K but pointing downward.',
   Q: 'Like G but pointing downward.',
-  R: 'Cross index and middle fingers.',
+  R: 'Cross your middle finger over your index finger and keep them close together.',
   S: 'Make a fist with thumb over fingers.',
   T: 'Thumb between index and middle fingers.',
-  U: 'Index and middle fingers together, pointing up.',
+  U: 'Index and middle fingers straight, touching, pointing up. Do not cross them (crossed is R).',
   V: 'Index and middle fingers spread in a V.',
   W: 'Three fingers spread out.',
   X: 'Hook index finger into a curve.',
@@ -170,7 +170,7 @@ export default function FSLLearningPage() {
           <div>
             <h1 className="text-xl font-bold tracking-tight">FSL Learning</h1>
             <p className="text-xs text-slate-500 dark:text-gray-400 mt-0.5">
-              Practice Filipino Sign Language alphabet with your camera
+              Practice Filipino Sign Language alphabet with your camera. Keep your hand close to the camera and fully visible.
             </p>
           </div>
           <div className="flex items-center gap-3">

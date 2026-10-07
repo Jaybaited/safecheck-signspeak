@@ -3,9 +3,10 @@ import { api } from '@/lib/api';
 import { pickChild } from '@/lib/selected-child';
 
 const READ_KEY_PREFIX = 'parent_notif_read_';
+const REFRESH_MS = 15000;
 
-// Unread tap events for the parent's first child. It loads the records itself, so the
-// sidebar badge is correct on every parent page, not only after visiting Notifications.
+// Unread tap events for the selected child. It loads the records itself and refreshes every
+// 15 seconds, so the sidebar badge is correct on every parent page and updates after a tap.
 export function usePersistedUnreadCount(parentId: string | undefined): number {
   const [unreadCount, setUnreadCount] = useState(0);
 
@@ -29,17 +30,22 @@ export function usePersistedUnreadCount(parentId: string | undefined): number {
       if (!cancelled) setUnreadCount(recordIds.filter((id) => !read.has(id)).length);
     };
 
-    api.getParentChildren(parentId)
-      .then((children) => (children.length ? api.getStudentAttendance((pickChild(parentId, children) ?? children[0]).id) : []))
-      .then((records) => {
-        recordIds = (records as { id: string }[]).map((r) => r.id);
-        recalc();
-      })
-      .catch(() => {});
+    const load = () => {
+      api.getParentChildren(parentId)
+        .then((children) => (children.length ? api.getStudentAttendance((pickChild(parentId, children) ?? children[0]).id) : []))
+        .then((records) => {
+          recordIds = (records as { id: string }[]).map((r) => r.id);
+          recalc();
+        })
+        .catch(() => {});
+    };
 
+    load();
+    const timer = setInterval(load, REFRESH_MS);
     window.addEventListener('storage', recalc);
     return () => {
       cancelled = true;
+      clearInterval(timer);
       window.removeEventListener('storage', recalc);
     };
   }, [parentId]);

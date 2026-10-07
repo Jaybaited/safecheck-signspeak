@@ -95,6 +95,16 @@ export default function ParentNotificationsPage() {
     } catch { router.push('/login'); }
   }, [router]);
 
+  useEffect(() => {
+    if (!child) return;
+    const timer = setInterval(() => {
+      api.getStudentAttendance(child.id)
+        .then((records) => setNotifications(records.map(recordToNotification)))
+        .catch(() => {});
+    }, 15000);
+    return () => clearInterval(timer);
+  }, [child]);
+
   const handleLogout = () => {
     logout();
     router.push('/login');

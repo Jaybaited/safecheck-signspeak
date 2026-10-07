@@ -74,6 +74,22 @@ export default function ParentDashboardPage() {
     } catch { router.push('/login'); }
   }, [router]);
 
+  useEffect(() => {
+    if (!child) return;
+    const refresh = async () => {
+      const [attendance, statsData, todayData] = await Promise.all([
+        api.getStudentAttendance(child.id).catch(() => null),
+        api.getStudentStats(child.id).catch(() => null),
+        api.getTodayAttendance(child.id).catch(() => null),
+      ]);
+      if (attendance) setRecords(attendance);
+      if (statsData) setStats(statsData);
+      setTodayRecord(todayData);
+    };
+    const timer = setInterval(refresh, 15000);
+    return () => clearInterval(timer);
+  }, [child]);
+
   const handleLogout = () => {
     logout();
     router.push('/login');
