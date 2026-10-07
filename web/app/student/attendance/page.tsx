@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import StudentSidebar from '@/components/student/StudentSidebar';
 import ThemeToggle from '@/components/ThemeToggle';
-import { api } from '@/lib/api';
+import { api, apiFetch } from '@/lib/api';
 import { logout } from '@/lib/auth';
 
 interface User {
@@ -60,7 +60,12 @@ export default function StudentAttendancePage() {
     if (!silent) setDataLoading(true);
     else setRefreshing(true);
     try {
-      const data = await api.getStudentAttendance(studentId);
+      const y = selectedMonth.getFullYear();
+      const mm = String(selectedMonth.getMonth() + 1).padStart(2, '0');
+      const lastDay = new Date(y, selectedMonth.getMonth() + 1, 0).getDate();
+      const data = await apiFetch<AttendanceRecord[]>(
+        '/attendance/student/' + studentId + '?from=' + y + '-' + mm + '-01&to=' + y + '-' + mm + '-' + String(lastDay).padStart(2, '0'),
+      );
       setAttendance(data as AttendanceRecord[]);
     } catch (err) {
       console.error('Failed to fetch attendance:', err);
@@ -69,6 +74,11 @@ export default function StudentAttendancePage() {
       setRefreshing(false);
     }
   };
+
+  useEffect(() => {
+    if (user) fetchData(user.id, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedMonth]);
 
   const handleRefresh = () => { if (user) fetchData(user.id, true); };
 

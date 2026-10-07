@@ -224,6 +224,12 @@ export class AttendanceService {
 
     return {
       date: todayStart.toISOString().slice(0, 10),
+      lastTapAt: records.reduce<Date | null>((latest, r) => {
+        for (const t of [r.timeIn, r.timeOut]) {
+          if (t && (!latest || t > latest)) latest = t;
+        }
+        return latest;
+      }, null),
       totalStudents,
       checkedIn: checkedIn.length,
       late,

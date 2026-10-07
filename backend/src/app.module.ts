@@ -13,6 +13,7 @@ import { PasswordResetModule } from './password-reset/password-reset.module';
 import { AssessmentsModule } from './assessments/assessments.module';
 import { FslModule } from './fsl/fsl.module';
 import { MaintenanceModule } from './maintenance/maintenance.module';
+import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { MaintenanceModule } from './maintenance/maintenance.module';
     AssessmentsModule,
     FslModule,
     MaintenanceModule,
+    HealthModule,
   ],
   controllers: [AppController],
   providers: [AppService],

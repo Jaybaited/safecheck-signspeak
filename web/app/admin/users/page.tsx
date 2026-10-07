@@ -504,11 +504,7 @@ export default function ManageUsersPage() {
             <p className="text-xs text-slate-500 dark:text-gray-400">
               Showing {filteredUsers.length} of {users.length} users
             </p>
-            <div className="flex items-center gap-1.5">
-              <button className="px-3 py-1.5 bg-white dark:bg-gray-800 hover:bg-slate-50 dark:hover:bg-gray-700 border border-slate-200 dark:border-gray-700 text-slate-700 dark:text-gray-300 rounded-lg text-xs transition-colors">Previous</button>
-              <button className="px-3 py-1.5 bg-[#7B1113] text-white rounded-lg text-xs font-medium">1</button>
-              <button className="px-3 py-1.5 bg-white dark:bg-gray-800 hover:bg-slate-50 dark:hover:bg-gray-700 border border-slate-200 dark:border-gray-700 text-slate-700 dark:text-gray-300 rounded-lg text-xs transition-colors">Next</button>
-            </div>
+            
           </div>
         </div>
       </main>

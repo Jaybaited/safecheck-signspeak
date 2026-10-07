@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { getPendingResetCount } from '@/lib/api';
 import LogoutModal from '@/components/shared/LogoutModal';
+import { useSystemStatus } from '@/hooks/useSystemStatus';
 
 interface SidebarProps {
   onLogout: () => void;
@@ -27,6 +28,7 @@ export default function Sidebar({ onLogout, admin }: SidebarProps) {
   const pathname = usePathname();
   const [pendingCount, setPendingCount] = useState(0);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const status = useSystemStatus();
 
   useEffect(() => {
     const fetchCount = async () => {
@@ -102,14 +104,22 @@ export default function Sidebar({ onLogout, admin }: SidebarProps) {
           </p>
           <div className="space-y-1.5">
             <div className="flex items-center gap-2">
-              <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-              <Wifi className="w-3 h-3 text-emerald-500" />
-              <span className="text-xs text-emerald-600 dark:text-emerald-400">RFID Online</span>
+              <div className={'w-1.5 h-1.5 rounded-full ' + (status.api === 'online' ? 'bg-emerald-500 animate-pulse' : status.api === 'offline' ? 'bg-red-500' : 'bg-gray-400')} />
+              <span className="text-xs text-gray-600 dark:text-gray-300">
+                Server: {status.api === 'online' ? 'Online' : status.api === 'offline' ? 'Offline' : 'Checking'}
+              </span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-              <Cpu className="w-3 h-3 text-emerald-500" />
-              <span className="text-xs text-emerald-600 dark:text-emerald-400">AI Active</span>
+              <div className={'w-1.5 h-1.5 rounded-full ' + (status.database === true ? 'bg-emerald-500 animate-pulse' : status.database === false ? 'bg-red-500' : 'bg-gray-400')} />
+              <span className="text-xs text-gray-600 dark:text-gray-300">
+                Database: {status.database === null ? 'Checking' : status.database ? 'Connected' : 'Error'}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+              <span className="text-xs text-gray-600 dark:text-gray-300">
+                Last tap: {status.lastTapAt ? new Date(status.lastTapAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : 'none today'}
+              </span>
             </div>
           </div>
         </div>

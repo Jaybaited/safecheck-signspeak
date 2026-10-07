@@ -10,6 +10,7 @@ import {
 import Sidebar from '@/components/admin/Sidebar';
 import ThemeToggle from '@/components/ThemeToggle';
 import { logout } from '@/lib/auth';
+import { useSystemStatus } from '@/hooks/useSystemStatus';
 
 interface AdminUser {
   id:        string;
@@ -81,6 +82,7 @@ async function apiFetch<T>(path: string, token: string): Promise<T> {
 
 export default function AdminDashboardPage() {
   const router = useRouter();
+  const sys = useSystemStatus();
 
   const [adminUser,   setAdminUser]   = useState<AdminUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -504,14 +506,14 @@ export default function AdminDashboardPage() {
               <h2 className="text-base font-bold mb-4 text-slate-900 dark:text-white">System Status</h2>
               <div className="space-y-2.5">
                 {[
-                  { label: 'RFID Scanner', status: 'Online'    },
-                  { label: 'AI Service',   status: 'Active'    },
-                  { label: 'Database',     status: 'Connected' },
+                  { label: 'Server', status: sys.api === 'online' ? 'Online' : sys.api === 'offline' ? 'Offline' : 'Checking', ok: sys.api !== 'offline' },
+                  { label: 'Database', status: sys.database === null ? 'Checking' : sys.database ? 'Connected' : 'Error', ok: sys.database !== false },
+                  { label: 'Last RFID Tap', status: sys.lastTapAt ? new Date(sys.lastTapAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : 'None today', ok: true },
                 ].map(item => (
                   <div key={item.label} className="flex items-center justify-between">
                     <span className="text-sm text-slate-600 dark:text-gray-300">{item.label}</span>
-                    <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 text-xs font-medium">
-                      <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                    <span className={'flex items-center gap-1.5 text-xs font-medium ' + (item.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400')}>
+                      <span className={'w-1.5 h-1.5 rounded-full ' + (item.ok ? 'bg-emerald-500 animate-pulse' : 'bg-red-500')} />
                       {item.status}
                     </span>
                   </div>
