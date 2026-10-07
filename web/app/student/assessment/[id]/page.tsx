@@ -92,6 +92,14 @@ export default function AssessmentRunPage() {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<AttemptDetail | null>(null);
 
+  const [wide, setWide] = useState(true);
+  useEffect(() => {
+    const check = () => setWide(window.innerWidth >= 1100);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+
   useEffect(() => {
     const token = localStorage.getItem('token');
     const userData = localStorage.getItem('user');
@@ -237,8 +245,11 @@ export default function AssessmentRunPage() {
         )}
 
         {view === 'lesson' && assessment && (
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
-            <div className={CARD + ' xl:col-span-2 flex flex-col gap-4'}>
+          <div
+            className="grid gap-6 items-start"
+            style={{ gridTemplateColumns: wide ? 'minmax(0, 2fr) minmax(320px, 1fr)' : 'minmax(0, 1fr)' }}
+          >
+            <div className={CARD + ' flex flex-col gap-4'}>
               <div className="flex items-center gap-3">
                 <span className="w-9 h-9 shrink-0 rounded-full bg-[#7B1113] text-white font-bold flex items-center justify-center">1</span>
                 <h2 className="text-xl font-bold">Watch the lesson</h2>
@@ -247,14 +258,16 @@ export default function AssessmentRunPage() {
               {assessment.lessonVideoUrl && parseYouTube(assessment.lessonVideoUrl) && (
                 <p className="text-xs text-slate-400 dark:text-gray-500">Source: Philippine School for the Deaf (YouTube)</p>
               )}
-              <div className="xl:hidden flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-xl bg-[#7B1113]/5 dark:bg-[#7B1113]/10 border border-[#7B1113]/20">
-                <p className="flex-1 text-lg font-semibold">Finished watching? Start the exam.</p>
-                <button onClick={startExam} disabled={busy} className={BTN_PRIMARY}>
-                  <Play className="w-5 h-5" /> Start the exam
-                </button>
-              </div>
+              {!wide && (
+                <div className="flex flex-wrap items-center gap-3 p-4 rounded-xl bg-[#7B1113]/5 dark:bg-[#7B1113]/10 border border-[#7B1113]/20">
+                  <p className="flex-1 text-lg font-semibold">Finished watching? Start the exam.</p>
+                  <button onClick={startExam} disabled={busy} className={BTN_PRIMARY}>
+                    <Play className="w-5 h-5" /> Start the exam
+                  </button>
+                </div>
+              )}
             </div>
-            <div className={CARD + ' flex flex-col gap-5 xl:sticky xl:top-6'}>
+            <div className={CARD + ' flex flex-col gap-5'} style={wide ? { position: 'sticky', top: 24 } : undefined}>
               <div className="flex items-center gap-3">
                 <span className="w-9 h-9 shrink-0 rounded-full bg-[#7B1113] text-white font-bold flex items-center justify-center">2</span>
                 <div>
@@ -270,11 +283,11 @@ export default function AssessmentRunPage() {
                 <li className="flex items-center gap-3"><CheckCircle className="w-6 h-6 shrink-0" /> You need {assessment.passMark}% to pass</li>
                 <li className="flex items-center gap-3"><Clock className="w-6 h-6 shrink-0" /> You can change an answer until you send the exam</li>
               </ul>
-              <div className="hidden xl:block">
+              {wide && (
                 <button onClick={startExam} disabled={busy} className={BTN_PRIMARY + ' w-full'}>
                   <Play className="w-5 h-5" /> Start the exam
                 </button>
-              </div>
+              )}
             </div>
           </div>
         )}
