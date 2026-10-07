@@ -121,7 +121,8 @@ async function main() {
         date: new Date(dateMs),
         timeIn: new Date(base + inMin * MIN),
         timeOut: noOut ? null : new Date(base + outMin * MIN),
-        status: noOut ? AttendanceStatus.UNCONFIRMED_OUT : late ? AttendanceStatus.LATE : AttendanceStatus.PRESENT,
+        status: late ? AttendanceStatus.LATE : AttendanceStatus.PRESENT,
+        noTapOut: !!noOut,
       });
     }
     await prisma.attendance.createMany({ data: rows });

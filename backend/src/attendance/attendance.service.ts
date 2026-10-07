@@ -214,13 +214,13 @@ export class AttendanceService {
       this.prisma.user.count({ where: { role: 'STUDENT' } }),
       this.prisma.attendance.findMany({
         where: { date: { gte: todayStart, lt: todayEnd } },
-        select: { status: true, timeIn: true, timeOut: true },
+        select: { status: true, noTapOut: true, timeIn: true, timeOut: true },
       }),
     ]);
 
     const checkedIn = records.filter((r) => r.timeIn !== null);
     const late = checkedIn.filter((r) => r.status === 'LATE').length;
-    const unconfirmedOut = checkedIn.filter((r) => r.status === 'UNCONFIRMED_OUT').length;
+    const unconfirmedOut = checkedIn.filter((r) => r.noTapOut).length;
 
     return {
       date: todayStart.toISOString().slice(0, 10),
@@ -269,7 +269,7 @@ export class AttendanceService {
     for (const record of noTapOut) {
       await this.prisma.attendance.update({
         where: { id: record.id },
-        data:  { status: 'UNCONFIRMED_OUT' },
+        data:  { noTapOut: true },
       });
 
       this.notificationsService
@@ -277,7 +277,7 @@ export class AttendanceService {
         .catch(console.error);
     }
 
-    console.log(`[Item 14] Marked ${noTapOut.length} students as UNCONFIRMED_OUT`);
+    console.log(`[Item 14] Marked ${noTapOut.length} students as no tap-out`);
   }
 
   // ── Item 14: Returns students with timeIn but no timeOut today ────────────
@@ -326,7 +326,8 @@ export class AttendanceService {
     const where: Record<string, unknown> = {};
     if (query.studentId)  where.studentId = query.studentId;
     if (dateFilter)       where.date      = dateFilter;
-    if (query.status)     where.status    = query.status;
+    if (query.status === 'UNCONFIRMED_OUT') where.noTapOut = true;
+    else if (query.status) where.status = query.status;
     if (query.gradeLevel) where.student   = { gradeLevel: query.gradeLevel };
 
     const [records, total] = await Promise.all([

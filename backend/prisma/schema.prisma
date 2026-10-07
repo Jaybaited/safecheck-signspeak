@@ -60,6 +60,7 @@ model Attendance {
   timeOut   DateTime?
   date      DateTime         @default(now()) @db.Date
   status    AttendanceStatus @default(PRESENT)
+  noTapOut  Boolean          @default(false)
   student   User             @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@unique([studentId, date])

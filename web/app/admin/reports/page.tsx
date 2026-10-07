@@ -31,6 +31,7 @@ interface ReportRow {
   timeIn:      string | null;
   timeOut:     string | null;
   status:      string | null;
+  noTapOut:    boolean;
 }
 
 
@@ -77,7 +78,7 @@ function exportToCSV(rows: ReportRow[], filename: string) {
     r.date,
     r.timeIn      ? formatTime(r.timeIn)  : '--:--',
     r.timeOut     ? formatTime(r.timeOut) : '--:--',
-    r.status      ?? '--',
+    r.noTapOut ? (r.status ?? '--') + ' (no tap-out)' : (r.status ?? '--'),
   ]);
   const bom = '\uFEFF';
   const csv = [headers, ...data]
@@ -125,7 +126,7 @@ export default function ReportsPage() {
     const tappedIn    = rows.filter((r) => r.timeIn  !== null).length;
     const tappedOut   = rows.filter((r) => r.timeOut !== null).length;
     const late        = rows.filter((r) => r.status === 'LATE').length;
-    const unconfirmed = rows.filter((r) => r.status === 'UNCONFIRMED_OUT').length;
+    const unconfirmed = rows.filter((r) => r.noTapOut).length;
     return { total: rows.length, tappedIn, tappedOut, late, unconfirmed };
   }, [rows]);
 
@@ -166,6 +167,7 @@ export default function ReportsPage() {
         timeIn:  rec.timeIn,
         timeOut: rec.timeOut,
         status:  rec.status,
+        noTapOut: Boolean((rec as unknown as { noTapOut?: boolean }).noTapOut),
       }));
 
 
@@ -385,7 +387,7 @@ export default function ReportsPage() {
               >
                 <option value="">All Statuses</option>
                 {STATUS_OPTIONS.map((s) => (
-                  <option key={s} value={s}>{s.replace('_', ' ')}</option>
+                  <option key={s} value={s}>{s === 'UNCONFIRMED_OUT' ? 'NO TAP-OUT' : s.replace('_', ' ')}</option>
                 ))}
               </select>
             </div>
@@ -559,7 +561,12 @@ export default function ReportsPage() {
                         {formatTime(row.timeOut)}
                       </td>
                       <td className="py-3 px-4">
-                        {statusBadge(row.status)}
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {statusBadge(row.status)}
+                          {row.noTapOut && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-500/10 dark:text-orange-400 dark:border-orange-500/20">NO TAP-OUT</span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))
