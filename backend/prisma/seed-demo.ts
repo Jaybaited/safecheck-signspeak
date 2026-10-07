@@ -2,8 +2,7 @@
 // Run: $env:DEMO_PASSWORD = "..."; npx ts-node prisma/seed-demo.ts   (re-running refreshes the dates)
 import {
   Prisma, PrismaClient, Role, GradeLevel, AttendanceStatus, AttemptStatus,
-  FSLActivitySource, FSLCategory, FSLProgressStatus,
-} from '@prisma/client';
+  FSLActivitySource, FSLCategory, FSLProgressStatus, NotificationStatus, NotificationType } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
@@ -127,6 +126,30 @@ async function main() {
     }
     await prisma.attendance.createMany({ data: rows });
     attendanceRows += rows.length;
+
+    // ---- parent notifications (the same messages a real tap creates) ----
+    const parentLinks = await prisma.parentStudent.findMany({ where: { studentId }, select: { parentId: true } });
+    const kid = await prisma.user.findUnique({ where: { id: studentId }, select: { firstName: true, lastName: true } });
+    if (kid && parentLinks.length) {
+      const kidName = kid.firstName + ' ' + kid.lastName;
+      const clock = (d: Date) => d.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Manila' });
+      const notes: Prisma.NotificationCreateManyInput[] = [];
+      for (const row of rows) {
+        const dayMs = (row.date as Date).getTime();
+        const noteStatus = nowMs - dayMs < 3 * DAY ? NotificationStatus.UNREAD : NotificationStatus.READ;
+        for (const link of parentLinks) {
+          if (row.timeIn) {
+            notes.push({ userId: link.parentId, type: NotificationType.ATTENDANCE, status: noteStatus, sentAt: row.timeIn as Date, message: kidName + ' has entered the school at ' + clock(row.timeIn as Date) });
+          }
+          if (row.timeOut) {
+            notes.push({ userId: link.parentId, type: NotificationType.ATTENDANCE, status: noteStatus, sentAt: row.timeOut as Date, message: kidName + ' has left the school at ' + clock(row.timeOut as Date) });
+          } else {
+            notes.push({ userId: link.parentId, type: NotificationType.ATTENDANCE, status: noteStatus, sentAt: new Date(dayMs - 8 * HOUR + 18 * HOUR), message: kidName + ' has not tapped out today. Please verify their whereabouts.' });
+          }
+        }
+      }
+      if (notes.length) await prisma.notification.createMany({ data: notes });
+    }
 
     // ---- FSL progress ----
     const masteredLetters = letters.slice(0, p.mastered);

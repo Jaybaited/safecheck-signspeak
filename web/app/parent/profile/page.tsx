@@ -14,6 +14,7 @@ import type { ChildInfo } from '@/lib/api';
 import { validateNewPassword, PASSWORD_HINT } from '@/lib/password';
 import { logout } from '@/lib/auth';
 import { pickChild } from '@/lib/selected-child';
+import { usePersistedUnreadCount } from '@/hooks/usePersistedUnreadCount';
 
 
 interface ParentUser {
@@ -35,6 +36,7 @@ const PLACEHOLDER_CHILD = {
 export default function ParentProfilePage() {
   const router = useRouter();
   const [parent,         setParent]         = useState<ParentUser | null>(null);
+  const unreadCount = usePersistedUnreadCount(parent?.id);
   const [authLoading,    setAuthLoading]    = useState(true);
   const [children,       setChildren]       = useState<ChildInfo[]>([]);
   const [childrenLoading,setChildrenLoading]= useState(false);
@@ -118,14 +120,15 @@ export default function ParentProfilePage() {
 
 
   // Pass first real child to sidebar (or placeholder while loading)
-  const sidebarChild = children[0]
-    ? { id: children[0].id, firstName: children[0].firstName, lastName: children[0].lastName, gradeLevel: children[0].gradeLevel }
+  const selectedChild = pickChild(parent.id, children) ?? children[0];
+  const sidebarChild = selectedChild
+    ? { id: selectedChild.id, firstName: selectedChild.firstName, lastName: selectedChild.lastName, gradeLevel: selectedChild.gradeLevel }
     : PLACEHOLDER_CHILD;
 
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-gray-950 text-slate-900 dark:text-white transition-colors duration-200">
-      <ParentSidebar onLogout={handleLogout} parent={parent} child={sidebarChild} />
+      <ParentSidebar onLogout={handleLogout} parent={parent} child={sidebarChild} unreadCount={unreadCount} />
 
 
       <main className="ml-64 p-8">

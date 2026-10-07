@@ -1,52 +1,33 @@
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
-import { pickChild } from '@/lib/selected-child';
 
-const READ_KEY_PREFIX = 'parent_notif_read_';
 const REFRESH_MS = 15000;
 
-// Unread tap events for the selected child. It loads the records itself and refreshes every
-// 15 seconds, so the sidebar badge is correct on every parent page and updates after a tap.
+// Fired by the Notifications page after something is marked read, so the sidebar badge updates at once.
+export const NOTIFICATIONS_CHANGED_EVENT = 'parent-notifications-changed';
+
+// Unread notifications for this parent, read from the server. It refreshes every 15 seconds,
+// so the badge is the same on every parent page, in every browser, and after a new tap.
 export function usePersistedUnreadCount(parentId: string | undefined): number {
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     if (!parentId) return;
     let cancelled = false;
-    let recordIds: string[] = [];
-
-    const readIds = (): string[] => {
-      try {
-        const raw = localStorage.getItem(READ_KEY_PREFIX + parentId);
-        const parsed: unknown = raw ? JSON.parse(raw) : [];
-        return Array.isArray(parsed) ? (parsed as string[]) : [];
-      } catch {
-        return [];
-      }
-    };
-
-    const recalc = () => {
-      const read = new Set(readIds());
-      if (!cancelled) setUnreadCount(recordIds.filter((id) => !read.has(id)).length);
-    };
 
     const load = () => {
-      api.getParentChildren(parentId)
-        .then((children) => (children.length ? api.getStudentAttendance((pickChild(parentId, children) ?? children[0]).id) : []))
-        .then((records) => {
-          recordIds = (records as { id: string }[]).map((r) => r.id);
-          recalc();
-        })
+      api.getUnreadNotifications()
+        .then((list) => { if (!cancelled) setUnreadCount(list.length); })
         .catch(() => {});
     };
 
     load();
     const timer = setInterval(load, REFRESH_MS);
-    window.addEventListener('storage', recalc);
+    window.addEventListener(NOTIFICATIONS_CHANGED_EVENT, load);
     return () => {
       cancelled = true;
       clearInterval(timer);
-      window.removeEventListener('storage', recalc);
+      window.removeEventListener(NOTIFICATIONS_CHANGED_EVENT, load);
     };
   }, [parentId]);
 

@@ -12,6 +12,7 @@ import { api, apiFetch } from '@/lib/api';
 import type { ChildInfo, AttendanceRecord } from '@/lib/api';
 import { logout } from '@/lib/auth';
 import { pickChild } from '@/lib/selected-child';
+import { usePersistedUnreadCount } from '@/hooks/usePersistedUnreadCount';
 
 interface ParentUser {
   id: string; username: string; role: string;
@@ -37,6 +38,7 @@ const formatTime = (iso: string | null | undefined) => {
 export default function ParentReportsPage() {
   const router = useRouter();
   const [parent,         setParent]         = useState<ParentUser | null>(null);
+  const unreadCount = usePersistedUnreadCount(parent?.id);
   const [child,          setChild]          = useState<ChildInfo | null>(null);
   const [allRecords,     setAllRecords]     = useState<AttendanceRecord[]>([]);
   const [authLoading,    setAuthLoading]    = useState(true);
@@ -177,7 +179,7 @@ export default function ParentReportsPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-gray-950 text-slate-900 dark:text-white transition-colors duration-200">
-      <ParentSidebar onLogout={handleLogout} parent={parent} child={sidebarChild} />
+      <ParentSidebar onLogout={handleLogout} parent={parent} child={sidebarChild} unreadCount={unreadCount} />
 
       <main className="ml-64 p-8">
         {/* Header */}
