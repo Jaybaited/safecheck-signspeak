@@ -7,6 +7,7 @@ import { ArrowLeft, ArrowRight, CheckCircle, XCircle, Clock, Play, RotateCcw, Fi
 import StudentSidebar from '@/components/student/StudentSidebar';
 import ThemeToggle from '@/components/ThemeToggle';
 import { logout } from '@/lib/auth';
+import { parseYouTube, youtubeEmbedUrl } from '@/lib/video';
 import {
   getAssessment, getMyLevels, getAssessmentAttempt, startAssessmentAttempt,
   saveAssessmentAnswer, completeAssessmentAttempt,
@@ -37,6 +38,20 @@ function VideoBox({ src, captionUrl }: { src: string | null; captionUrl: string 
         <Film className="w-10 h-10" />
         <p className="text-sm">Video placeholder (mock content)</p>
       </div>
+    );
+  }
+  const yt = parseYouTube(src);
+  if (yt) {
+    return (
+      <iframe
+        key={src}
+        src={youtubeEmbedUrl(yt)}
+        title="FSL video"
+        className="w-full aspect-video rounded-xl bg-black"
+        allow="accelerometer; encrypted-media; picture-in-picture"
+        allowFullScreen
+        referrerPolicy="strict-origin-when-cross-origin"
+      />
     );
   }
   return (
@@ -211,7 +226,12 @@ export default function AssessmentRunPage() {
         {view === 'lesson' && assessment && (
           <div className={CARD + ' flex flex-col gap-5'}>
             <h2 className="text-xl font-bold">Lesson</h2>
-            <div className="max-w-3xl"><VideoBox src={assessment.lessonVideoUrl} captionUrl={null} /></div>
+            <div className="max-w-3xl">
+              <VideoBox src={assessment.lessonVideoUrl} captionUrl={null} />
+              {parseYouTube(assessment.lessonVideoUrl) && (
+                <p className="text-xs text-slate-400 dark:text-gray-500 mt-1">Source: Philippine School for the Deaf (YouTube)</p>
+              )}
+            </div>
             {assessment.lessonDescription && (
               <p className="text-lg text-slate-700 dark:text-gray-300">{assessment.lessonDescription}</p>
             )}
