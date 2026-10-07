@@ -33,6 +33,10 @@ interface WeekDay {
   fsl: number; hasTimeIn: boolean; hasTimeOut: boolean;
 }
 
+function localIso(d: Date): string {
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
 function getWeekDates(): { label: string; iso: string }[] {
   const today  = new Date();
   const monday = new Date(today);
@@ -40,7 +44,7 @@ function getWeekDates(): { label: string; iso: string }[] {
   return ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map((label, i) => {
     const d = new Date(monday);
     d.setDate(monday.getDate() + i);
-    return { label, iso: d.toISOString().split('T')[0] };
+    return { label, iso: localIso(d) };
   });
 }
 
