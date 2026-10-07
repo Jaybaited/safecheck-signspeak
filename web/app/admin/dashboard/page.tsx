@@ -507,7 +507,7 @@ export default function AdminDashboardPage() {
               <div className="space-y-2.5">
                 {[
                   { label: 'Server', status: sys.api === 'online' ? 'Online' : sys.api === 'offline' ? 'Offline' : 'Checking', ok: sys.api !== 'offline' },
-                  { label: 'Database', status: sys.database === null ? 'Checking' : sys.database ? 'Connected' : 'Error', ok: sys.database !== false },
+                  { label: 'Database', status: sys.database === null ? (sys.api === 'offline' ? 'Unknown' : 'Checking') : sys.database ? 'Connected' : 'Error', ok: sys.database !== false && sys.api !== 'offline' },
                   { label: 'Last RFID Tap', status: sys.lastTapAt ? new Date(sys.lastTapAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : 'None today', ok: true },
                 ].map(item => (
                   <div key={item.label} className="flex items-center justify-between">

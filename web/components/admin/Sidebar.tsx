@@ -112,7 +112,7 @@ export default function Sidebar({ onLogout, admin }: SidebarProps) {
             <div className="flex items-center gap-2">
               <div className={'w-1.5 h-1.5 rounded-full ' + (status.database === true ? 'bg-emerald-500 animate-pulse' : status.database === false ? 'bg-red-500' : 'bg-gray-400')} />
               <span className="text-xs text-gray-600 dark:text-gray-300">
-                Database: {status.database === null ? 'Checking' : status.database ? 'Connected' : 'Error'}
+                Database: {status.database === null ? (status.api === 'offline' ? 'Unknown' : 'Checking') : status.database ? 'Connected' : 'Error'}
               </span>
             </div>
             <div className="flex items-center gap-2">
