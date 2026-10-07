@@ -392,3 +392,13 @@ model FSLGameScore {
   @@index([studentId, mode])
   @@map("fsl_game_scores")
 }
+
+// School calendar: days with no classes (holidays), used by the attendance rate
+model SchoolHoliday {
+  id        String   @id @default(uuid())
+  date      DateTime @unique @db.Date
+  name      String
+  createdAt DateTime @default(now())
+
+  @@map("school_holidays")
+}

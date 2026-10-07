@@ -174,12 +174,18 @@ export class AttendanceService {
     const late    = records.filter((r) => r.status === 'LATE').length;
 
     // School days = Monday to Friday from the student's first record in the window up to
-    // yesterday, plus today if the student has already tapped. Holidays are not known.
+    // yesterday, plus today if the student has already tapped. Days in the school calendar (holidays) are skipped.
+    const holidayRows = await this.prisma.schoolHoliday.findMany({
+      where: { date: { gte: new Date(todayMs - 29 * DAY), lte: new Date(todayMs) } },
+      select: { date: true },
+    });
+    const holidays = new Set(holidayRows.map((h) => h.date.getTime()));
+
     let schoolDays = 0;
     if (records.length > 0) {
       for (let t = records[0].date.getTime(); t < todayMs; t += DAY) {
         const dow = new Date(t).getUTCDay();
-        if (dow !== 0 && dow !== 6) schoolDays++;
+        if (dow !== 0 && dow !== 6 && !holidays.has(t)) schoolDays++;
       }
       if (records.some((r) => r.date.getTime() === todayMs)) schoolDays++;
     }

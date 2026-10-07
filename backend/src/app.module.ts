@@ -14,6 +14,7 @@ import { AssessmentsModule } from './assessments/assessments.module';
 import { FslModule } from './fsl/fsl.module';
 import { MaintenanceModule } from './maintenance/maintenance.module';
 import { HealthModule } from './health/health.module';
+import { CalendarModule } from './calendar/calendar.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { HealthModule } from './health/health.module';
     FslModule,
     MaintenanceModule,
     HealthModule,
+    CalendarModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import {
   LayoutDashboard, Users, Wifi, FileText,
-  BookOpen, Settings, LogOut, Cpu, GraduationCap, KeyRound, ClipboardCheck,
+  BookOpen, Settings, CalendarDays, LogOut, Cpu, GraduationCap, KeyRound, ClipboardCheck,
 } from 'lucide-react';
 import { getPendingResetCount } from '@/lib/api';
 import LogoutModal from '@/components/shared/LogoutModal';
@@ -52,7 +52,7 @@ export default function Sidebar({ onLogout, admin }: SidebarProps) {
     { name: 'FSL Progress',      href: '/admin/fsl',                icon: BookOpen,        badge: 0            },
     { name: 'Assessment Results', href: '/admin/assessment-results', icon: ClipboardCheck, badge: 0 },
     { name: 'Password Requests', href: '/admin/password-requests',  icon: KeyRound,        badge: pendingCount },
-    { name: 'Configuration',     href: '/admin/config',             icon: Settings,        badge: 0            },
+    { name: 'School Calendar',   href: '/admin/config',             icon: CalendarDays,    badge: 0            },
   ];
 
   return (
