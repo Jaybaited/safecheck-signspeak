@@ -13,6 +13,7 @@ import { api }       from '@/lib/api';
 import type { ChildInfo } from '@/lib/api';
 import { validateNewPassword, PASSWORD_HINT } from '@/lib/password';
 import { logout } from '@/lib/auth';
+import { pickChild } from '@/lib/selected-child';
 
 
 interface ParentUser {
@@ -65,7 +66,10 @@ export default function ParentProfilePage() {
       // Fetch real children
       setChildrenLoading(true);
       api.getParentChildren(p.id)
-        .then(setChildren)
+        .then((list) => {
+          const sel = pickChild(p.id, list);
+          setChildren(sel ? [sel, ...list.filter((c) => c.id !== sel.id)] : list);
+        })
         .catch(() => setChildren([]))
         .finally(() => setChildrenLoading(false));
 

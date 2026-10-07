@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
+import { pickChild } from '@/lib/selected-child';
 
 const READ_KEY_PREFIX = 'parent_notif_read_';
 
@@ -29,7 +30,7 @@ export function usePersistedUnreadCount(parentId: string | undefined): number {
     };
 
     api.getParentChildren(parentId)
-      .then((children) => (children.length ? api.getStudentAttendance(children[0].id) : []))
+      .then((children) => (children.length ? api.getStudentAttendance((pickChild(parentId, children) ?? children[0]).id) : []))
       .then((records) => {
         recordIds = (records as { id: string }[]).map((r) => r.id);
         recalc();

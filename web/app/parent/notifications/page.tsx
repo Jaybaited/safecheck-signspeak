@@ -9,6 +9,7 @@ import { api } from '@/lib/api';
 import { useUnreadCount } from '@/hooks/useUnreadCount';
 import type { ChildInfo, AttendanceRecord } from '@/lib/api';
 import { logout } from '@/lib/auth';
+import { pickChild } from '@/lib/selected-child';
 
 interface ParentUser {
   id: string; username: string; role: string;
@@ -83,7 +84,7 @@ export default function ParentNotificationsPage() {
       api.getParentChildren(p.id)
         .then((children) => {
           if (!children.length) return;
-          const firstChild = children[0];
+          const firstChild = pickChild(p.id, children) ?? children[0];
           setChild(firstChild);
           return api.getStudentAttendance(firstChild.id)
             .then((records) => setNotifications(records.map(recordToNotification)))

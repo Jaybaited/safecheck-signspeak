@@ -14,6 +14,7 @@ import type { FslProgress } from '@/lib/fsl-api';
 import { usePersistedUnreadCount } from '@/hooks/usePersistedUnreadCount';
 import type { ChildInfo } from '@/lib/api';
 import { logout } from '@/lib/auth';
+import { pickChild } from '@/lib/selected-child';
 
 interface ParentUser {
   id: string; username: string; role: string;
@@ -59,7 +60,7 @@ export default function ParentFSLProgressPage() {
       setParent(p);
       setAuthLoading(false);
       api.getParentChildren(p.id)
-        .then((children) => { if (children.length) setChild(children[0]); })
+        .then((children) => { if (children.length) setChild(pickChild(p.id, children) ?? children[0]); })
         .catch(() => {});
     } catch { router.push('/login'); }
   }, [router]);

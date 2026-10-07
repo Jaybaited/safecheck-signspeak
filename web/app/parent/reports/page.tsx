@@ -11,6 +11,7 @@ import ThemeToggle from '@/components/ThemeToggle';
 import { api, apiFetch } from '@/lib/api';
 import type { ChildInfo, AttendanceRecord } from '@/lib/api';
 import { logout } from '@/lib/auth';
+import { pickChild } from '@/lib/selected-child';
 
 interface ParentUser {
   id: string; username: string; role: string;
@@ -59,7 +60,7 @@ export default function ParentReportsPage() {
       api.getParentChildren(p.id)
         .then((children) => {
           if (!children.length) return;
-          const firstChild = children[0];
+          const firstChild = pickChild(p.id, children) ?? children[0];
           setChild(firstChild);
           return api.getStudentAttendance(firstChild.id)
             .then(setAllRecords)

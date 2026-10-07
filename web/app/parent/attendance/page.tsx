@@ -12,6 +12,7 @@ import { api } from '@/lib/api';
 import type { ChildInfo, AttendanceRecord } from '@/lib/api';
 import { usePersistedUnreadCount } from '@/hooks/usePersistedUnreadCount';
 import { logout } from '@/lib/auth';
+import { pickChild } from '@/lib/selected-child';
 
 interface ParentUser {
   id: string; username: string; role: string;
@@ -55,7 +56,7 @@ export default function ParentAttendancePage() {
       api.getParentChildren(p.id)
         .then((children) => {
           if (!children.length) return;
-          const firstChild = children[0];
+          const firstChild = pickChild(p.id, children) ?? children[0];
           setChild(firstChild);
           setDataLoading(true);
           return Promise.all([

@@ -9,6 +9,7 @@ import {
   ChevronRight, User,
 } from 'lucide-react';
 import LogoutModal from '@/components/shared/LogoutModal';
+import { api } from '@/lib/api';
 
 interface ParentUser {
   id: string;
@@ -48,6 +49,11 @@ export default function ParentSidebar({ onLogout, parent, child, unreadCount = 0
   const pathname = usePathname();
   const [time, setTime] = useState(new Date());
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [kids, setKids] = useState<{ id: string; firstName: string; lastName: string }[]>([]);
+
+  useEffect(() => {
+    api.getParentChildren(parent.id).then((list) => setKids(list)).catch(() => {});
+  }, [parent.id]);
 
   useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000);
@@ -77,6 +83,20 @@ export default function ParentSidebar({ onLogout, parent, child, unreadCount = 0
         {child && (
           <div className="mx-4 mt-4 p-3 bg-[#7B1113]/5 dark:bg-[#7B1113]/10 border border-[#7B1113]/20 dark:border-[#7B1113]/30 rounded-xl">
             <p className="text-xs text-[#7B1113] dark:text-[#E8C96A] font-medium mb-1.5">Viewing child:</p>
+            {kids.length > 1 && (
+              <select
+                value={child.id}
+                onChange={(e) => {
+                  localStorage.setItem('parent_selected_child_' + parent.id, e.target.value);
+                  window.location.reload();
+                }}
+                className="mb-2 w-full text-xs rounded-md bg-white dark:bg-gray-800 border border-slate-200 dark:border-gray-700 px-2 py-1 text-slate-900 dark:text-white"
+              >
+                {kids.map((k) => (
+                  <option key={k.id} value={k.id}>{k.firstName} {k.lastName}</option>
+                ))}
+              </select>
+            )}
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 bg-gradient-to-br from-[#9B2020] to-[#5A0A0A] rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0">
                 {child.firstName[0]}{child.lastName[0]}
