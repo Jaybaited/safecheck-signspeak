@@ -508,6 +508,7 @@ export default function AdminDashboardPage() {
                 {[
                   { label: 'Server', status: sys.api === 'online' ? 'Online' : sys.api === 'offline' ? 'Offline' : 'Checking', ok: sys.api !== 'offline' },
                   { label: 'Database', status: sys.database === null ? (sys.api === 'offline' ? 'Unknown' : 'Checking') : sys.database ? 'Connected' : 'Error', ok: sys.database !== false && sys.api !== 'offline' },
+                  { label: 'AI Service', status: sys.ai === 'online' ? 'Online' : sys.ai === 'nomodel' ? 'No model' : sys.ai === 'offline' ? 'Offline' : 'Checking', ok: sys.ai !== 'offline' && sys.ai !== 'nomodel' },
                   { label: 'Last RFID Tap', status: sys.lastTapAt ? new Date(sys.lastTapAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : 'None today', ok: true },
                 ].map(item => (
                   <div key={item.label} className="flex items-center justify-between">

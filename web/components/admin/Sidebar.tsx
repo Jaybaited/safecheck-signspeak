@@ -116,6 +116,12 @@ export default function Sidebar({ onLogout, admin }: SidebarProps) {
               </span>
             </div>
             <div className="flex items-center gap-2">
+              <div className={'w-1.5 h-1.5 rounded-full ' + (status.ai === 'online' ? 'bg-emerald-500 animate-pulse' : status.ai === 'checking' ? 'bg-gray-400' : 'bg-red-500')} />
+              <span className="text-xs text-gray-600 dark:text-gray-300">
+                AI service: {status.ai === 'online' ? 'Online' : status.ai === 'nomodel' ? 'No model' : status.ai === 'offline' ? 'Offline' : 'Checking'}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
               <div className="w-1.5 h-1.5 rounded-full bg-gray-400" />
               <span className="text-xs text-gray-600 dark:text-gray-300">
                 Last tap: {status.lastTapAt ? new Date(status.lastTapAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : 'none today'}

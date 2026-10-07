@@ -47,7 +47,7 @@ function VideoBox({ src, captionUrl }: { src: string | null; captionUrl: string 
         key={src}
         src={youtubeEmbedUrl(yt)}
         title="FSL video"
-        className="w-full aspect-video rounded-xl bg-black"
+        className="w-full aspect-video max-h-[60vh] rounded-xl bg-black"
         allow="accelerometer; encrypted-media; picture-in-picture"
         allowFullScreen
         referrerPolicy="strict-origin-when-cross-origin"
@@ -55,7 +55,7 @@ function VideoBox({ src, captionUrl }: { src: string | null; captionUrl: string 
     );
   }
   return (
-    <video key={src} controls playsInline className="w-full aspect-video rounded-xl bg-black">
+    <video key={src} controls playsInline className="w-full aspect-video max-h-[60vh] rounded-xl bg-black">
       <source src={src} />
       {captionUrl && <track kind="captions" srcLang="en" label="Captions" src={captionUrl} default />}
     </video>
@@ -226,7 +226,7 @@ export default function AssessmentRunPage() {
         {view === 'lesson' && assessment && (
           <div className={CARD + ' flex flex-col gap-5'}>
             <h2 className="text-xl font-bold">Lesson</h2>
-            <div className="max-w-3xl">
+            <div className="max-w-4xl">
               <VideoBox src={assessment.lessonVideoUrl} captionUrl={null} />
               {parseYouTube(assessment.lessonVideoUrl) && (
                 <p className="text-xs text-slate-400 dark:text-gray-500 mt-1">Source: Philippine School for the Deaf (YouTube)</p>
@@ -259,11 +259,13 @@ export default function AssessmentRunPage() {
               />
             </div>
 
-            <div className="grid grid-cols-1 xl:grid-cols-5 gap-6 items-start">
-              <div className="xl:col-span-3">
-                <VideoBox src={q.mediaUrl} captionUrl={q.captionUrl} />
-              </div>
-              <div className="xl:col-span-2 flex flex-col gap-5">
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
+              {q.mediaUrl && (
+                <div className="lg:col-span-3">
+                  <VideoBox src={q.mediaUrl} captionUrl={q.captionUrl} />
+                </div>
+              )}
+              <div className={(q.mediaUrl ? 'lg:col-span-2' : 'lg:col-span-5') + ' flex flex-col gap-5'}>
             <p className="text-lg font-semibold">{q.prompt}</p>
 
             <div className="grid grid-cols-1 gap-4">
