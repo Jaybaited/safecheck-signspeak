@@ -84,11 +84,16 @@ export default function Sidebar({ onLogout, admin }: SidebarProps) {
             return (
               <Link key={item.name} href={item.href}>
                 <div className={`flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-colors text-sm ${isActive ? ACTIVE_CLS : INACTIVE_CLS}`}>
-                  <item.icon className="w-4 h-4 shrink-0" />
+                  <div className="relative shrink-0">
+                    <item.icon className="w-4 h-4" />
+                    {item.badge > 0 && (
+                      <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white dark:border-gray-900" />
+                    )}
+                  </div>
                   <span className="flex-1">{item.name}</span>
                   {item.badge > 0 && (
-                    <span className="min-w-[18px] h-[18px] px-1 bg-[#7B1113] text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                      {item.badge > 99 ? '99+' : item.badge}
+                    <span className="px-1.5 py-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full leading-none">
+                      {item.badge > 9 ? '9+' : item.badge}
                     </span>
                   )}
                 </div>

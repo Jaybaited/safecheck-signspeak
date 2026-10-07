@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, ArrowRight, CheckCircle, XCircle, Clock, Play, RotateCcw, Film } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle, XCircle, Clock, Play, RotateCcw, Film, ClipboardList } from 'lucide-react';
 import StudentSidebar from '@/components/student/StudentSidebar';
 import ThemeToggle from '@/components/ThemeToggle';
 import { logout } from '@/lib/auth';
@@ -31,23 +31,26 @@ const BTN_PRIMARY = BTN + ' bg-[#7B1113] hover:bg-[#9B2020] text-white';
 const BTN_OUTLINE = BTN + ' border border-slate-300 dark:border-gray-700 hover:bg-slate-100 dark:hover:bg-gray-800';
 const CARD = 'bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 rounded-xl p-6 shadow-sm';
 
-function VideoBox({ src, captionUrl }: { src: string | null; captionUrl: string | null }) {
-  if (!src) {
+const VIDEO_STYLE = { width: 'min(100%, calc(55vh * 16 / 9))' } as const;
+
+function VideoBox({ src, captionUrl, allowYouTube = true }: { src: string | null; captionUrl: string | null; allowYouTube?: boolean }) {
+  const yt = src ? parseYouTube(src) : null;
+  if (!src || (yt && !allowYouTube)) {
     return (
-      <div className="w-full aspect-video rounded-xl border-2 border-dashed border-slate-300 dark:border-gray-700 flex flex-col items-center justify-center gap-2 text-slate-400 dark:text-gray-500">
+      <div style={VIDEO_STYLE} className="aspect-video rounded-xl border-2 border-dashed border-slate-300 dark:border-gray-700 flex flex-col items-center justify-center gap-2 text-slate-400 dark:text-gray-500">
         <Film className="w-10 h-10" />
         <p className="text-sm">Video placeholder (mock content)</p>
       </div>
     );
   }
-  const yt = parseYouTube(src);
   if (yt) {
     return (
       <iframe
         key={src}
         src={youtubeEmbedUrl(yt)}
         title="FSL video"
-        className="w-full aspect-video max-h-[60vh] rounded-xl bg-black"
+        style={VIDEO_STYLE}
+        className="aspect-video rounded-xl bg-black"
         allow="accelerometer; encrypted-media; picture-in-picture"
         allowFullScreen
         referrerPolicy="strict-origin-when-cross-origin"
@@ -55,7 +58,17 @@ function VideoBox({ src, captionUrl }: { src: string | null; captionUrl: string 
     );
   }
   return (
-    <video key={src} controls playsInline className="w-full aspect-video max-h-[60vh] rounded-xl bg-black">
+    <video
+      key={src}
+      controls
+      playsInline
+      preload="metadata"
+      controlsList="nodownload"
+      disablePictureInPicture
+      onContextMenu={(e) => e.preventDefault()}
+      style={VIDEO_STYLE}
+      className="aspect-video rounded-xl bg-black"
+    >
       <source src={src} />
       {captionUrl && <track kind="captions" srcLang="en" label="Captions" src={captionUrl} default />}
     </video>
@@ -224,24 +237,44 @@ export default function AssessmentRunPage() {
         )}
 
         {view === 'lesson' && assessment && (
-          <div className={CARD + ' flex flex-col gap-5'}>
-            <h2 className="text-xl font-bold">Lesson</h2>
-            <div className="max-w-4xl">
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
+            <div className={CARD + ' xl:col-span-2 flex flex-col gap-4'}>
+              <div className="flex items-center gap-3">
+                <span className="w-9 h-9 shrink-0 rounded-full bg-[#7B1113] text-white font-bold flex items-center justify-center">1</span>
+                <h2 className="text-xl font-bold">Watch the lesson</h2>
+              </div>
               <VideoBox src={assessment.lessonVideoUrl} captionUrl={null} />
-              {parseYouTube(assessment.lessonVideoUrl) && (
-                <p className="text-xs text-slate-400 dark:text-gray-500 mt-1">Source: Philippine School for the Deaf (YouTube)</p>
+              {assessment.lessonVideoUrl && parseYouTube(assessment.lessonVideoUrl) && (
+                <p className="text-xs text-slate-400 dark:text-gray-500">Source: Philippine School for the Deaf (YouTube)</p>
               )}
+              <div className="xl:hidden flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-xl bg-[#7B1113]/5 dark:bg-[#7B1113]/10 border border-[#7B1113]/20">
+                <p className="flex-1 text-lg font-semibold">Finished watching? Start the exam.</p>
+                <button onClick={startExam} disabled={busy} className={BTN_PRIMARY}>
+                  <Play className="w-5 h-5" /> Start the exam
+                </button>
+              </div>
             </div>
-            {assessment.lessonDescription && (
-              <p className="text-lg text-slate-700 dark:text-gray-300">{assessment.lessonDescription}</p>
-            )}
-            <p className="text-slate-500 dark:text-gray-400">
-              {questions.length} questions. You need {assessment.passMark}% to pass.
-            </p>
-            <div>
-              <button onClick={startExam} disabled={busy} className={BTN_PRIMARY}>
-                <Play className="w-5 h-5" /> Start the exam
-              </button>
+            <div className={CARD + ' flex flex-col gap-5 xl:sticky xl:top-6'}>
+              <div className="flex items-center gap-3">
+                <span className="w-9 h-9 shrink-0 rounded-full bg-[#7B1113] text-white font-bold flex items-center justify-center">2</span>
+                <div>
+                  {card && <p className="text-sm font-semibold text-[#7B1113] dark:text-[#E8C96A]">{'Level ' + card.level}</p>}
+                  <h2 className="text-xl font-bold">Answer the questions</h2>
+                </div>
+              </div>
+              {assessment.lessonDescription && (
+                <p className="text-lg text-slate-700 dark:text-gray-300">{assessment.lessonDescription}</p>
+              )}
+              <ul className="flex flex-col gap-3 text-lg text-slate-600 dark:text-gray-300">
+                <li className="flex items-center gap-3"><ClipboardList className="w-6 h-6 shrink-0" /> {questions.length} questions</li>
+                <li className="flex items-center gap-3"><CheckCircle className="w-6 h-6 shrink-0" /> You need {assessment.passMark}% to pass</li>
+                <li className="flex items-center gap-3"><Clock className="w-6 h-6 shrink-0" /> You can change an answer until you send the exam</li>
+              </ul>
+              <div className="hidden xl:block">
+                <button onClick={startExam} disabled={busy} className={BTN_PRIMARY + ' w-full'}>
+                  <Play className="w-5 h-5" /> Start the exam
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -262,7 +295,7 @@ export default function AssessmentRunPage() {
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
               {q.mediaUrl && (
                 <div className="lg:col-span-3">
-                  <VideoBox src={q.mediaUrl} captionUrl={q.captionUrl} />
+                  <VideoBox src={q.mediaUrl} captionUrl={q.captionUrl} allowYouTube={false} />
                 </div>
               )}
               <div className={(q.mediaUrl ? 'lg:col-span-2' : 'lg:col-span-5') + ' flex flex-col gap-5'}>
