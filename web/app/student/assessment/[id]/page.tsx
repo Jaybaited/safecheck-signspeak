@@ -295,52 +295,56 @@ export default function AssessmentRunPage() {
         {view === 'exam' && assessment && q && (
           <div className={CARD + ' flex flex-col gap-5'}>
             <div className="flex items-center justify-between text-slate-500 dark:text-gray-400">
-              <span className="font-semibold">Question {index + 1} of {questions.length}</span>
-              <span>{answeredCount} answered</span>
+              <span className="font-semibold text-sm">Question {index + 1} of {questions.length}</span>
+              <span className="text-sm">{answeredCount} of {questions.length} answered</span>
             </div>
             <div className="w-full h-2 rounded-full bg-slate-200 dark:bg-gray-800">
               <div
-                className="h-2 rounded-full bg-[#7B1113]"
-                style={{ width: `${(answeredCount / Math.max(questions.length, 1)) * 100}%` }}
+                className="h-2 rounded-full bg-[#7B1113] transition-all duration-300"
+                style={{ width: ((answeredCount / Math.max(questions.length, 1)) * 100) + '%' }}
               />
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
+            <div
+              className="grid gap-6 items-start"
+              style={{
+                gridTemplateColumns: wide && q.mediaUrl ? 'minmax(0, 1.35fr) minmax(320px, 1fr)' : 'minmax(0, 1fr)',
+              }}
+            >
               {q.mediaUrl && (
-                <div className="lg:col-span-3">
+                <div className="flex flex-col gap-2">
                   <VideoBox src={q.mediaUrl} captionUrl={q.captionUrl} allowYouTube={false} />
                 </div>
               )}
-              <div className={(q.mediaUrl ? 'lg:col-span-2' : 'lg:col-span-5') + ' flex flex-col gap-5'}>
-            <p className="text-lg font-semibold">{q.prompt}</p>
+              <div className="flex flex-col gap-4">
+                <p className="text-lg font-bold text-slate-900 dark:text-white leading-snug">{q.prompt}</p>
 
-            <div className="grid grid-cols-1 gap-4">
-              {choices.map(([letter, text]) => {
-                const selected = answers[q.id] === letter;
-                return (
-                  <button
-                    key={letter}
-                    onClick={() => choose(q.id, letter)}
-                    disabled={busy}
-                    className={`flex items-center gap-4 text-left px-5 py-5 rounded-xl border-2 text-lg font-semibold transition-colors disabled:opacity-60 ${
-                      selected
-                        ? 'border-[#7B1113] bg-[#7B1113]/10 dark:bg-[#7B1113]/20'
-                        : 'border-slate-200 dark:border-gray-700 hover:border-[#7B1113]'
-                    }`}
-                  >
-                    <span className={`w-10 h-10 shrink-0 rounded-full flex items-center justify-center font-bold ${selected ? 'bg-[#7B1113] text-white' : 'bg-slate-100 dark:bg-gray-800'}`}>
-                      {letter}
-                    </span>
-                    <span>{text}</span>
-                  </button>
-                );
-              })}
+                <div className="grid grid-cols-1 gap-3">
+                  {choices.map(([letter, text]) => {
+                    const selected = answers[q.id] === letter;
+                    return (
+                      <button
+                        key={letter}
+                        onClick={() => choose(q.id, letter)}
+                        disabled={busy}
+                        className={'flex items-center gap-3.5 text-left px-4 py-3.5 rounded-xl border-2 text-base font-semibold transition-colors disabled:opacity-60 ' +
+                          (selected
+                            ? 'border-[#7B1113] bg-[#7B1113]/10 dark:bg-[#7B1113]/20 text-[#7B1113] dark:text-[#E8C96A]'
+                            : 'border-slate-200 dark:border-gray-700 hover:border-[#7B1113] text-slate-800 dark:text-gray-200')}
+                      >
+                        <span className={'w-8 h-8 shrink-0 rounded-full flex items-center justify-center font-bold text-sm ' +
+                          (selected ? 'bg-[#7B1113] text-white' : 'bg-slate-100 dark:bg-gray-800 text-slate-700 dark:text-gray-300')}>
+                          {letter}
+                        </span>
+                        <span>{text}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
 
-            </div>
-            </div>
-
-            <div className="flex items-center justify-between pt-2">
+            <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-gray-800">
               <button onClick={() => setIndex((i) => Math.max(0, i - 1))} disabled={index === 0 || busy} className={BTN_OUTLINE}>
                 <ArrowLeft className="w-5 h-5" /> Back
               </button>
