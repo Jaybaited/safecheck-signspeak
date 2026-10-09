@@ -16,6 +16,8 @@ import ThemeToggle from '@/components/ThemeToggle';
 import FSLCamera from '@/components/fsl/FSLCamera';
 import type { FSLPrediction } from '@/types/fsl';
 import { studentStorage } from '@/lib/storage';
+import { getMyFslProgress, recordFslSign, importLocalFslOnce } from '@/lib/fsl-api';
+import { logout } from '@/lib/auth';
 
 interface User {
   id: string;
@@ -50,10 +52,10 @@ const TIPS: Record<string, string> = {
   O: 'All fingers and thumb form a circle.',
   P: 'Like K but pointing downward.',
   Q: 'Like G but pointing downward.',
-  R: 'Cross index and middle fingers.',
+  R: 'Cross your middle finger over your index finger and keep them close together.',
   S: 'Make a fist with thumb over fingers.',
   T: 'Thumb between index and middle fingers.',
-  U: 'Index and middle fingers together, pointing up.',
+  U: 'Index and middle fingers straight, touching, pointing up. Do not cross them (crossed is R).',
   V: 'Index and middle fingers spread in a V.',
   W: 'Three fingers spread out.',
   X: 'Hook index finger into a curve.',
@@ -86,6 +88,11 @@ export default function FSLLearningPage() {
       setUser(parsedUser);
       const saved = studentStorage.get(parsedUser.id, 'fsl_completed');
       if (saved) setCompleted(new Set(JSON.parse(saved) as string[]));
+      importLocalFslOnce(parsedUser.id).finally(() => {
+        getMyFslProgress()
+          .then((p) => setCompleted(new Set(p.letters.filter((l) => l.status === 'MASTERED').map((l) => l.word))))
+          .catch(() => {});
+      });
     } catch {
       router.push('/login');
     } finally {
@@ -94,8 +101,7 @@ export default function FSLLearningPage() {
   }, [router]);
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    logout();
     router.push('/login');
   };
 
@@ -108,6 +114,7 @@ export default function FSLLearningPage() {
     });
     setJustSigned((prev) => new Set([...prev, selectedLetter]));
     studentStorage.logFslActivity(user.id);
+    recordFslSign(selectedLetter, pred.confidence).catch(() => {});
   }, [user, selectedLetter]);
 
   const handlePrediction = useCallback((pred: FSLPrediction | null) => {
@@ -163,7 +170,7 @@ export default function FSLLearningPage() {
           <div>
             <h1 className="text-xl font-bold tracking-tight">FSL Learning</h1>
             <p className="text-xs text-slate-500 dark:text-gray-400 mt-0.5">
-              Practice Filipino Sign Language alphabet with your camera
+              Practice Filipino Sign Language alphabet with your camera. Keep your hand close to the camera and fully visible.
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -262,7 +269,7 @@ export default function FSLLearningPage() {
                 <button
                   onClick={goToPrev}
                   disabled={currentIdx <= 0}
-                  style={{ outline: 'none' }}
+                  style={{ outline: 'none', backgroundColor: 'rgba(239,68,68,0.08)' }}
                   onMouseEnter={e => {
                     if (!e.currentTarget.disabled) {
                       e.currentTarget.style.boxShadow = 'inset 0 0 0 2px #f87171';
@@ -277,7 +284,6 @@ export default function FSLLearningPage() {
                     text-red-500 dark:text-red-400
                     border-r border-slate-200 dark:border-gray-800
                     disabled:opacity-30 disabled:cursor-not-allowed transition-colors min-w-[120px]"
-                  style={{ backgroundColor: 'rgba(239,68,68,0.08)' }}
                 >
                   <ChevronLeft className="w-5 h-5" />
                   Previous

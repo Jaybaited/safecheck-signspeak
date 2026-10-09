@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -81,14 +81,22 @@ export class AttendanceService {
     let action: AttendanceAction;
 
     if (!attendance) {
-      attendance = await this.prisma.attendance.create({
-        data: {
-          studentId: user.id,
-          timeIn:    serverNow,
-          date:      attendanceDate,
-          status,
-        },
-      });
+      try {
+        attendance = await this.prisma.attendance.create({
+          data: {
+            studentId: user.id,
+            timeIn:    serverNow,
+            date:      attendanceDate,
+            status,
+          },
+        });
+      } catch (err: any) {
+        // Two taps for the same card arrived at the same moment (unique student + date).
+        if (err?.code === 'P2002') {
+          throw new ConflictException('This card was just scanned. Please wait a moment and tap again.');
+        }
+        throw err;
+      }
       action = 'CHECK_IN';
     } else if (!attendance.timeOut) {
       attendance = await this.prisma.attendance.update({
@@ -125,7 +133,22 @@ export class AttendanceService {
     };
   }
 
-  async getStudentAttendance(studentId: string) {
+  async getStudentAttendance(studentId: string, from?: string, to?: string) {
+    // With from/to (YYYY-MM-DD) return every record in that range; otherwise the latest 30.
+    if (from || to) {
+      const valid = (v?: string) => !v || /^\d{4}-\d{2}-\d{2}$/.test(v);
+      if (!valid(from) || !valid(to)) {
+        throw new BadRequestException('from and to must be dates like 2026-09-30.');
+      }
+      const date: { gte?: Date; lte?: Date } = {};
+      if (from) date.gte = new Date(from + 'T00:00:00.000Z');
+      if (to) date.lte = new Date(to + 'T00:00:00.000Z');
+      return this.prisma.attendance.findMany({
+        where:   { studentId, date },
+        orderBy: { date: 'desc' },
+        take:    400,
+      });
+    }
     return this.prisma.attendance.findMany({
       where:   { studentId },
       orderBy: { date: 'desc' },
@@ -134,35 +157,92 @@ export class AttendanceService {
   }
 
   async getStudentStats(studentId: string) {
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const serverNow = await this.networkTime.getNow();
+    const manilaNow = new Date(serverNow.getTime() + 8 * 60 * 60 * 1000);
+    const todayMs   = Date.UTC(manilaNow.getUTCFullYear(), manilaNow.getUTCMonth(), manilaNow.getUTCDate());
+    const DAY       = 24 * 60 * 60 * 1000;
 
-    const attendanceRecords = await this.prisma.attendance.findMany({
-      where: { studentId, date: { gte: thirtyDaysAgo } },
+    const records = await this.prisma.attendance.findMany({
+      where: {
+        studentId,
+        date: { gte: new Date(todayMs - 29 * DAY), lte: new Date(todayMs) },
+      },
+      orderBy: { date: 'asc' },
     });
 
-    const totalDays      = attendanceRecords.length;
-    const present        = attendanceRecords.filter((r) => r.timeIn !== null).length;
-    const late           = attendanceRecords.filter((r) => r.status === 'LATE').length;
-    const absent         = totalDays - present;
+    const present = records.filter((r) => r.timeIn !== null).length;
+    const late    = records.filter((r) => r.status === 'LATE').length;
+
+    // School days = Monday to Friday from the student's first record in the window up to
+    // yesterday, plus today if the student has already tapped. Days in the school calendar (holidays) are skipped.
+    const holidayRows = await this.prisma.schoolHoliday.findMany({
+      where: { date: { gte: new Date(todayMs - 29 * DAY), lte: new Date(todayMs) } },
+      select: { date: true },
+    });
+    const holidays = new Set(holidayRows.map((h) => h.date.getTime()));
+
+    let schoolDays = 0;
+    if (records.length > 0) {
+      for (let t = records[0].date.getTime(); t < todayMs; t += DAY) {
+        const dow = new Date(t).getUTCDay();
+        if (dow !== 0 && dow !== 6 && !holidays.has(t)) schoolDays++;
+      }
+      if (records.some((r) => r.date.getTime() === todayMs)) schoolDays++;
+    }
+
+    const totalDays      = Math.max(schoolDays, present);
+    const absent         = Math.max(0, totalDays - present);
     const attendanceRate = totalDays > 0 ? Math.round((present / totalDays) * 100) : 0;
 
     return { totalDays, present, late, absent, attendanceRate };
   }
 
   async getTodayAttendance(studentId: string) {
-    const now     = new Date();
-    const today   = new Date(now);
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    // Same Manila "today" as the RFID tap, so the result does not depend on the server time zone.
+    const serverNow  = await this.networkTime.getNow();
+    const manilaDate = new Date(serverNow.getTime() + 8 * 60 * 60 * 1000);
+    const { todayStart, todayEnd } = getManilaToday(manilaDate);
 
     return this.prisma.attendance.findFirst({
       where: {
         studentId,
-        date: { gte: today, lt: tomorrow },
+        date: { gte: todayStart, lt: todayEnd },
       },
     });
+  }
+
+  async getTodaySummary() {
+    const serverNow  = await this.networkTime.getNow();
+    const manilaDate = new Date(serverNow.getTime() + 8 * 60 * 60 * 1000);
+    const { todayStart, todayEnd } = getManilaToday(manilaDate);
+
+    const [totalStudents, records] = await Promise.all([
+      this.prisma.user.count({ where: { role: 'STUDENT' } }),
+      this.prisma.attendance.findMany({
+        where: { date: { gte: todayStart, lt: todayEnd } },
+        select: { status: true, noTapOut: true, timeIn: true, timeOut: true },
+      }),
+    ]);
+
+    const checkedIn = records.filter((r) => r.timeIn !== null);
+    const late = checkedIn.filter((r) => r.status === 'LATE').length;
+    const unconfirmedOut = checkedIn.filter((r) => r.noTapOut).length;
+
+    return {
+      date: todayStart.toISOString().slice(0, 10),
+      lastTapAt: records.reduce<Date | null>((latest, r) => {
+        for (const t of [r.timeIn, r.timeOut]) {
+          if (t && (!latest || t > latest)) latest = t;
+        }
+        return latest;
+      }, null),
+      totalStudents,
+      checkedIn: checkedIn.length,
+      late,
+      unconfirmedOut,
+      notCheckedIn: Math.max(0, totalStudents - checkedIn.length),
+      attendanceRate: totalStudents > 0 ? Math.round((checkedIn.length / totalStudents) * 100) : 0,
+    };
   }
 
   async getNetworkTime(): Promise<Date> {
@@ -195,7 +275,7 @@ export class AttendanceService {
     for (const record of noTapOut) {
       await this.prisma.attendance.update({
         where: { id: record.id },
-        data:  { status: 'UNCONFIRMED_OUT' },
+        data:  { noTapOut: true },
       });
 
       this.notificationsService
@@ -203,7 +283,7 @@ export class AttendanceService {
         .catch(console.error);
     }
 
-    console.log(`[Item 14] Marked ${noTapOut.length} students as UNCONFIRMED_OUT`);
+    console.log(`[Item 14] Marked ${noTapOut.length} students as no tap-out`);
   }
 
   // ── Item 14: Returns students with timeIn but no timeOut today ────────────
@@ -252,13 +332,14 @@ export class AttendanceService {
     const where: Record<string, unknown> = {};
     if (query.studentId)  where.studentId = query.studentId;
     if (dateFilter)       where.date      = dateFilter;
-    if (query.status)     where.status    = query.status;
+    if (query.status === 'UNCONFIRMED_OUT') where.noTapOut = true;
+    else if (query.status) where.status = query.status;
     if (query.gradeLevel) where.student   = { gradeLevel: query.gradeLevel };
 
     const [records, total] = await Promise.all([
       this.prisma.attendance.findMany({
         where,
-        orderBy: { date: 'desc' },
+        orderBy: [{ date: 'desc' }, { timeIn: 'desc' }],
         skip,
         take: limit,
         include: {

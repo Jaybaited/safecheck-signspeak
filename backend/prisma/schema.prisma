@@ -9,32 +9,36 @@ datasource db {
 }
 
 model User {
-  id                 String          @id @default(uuid())
-  username           String          @unique
-  email              String?         @unique
-  password           String
-  role               Role
-  firstName          String
-  lastName           String
-  gradeLevel         GradeLevel?
-  rfidCard           String?         @unique
-  photoUrl           String?
-  createdAt          DateTime        @default(now())
-  updatedAt          DateTime        @updatedAt
-  pushToken          String?
-  mustChangePassword Boolean         @default(true)
-  phoneNumber        String?
-  attendances        Attendance[]
-  fslProgress        FSLProgress[]
-  parentLinks        ParentStudent[] @relation("ParentUser")
-  childLinks         ParentStudent[] @relation("StudentUser")
+  id                    String                 @id @default(uuid())
+  username              String                 @unique
+  email                 String?                @unique
+  password              String
+  role                  Role
+  firstName             String
+  lastName              String
+  gradeLevel            GradeLevel?
+  rfidCard              String?                @unique
+  photoUrl              String?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  pushToken             String?
+  mustChangePassword    Boolean                @default(true)
+  phoneNumber           String?
+  attendances           Attendance[]
+  fslProgress           FSLProgress[]
+  parentLinks           ParentStudent[]        @relation("ParentUser")
+  childLinks            ParentStudent[]        @relation("StudentUser")
+  notifications         Notification[]
+  refreshTokens         RefreshToken[]
+  passwordResetRequests PasswordResetRequest[]
 
   // Phase 1 additions
-  assessmentsCreated Assessment[]         @relation("AssessmentCreator")
+  assessmentsCreated Assessment[]        @relation("AssessmentCreator")
   assessmentAttempts AssessmentAttempt[]
-  announcements      Announcement[]       @relation("AnnouncementCreator")
 
   @@map("users")
+  fslActivities FSLActivity[]
+  fslGameScores FSLGameScore[]
 }
 
 model ParentStudent {
@@ -49,17 +53,6 @@ model ParentStudent {
   @@map("parent_students")
 }
 
-model RFIDCard {
-  id         String     @id @default(uuid())
-  cardUID    String     @unique
-  studentId  String
-  status     CardStatus @default(ACTIVE)
-  issuedAt   DateTime   @default(now())
-  replacedAt DateTime?
-
-  @@map("rfid_cards")
-}
-
 model Attendance {
   id        String           @id @default(uuid())
   studentId String
@@ -67,8 +60,11 @@ model Attendance {
   timeOut   DateTime?
   date      DateTime         @default(now()) @db.Date
   status    AttendanceStatus @default(PRESENT)
+  noTapOut  Boolean          @default(false)
   student   User             @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
+  @@unique([studentId, date])
+  @@index([date])
   @@map("attendances")
 }
 
@@ -85,6 +81,7 @@ model FSLWord {
   assessmentQuestions AssessmentQuestion[]
 
   @@map("fsl_words")
+  activities FSLActivity[]
 }
 
 model FSLProgress {
@@ -110,6 +107,9 @@ model Notification {
   type    NotificationType
   status  NotificationStatus @default(UNREAD)
 
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
   @@map("notifications")
 }
 
@@ -143,6 +143,8 @@ model RefreshToken {
   expiresAt DateTime
   createdAt DateTime @default(now())
 
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
   @@map("refresh_tokens")
 }
@@ -169,6 +171,7 @@ model PasswordResetRequest {
   resolvedAt        DateTime?
   resolvedBy        String?
   generatedPassword String?
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([status])
   @@index([userId])
@@ -180,17 +183,21 @@ model PasswordResetRequest {
 // ─────────────────────────────────────────────
 
 model Assessment {
-  id          String             @id @default(uuid())
-  title       String
-  audience    AssessmentAudience
-  type        AssessmentType
-  gradeLevel  GradeLevel?
-  isActive    Boolean            @default(false)
-  isPublished Boolean            @default(false)
-  createdBy   String
-  creator     User               @relation("AssessmentCreator", fields: [createdBy], references: [id])
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
+  id                String             @id @default(uuid())
+  title             String
+  audience          AssessmentAudience
+  type              AssessmentType
+  gradeLevel        GradeLevel?
+  level             Int?
+  passMark          Int                @default(70)
+  lessonVideoUrl    String?
+  lessonDescription String?
+  isActive          Boolean            @default(false)
+  isPublished       Boolean            @default(false)
+  createdBy         String
+  creator           User               @relation("AssessmentCreator", fields: [createdBy], references: [id])
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
 
   questions AssessmentQuestion[]
   attempts  AssessmentAttempt[]
@@ -207,6 +214,7 @@ model AssessmentQuestion {
   type          QuestionType
   prompt        String
   mediaUrl      String?
+  captionUrl    String?
   wordId        String?
   word          FSLWord?     @relation(fields: [wordId], references: [id])
   choices       Json?
@@ -226,6 +234,7 @@ model AssessmentAttempt {
   user               User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   status             AttemptStatus @default(IN_PROGRESS)
   score              Float?
+  passed             Boolean?
   scoreVisibleToUser Boolean       @default(true)
   reviewedByAdminId  String?
   reviewedAt         DateTime?
@@ -254,23 +263,6 @@ model AssessmentResponse {
 }
 
 // ─────────────────────────────────────────────
-// PHASE 1 ADDITIONS — Announcements
-// ─────────────────────────────────────────────
-
-model Announcement {
-  id        String               @id @default(uuid())
-  title     String
-  message   String
-  audience  AnnouncementAudience @default(ALL)
-  createdBy String
-  creator   User                 @relation("AnnouncementCreator", fields: [createdBy], references: [id])
-  createdAt DateTime             @default(now())
-
-  @@index([audience])
-  @@map("announcements")
-}
-
-// ─────────────────────────────────────────────
 // ENUMS — existing
 // ─────────────────────────────────────────────
 
@@ -294,13 +286,6 @@ enum GradeLevel {
   GRADE_10
   GRADE_11
   GRADE_12
-}
-
-enum CardStatus {
-  ACTIVE
-  LOST
-  REPLACED
-  SUSPENDED
 }
 
 enum AttendanceStatus {
@@ -376,8 +361,44 @@ enum AttemptStatus {
   GRADED
 }
 
-enum AnnouncementAudience {
-  ALL
-  STUDENTS
-  PARENTS
+enum FSLActivitySource {
+  PRACTICE
+  GAME
+}
+
+model FSLActivity {
+  id         String            @id @default(uuid())
+  studentId  String
+  wordId     String
+  source     FSLActivitySource @default(PRACTICE)
+  confidence Float?
+  createdAt  DateTime          @default(now())
+  student    User              @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  word       FSLWord           @relation(fields: [wordId], references: [id], onDelete: Cascade)
+
+  @@index([studentId, createdAt])
+  @@map("fsl_activity")
+}
+
+model FSLGameScore {
+  id           String   @id @default(uuid())
+  studentId    String
+  mode         String
+  score        Int
+  lettersCount Int      @default(0)
+  createdAt    DateTime @default(now())
+  student      User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId, mode])
+  @@map("fsl_game_scores")
+}
+
+// School calendar: days with no classes (holidays), used by the attendance rate
+model SchoolHoliday {
+  id        String   @id @default(uuid())
+  date      DateTime @unique @db.Date
+  name      String
+  createdAt DateTime @default(now())
+
+  @@map("school_holidays")
 }

@@ -5,10 +5,11 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import {
   LayoutDashboard, Users, Wifi, FileText,
-  BookOpen, Settings, LogOut, Cpu, GraduationCap, KeyRound,
+  BookOpen, Settings, CalendarDays, LogOut, Cpu, GraduationCap, KeyRound, ClipboardCheck,
 } from 'lucide-react';
 import { getPendingResetCount } from '@/lib/api';
 import LogoutModal from '@/components/shared/LogoutModal';
+import { useSystemStatus } from '@/hooks/useSystemStatus';
 
 interface SidebarProps {
   onLogout: () => void;
@@ -27,6 +28,7 @@ export default function Sidebar({ onLogout, admin }: SidebarProps) {
   const pathname = usePathname();
   const [pendingCount, setPendingCount] = useState(0);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const status = useSystemStatus();
 
   useEffect(() => {
     const fetchCount = async () => {
@@ -48,8 +50,9 @@ export default function Sidebar({ onLogout, admin }: SidebarProps) {
     { name: 'RFID Management',   href: '/admin/rfid-management',    icon: Wifi,            badge: 0            },
     { name: 'Reports',           href: '/admin/reports',            icon: FileText,        badge: 0            },
     { name: 'FSL Progress',      href: '/admin/fsl',                icon: BookOpen,        badge: 0            },
+    { name: 'Assessment Results', href: '/admin/assessment-results', icon: ClipboardCheck, badge: 0 },
     { name: 'Password Requests', href: '/admin/password-requests',  icon: KeyRound,        badge: pendingCount },
-    { name: 'Configuration',     href: '/admin/config',             icon: Settings,        badge: 0            },
+    { name: 'School Calendar',   href: '/admin/config',             icon: CalendarDays,    badge: 0            },
   ];
 
   return (
@@ -81,11 +84,16 @@ export default function Sidebar({ onLogout, admin }: SidebarProps) {
             return (
               <Link key={item.name} href={item.href}>
                 <div className={`flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-colors text-sm ${isActive ? ACTIVE_CLS : INACTIVE_CLS}`}>
-                  <item.icon className="w-4 h-4 shrink-0" />
+                  <div className="relative shrink-0">
+                    <item.icon className="w-4 h-4" />
+                    {item.badge > 0 && (
+                      <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white dark:border-gray-900" />
+                    )}
+                  </div>
                   <span className="flex-1">{item.name}</span>
                   {item.badge > 0 && (
-                    <span className="min-w-[18px] h-[18px] px-1 bg-[#7B1113] text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                      {item.badge > 99 ? '99+' : item.badge}
+                    <span className="px-1.5 py-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full leading-none">
+                      {item.badge > 9 ? '9+' : item.badge}
                     </span>
                   )}
                 </div>
@@ -101,14 +109,28 @@ export default function Sidebar({ onLogout, admin }: SidebarProps) {
           </p>
           <div className="space-y-1.5">
             <div className="flex items-center gap-2">
-              <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-              <Wifi className="w-3 h-3 text-emerald-500" />
-              <span className="text-xs text-emerald-600 dark:text-emerald-400">RFID Online</span>
+              <div className={'w-1.5 h-1.5 rounded-full ' + (status.api === 'online' ? 'bg-emerald-500 animate-pulse' : status.api === 'offline' ? 'bg-red-500' : 'bg-gray-400')} />
+              <span className="text-xs text-gray-600 dark:text-gray-300">
+                Server: {status.api === 'online' ? 'Online' : status.api === 'offline' ? 'Offline' : 'Checking'}
+              </span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-              <Cpu className="w-3 h-3 text-emerald-500" />
-              <span className="text-xs text-emerald-600 dark:text-emerald-400">AI Active</span>
+              <div className={'w-1.5 h-1.5 rounded-full ' + (status.database === true ? 'bg-emerald-500 animate-pulse' : status.database === false ? 'bg-red-500' : 'bg-gray-400')} />
+              <span className="text-xs text-gray-600 dark:text-gray-300">
+                Database: {status.database === null ? (status.api === 'offline' ? 'Unknown' : 'Checking') : status.database ? 'Connected' : 'Error'}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className={'w-1.5 h-1.5 rounded-full ' + (status.ai === 'online' ? 'bg-emerald-500 animate-pulse' : status.ai === 'checking' ? 'bg-gray-400' : 'bg-red-500')} />
+              <span className="text-xs text-gray-600 dark:text-gray-300">
+                AI service: {status.ai === 'online' ? 'Online' : status.ai === 'nomodel' ? 'No model' : status.ai === 'offline' ? 'Offline' : 'Checking'}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+              <span className="text-xs text-gray-600 dark:text-gray-300">
+                Last tap: {status.lastTapAt ? new Date(status.lastTapAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : 'none today'}
+              </span>
             </div>
           </div>
         </div>

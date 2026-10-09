@@ -10,6 +10,7 @@ import {
 import Sidebar from '@/components/admin/Sidebar';
 import ThemeToggle from '@/components/ThemeToggle';
 import { api } from '@/lib/api';
+import { logout } from '@/lib/auth';
 
 
 interface AuthUser {
@@ -30,6 +31,7 @@ interface ReportRow {
   timeIn:      string | null;
   timeOut:     string | null;
   status:      string | null;
+  noTapOut:    boolean;
 }
 
 
@@ -76,7 +78,7 @@ function exportToCSV(rows: ReportRow[], filename: string) {
     r.date,
     r.timeIn      ? formatTime(r.timeIn)  : '--:--',
     r.timeOut     ? formatTime(r.timeOut) : '--:--',
-    r.status      ?? '--',
+    r.noTapOut ? (r.status ?? '--') + ' (no tap-out)' : (r.status ?? '--'),
   ]);
   const bom = '\uFEFF';
   const csv = [headers, ...data]
@@ -124,7 +126,7 @@ export default function ReportsPage() {
     const tappedIn    = rows.filter((r) => r.timeIn  !== null).length;
     const tappedOut   = rows.filter((r) => r.timeOut !== null).length;
     const late        = rows.filter((r) => r.status === 'LATE').length;
-    const unconfirmed = rows.filter((r) => r.status === 'UNCONFIRMED_OUT').length;
+    const unconfirmed = rows.filter((r) => r.noTapOut).length;
     return { total: rows.length, tappedIn, tappedOut, late, unconfirmed };
   }, [rows]);
 
@@ -165,6 +167,7 @@ export default function ReportsPage() {
         timeIn:  rec.timeIn,
         timeOut: rec.timeOut,
         status:  rec.status,
+        noTapOut: Boolean((rec as unknown as { noTapOut?: boolean }).noTapOut),
       }));
 
 
@@ -198,8 +201,7 @@ export default function ReportsPage() {
 
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    logout();
     router.push('/login');
   };
 
@@ -317,9 +319,9 @@ export default function ReportsPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           {[
             { label: 'Total Records', value: total,          color: 'text-slate-900 dark:text-white'         },
-            { label: 'Tapped In',     value: stats.tappedIn, color: 'text-emerald-600 dark:text-emerald-400' },
-            { label: 'Tapped Out',    value: stats.tappedOut,color: 'text-blue-600 dark:text-blue-400'       },
-            { label: 'Late',          value: stats.late,     color: stats.late > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-900 dark:text-white' },
+            { label: 'Tapped In (this page)',     value: stats.tappedIn, color: 'text-emerald-600 dark:text-emerald-400' },
+            { label: 'Tapped Out (this page)',    value: stats.tappedOut,color: 'text-blue-600 dark:text-blue-400'       },
+            { label: 'Late (this page)',          value: stats.late,     color: stats.late > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-900 dark:text-white' },
           ].map(({ label, value, color }) => (
             <div
               key={label}
@@ -385,7 +387,7 @@ export default function ReportsPage() {
               >
                 <option value="">All Statuses</option>
                 {STATUS_OPTIONS.map((s) => (
-                  <option key={s} value={s}>{s.replace('_', ' ')}</option>
+                  <option key={s} value={s}>{s === 'UNCONFIRMED_OUT' ? 'NO TAP-OUT' : s.replace('_', ' ')}</option>
                 ))}
               </select>
             </div>
@@ -559,7 +561,12 @@ export default function ReportsPage() {
                         {formatTime(row.timeOut)}
                       </td>
                       <td className="py-3 px-4">
-                        {statusBadge(row.status)}
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {statusBadge(row.status)}
+                          {row.noTapOut && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-500/10 dark:text-orange-400 dark:border-orange-500/20">NO TAP-OUT</span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))

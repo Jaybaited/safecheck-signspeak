@@ -13,6 +13,8 @@ import ThemeToggle from '@/components/ThemeToggle';
 import { studentStorage } from '@/lib/storage';
 import { api } from '@/lib/api';
 import type { AttendanceRecord, AttendanceStats } from '@/lib/api';
+import { logout } from '@/lib/auth';
+import { getMyFslProgress, importLocalFslOnce } from '@/lib/fsl-api';
 
 interface User {
   id: string; username: string; role: string;
@@ -31,6 +33,10 @@ interface WeekDay {
   fsl: number; hasTimeIn: boolean; hasTimeOut: boolean;
 }
 
+function localIso(d: Date): string {
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
 function getWeekDates(): { label: string; iso: string }[] {
   const today  = new Date();
   const monday = new Date(today);
@@ -38,7 +44,7 @@ function getWeekDates(): { label: string; iso: string }[] {
   return ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map((label, i) => {
     const d = new Date(monday);
     d.setDate(monday.getDate() + i);
-    return { label, iso: d.toISOString().split('T')[0] };
+    return { label, iso: localIso(d) };
   });
 }
 
@@ -76,10 +82,17 @@ export default function StudentProgressPage() {
     else setRefreshing(true);
     try {
       const weekDates = getWeekDates();
-      const [stats, records] = await Promise.all([
+      await importLocalFslOnce(studentId);
+      const [stats, records, fslProg] = await Promise.all([
         api.getStudentStats(studentId),
         api.getStudentAttendance(studentId),
+        getMyFslProgress().catch(() => null),
       ]);
+      if (fslProg) {
+        setCompletedLetters(new Set(fslProg.letters.filter((l) => l.status === 'MASTERED').map((l) => l.word)));
+      }
+      const fslByDate: Record<string, number> = {};
+      (fslProg?.daily ?? []).forEach((d) => { fslByDate[d.date] = d.count; });
       setAttendanceStats(stats as AttendanceStats);
 
       const recordsByDate: Record<string, AttendanceRecord> = {};
@@ -89,7 +102,7 @@ export default function StudentProgressPage() {
 
       setWeekDays(weekDates.map(({ label, iso }) => ({
         label, iso,
-        fsl:        studentStorage.getFslActivity(studentId, iso),
+        fsl:        fslByDate[iso] ?? 0,
         hasTimeIn:  !!recordsByDate[iso]?.timeIn,
         hasTimeOut: !!recordsByDate[iso]?.timeOut,
       })));
@@ -114,8 +127,7 @@ export default function StudentProgressPage() {
 
   const handleRefresh = () => { if (user) loadData(user.id, true); };
   const handleLogout  = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    logout();
     router.push('/login');
   };
 

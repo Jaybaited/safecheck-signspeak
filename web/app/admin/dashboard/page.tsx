@@ -9,6 +9,8 @@ import {
 } from 'lucide-react';
 import Sidebar from '@/components/admin/Sidebar';
 import ThemeToggle from '@/components/ThemeToggle';
+import { logout } from '@/lib/auth';
+import { useSystemStatus } from '@/hooks/useSystemStatus';
 
 interface AdminUser {
   id:        string;
@@ -80,6 +82,7 @@ async function apiFetch<T>(path: string, token: string): Promise<T> {
 
 export default function AdminDashboardPage() {
   const router = useRouter();
+  const sys = useSystemStatus();
 
   const [adminUser,   setAdminUser]   = useState<AdminUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -140,25 +143,20 @@ export default function AdminDashboardPage() {
       nameMap[u.id] = `${u.firstName} ${u.lastName}`;
     });
 
-    // Step 2: fetch today's attendance per student in parallel
-    // Uses GET /attendance/student/:id/today  (exists in your backend)
+    // Step 2: today's numbers come from one summary call that counts every student
     let presentToday = 0;
     let totalToday   = 0;
-
-    if (studentIds.length > 0) {
-      const sample = studentIds.slice(0, 30); // cap to keep it fast
-      const todayResults = await Promise.allSettled(
-        sample.map(id =>
-          apiFetch<AttendanceRecord | null>(`/attendance/student/${id}/today`, token)
-        )
+    let flagged      = 0;
+    try {
+      const summary = await apiFetch<{ checkedIn: number; totalStudents: number; unconfirmedOut: number }>(
+        '/attendance/summary/today',
+        token,
       );
-      todayResults.forEach(r => {
-        if (r.status === 'fulfilled' && r.value) {
-          totalToday++;
-          const s = r.value.status;
-          if (s === 'PRESENT' || s === 'LATE') presentToday++;
-        }
-      });
+      presentToday = summary.checkedIn;
+      totalToday   = summary.totalStudents;
+      flagged      = summary.unconfirmedOut;
+    } catch {
+      // keep zeros; the user and student counts still show
     }
 
     const attendanceRate = totalToday > 0
@@ -168,37 +166,24 @@ export default function AdminDashboardPage() {
     setStats({
       totalUsers:           users.length,
       totalStudents:        students.length,
-      pendingNotifications: 0,
+      pendingNotifications: flagged,
       attendanceRate,
       presentToday,
       totalToday,
     });
 
-    // Step 3: fetch recent attendance logs for first 5 students
-    // Uses GET /attendance/student/:id  (exists in your backend)
-    // Merges, sorts by date desc, takes top 10, attaches names from nameMap
+    // Step 3: the 10 most recent attendance records across all students
     try {
-      const sample = studentIds.slice(0, 5);
-      const logResults = await Promise.allSettled(
-        sample.map(id =>
-          apiFetch<AttendanceRecord[]>(`/attendance/student/${id}`, token)
-        )
+      const page = await apiFetch<{ data: (AttendanceRecord & { student: { firstName: string; lastName: string } })[] }>(
+        '/attendance?limit=10',
+        token,
       );
-      const merged: (AttendanceRecord & { studentName: string })[] = [];
-      logResults.forEach((r, i) => {
-        if (r.status === 'fulfilled') {
-          r.value.forEach(record => {
-            merged.push({
-              ...record,
-              studentName: nameMap[sample[i]] ?? `Student #${sample[i].slice(0, 6)}`,
-            });
-          });
-        }
-      });
-      const sorted = merged.sort(
-        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+      setRecentLogs(
+        page.data.map((r) => ({
+          ...r,
+          studentName: r.student.firstName + ' ' + r.student.lastName,
+        })),
       );
-      setRecentLogs(sorted.slice(0, 10));
     } catch {
       setRecentLogs([]);
     }
@@ -223,8 +208,7 @@ export default function AdminDashboardPage() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    logout();
     router.push('/login');
   };
 
@@ -522,14 +506,15 @@ export default function AdminDashboardPage() {
               <h2 className="text-base font-bold mb-4 text-slate-900 dark:text-white">System Status</h2>
               <div className="space-y-2.5">
                 {[
-                  { label: 'RFID Scanner', status: 'Online'    },
-                  { label: 'AI Service',   status: 'Active'    },
-                  { label: 'Database',     status: 'Connected' },
+                  { label: 'Server', status: sys.api === 'online' ? 'Online' : sys.api === 'offline' ? 'Offline' : 'Checking', ok: sys.api !== 'offline' },
+                  { label: 'Database', status: sys.database === null ? (sys.api === 'offline' ? 'Unknown' : 'Checking') : sys.database ? 'Connected' : 'Error', ok: sys.database !== false && sys.api !== 'offline' },
+                  { label: 'AI Service', status: sys.ai === 'online' ? 'Online' : sys.ai === 'nomodel' ? 'No model' : sys.ai === 'offline' ? 'Offline' : 'Checking', ok: sys.ai !== 'offline' && sys.ai !== 'nomodel' },
+                  { label: 'Last RFID Tap', status: sys.lastTapAt ? new Date(sys.lastTapAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : 'None today', ok: true },
                 ].map(item => (
                   <div key={item.label} className="flex items-center justify-between">
                     <span className="text-sm text-slate-600 dark:text-gray-300">{item.label}</span>
-                    <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 text-xs font-medium">
-                      <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                    <span className={'flex items-center gap-1.5 text-xs font-medium ' + (item.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400')}>
+                      <span className={'w-1.5 h-1.5 rounded-full ' + (item.ok ? 'bg-emerald-500 animate-pulse' : 'bg-red-500')} />
                       {item.status}
                     </span>
                   </div>

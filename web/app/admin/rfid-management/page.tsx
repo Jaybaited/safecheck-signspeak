@@ -7,6 +7,7 @@ import Sidebar from '@/components/admin/Sidebar';
 import ThemeToggle from '@/components/ThemeToggle';
 import EditRfidModal from '@/components/admin/EditRfidModal';
 import { api } from '@/lib/api';
+import { logout } from '@/lib/auth';
 
 interface AuthUser {
   id: string; username: string; role: string;
@@ -135,26 +136,22 @@ export default function RfidManagement() {
         nameMap[s.id] = `${s.firstName} ${s.lastName}`;
       });
 
-      const sample = students.slice(0, 10).map((s: any) => s.id);
-      const logResults = await Promise.allSettled(
-        sample.map((id: string) =>
-          apiFetch<AttendanceRecord | null>(`/attendance/student/${id}/today`, token)
-        )
-      );
+      type TodayRow = AttendanceRecord & { student: { firstName: string; lastName: string } };
+      const todayKey = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const todayPage = await apiFetch<{ data: TodayRow[] }>(
+        '/attendance?date=' + todayKey + '&limit=100',
+        token,
+      ).catch(() => ({ data: [] as TodayRow[] }));
 
-      const liveLogs: ActivityLog[] = [];
-      logResults.forEach((r, i) => {
-        if (r.status === 'fulfilled' && r.value) {
-          const record = r.value;
-          const s = record.status?.toUpperCase();
-          liveLogs.push({
-            id:          record.id,
-            studentName: nameMap[sample[i]] ?? `Student #${sample[i].slice(0, 6)}`,
-            action:      record.timeIn ? 'RFID tap' : 'No tap',
-            time:        formatTime(record.timeIn),
-            status:      s === 'PRESENT' ? 'present' : s === 'LATE' ? 'late' : 'absent',
-          });
-        }
+      const liveLogs: ActivityLog[] = todayPage.data.map((record) => {
+        const s = record.status?.toUpperCase();
+        return {
+          id:          record.id,
+          studentName: record.student.firstName + ' ' + record.student.lastName,
+          action:      record.timeIn ? 'RFID tap' : 'No tap',
+          time:        formatTime(record.timeIn),
+          status:      (s === 'PRESENT' || s === 'UNCONFIRMED_OUT' ? 'present' : s === 'LATE' ? 'late' : 'absent') as ActivityLog['status'],
+        };
       });
 
       liveLogs.sort((a, b) => {
@@ -196,8 +193,7 @@ export default function RfidManagement() {
   }, [router, fetchData]);
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    logout();
     router.push('/login');
   };
 

@@ -3,6 +3,7 @@
 import { useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import TeacherSidebar from '@/components/teacher/TeacherSidebar';
+import { logout } from '@/lib/auth';
 
 export default function TeacherLayout({
   children,
@@ -12,10 +13,7 @@ export default function TeacherLayout({
   const router = useRouter();
 
   const handleLogout = useCallback(() => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-    localStorage.removeItem('user');
+    logout();
     router.push('/login');
   }, [router]);
 

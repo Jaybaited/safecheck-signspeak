@@ -11,6 +11,10 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { AppConfigModule } from './config/config.module';
 import { PasswordResetModule } from './password-reset/password-reset.module';
 import { AssessmentsModule } from './assessments/assessments.module';
+import { FslModule } from './fsl/fsl.module';
+import { MaintenanceModule } from './maintenance/maintenance.module';
+import { HealthModule } from './health/health.module';
+import { CalendarModule } from './calendar/calendar.module';
 
 @Module({
   imports: [
@@ -24,6 +28,10 @@ import { AssessmentsModule } from './assessments/assessments.module';
     AppConfigModule,
     PasswordResetModule,
     AssessmentsModule,
+    FslModule,
+    MaintenanceModule,
+    HealthModule,
+    CalendarModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -11,6 +11,8 @@ import ThemeToggle from '@/components/ThemeToggle';
 import { api } from '@/lib/api';
 import type { ChildInfo, AttendanceRecord, AttendanceStats } from '@/lib/api';
 import { usePersistedUnreadCount } from '@/hooks/usePersistedUnreadCount';
+import { logout } from '@/lib/auth';
+import { pickChild } from '@/lib/selected-child';
 
 interface ParentUser {
   id: string; username: string; role: string;
@@ -55,7 +57,7 @@ export default function ParentDashboardPage() {
       api.getParentChildren(p.id)
         .then(async (children) => {
           if (!children.length) return;
-          const firstChild = children[0];
+          const firstChild = pickChild(p.id, children) ?? children[0];
           setChild(firstChild);
           const [attendance, statsData, todayData] = await Promise.all([
             api.getStudentAttendance(firstChild.id).catch(() => [] as AttendanceRecord[]),
@@ -72,8 +74,24 @@ export default function ParentDashboardPage() {
     } catch { router.push('/login'); }
   }, [router]);
 
+  useEffect(() => {
+    if (!child) return;
+    const refresh = async () => {
+      const [attendance, statsData, todayData] = await Promise.all([
+        api.getStudentAttendance(child.id).catch(() => null),
+        api.getStudentStats(child.id).catch(() => null),
+        api.getTodayAttendance(child.id).catch(() => null),
+      ]);
+      if (attendance) setRecords(attendance);
+      if (statsData) setStats(statsData);
+      setTodayRecord(todayData);
+    };
+    const timer = setInterval(refresh, 15000);
+    return () => clearInterval(timer);
+  }, [child]);
+
   const handleLogout = () => {
-    localStorage.removeItem('token'); localStorage.removeItem('user');
+    logout();
     router.push('/login');
   };
 

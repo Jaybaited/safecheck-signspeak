@@ -11,6 +11,7 @@ import ThemeToggle    from '@/components/ThemeToggle';
 import { api }        from '@/lib/api';
 import type { ParentInfo } from '@/lib/api';
 import { validateNewPassword, PASSWORD_HINT } from '@/lib/password';
+import { logout } from '@/lib/auth';
 
 
 interface UserProfile {
@@ -101,7 +102,12 @@ export default function StudentProfilePage() {
       // Fetch fresh profile (ensures rfidCard is current)
       setProfileLoading(true);
       api.getUserById(cached.id)
-        .then((fresh: UserProfile) => {
+        .then((res) => {
+          const fresh: UserProfile = {
+            ...res,
+            gradeLevel: res.gradeLevel ?? null,
+            rfidCard: res.rfidCard ?? null,
+          };
           setUser(fresh);
           localStorage.setItem('user', JSON.stringify(fresh));
         })
@@ -125,8 +131,7 @@ export default function StudentProfilePage() {
 
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    logout();
     router.push('/login');
   };
 

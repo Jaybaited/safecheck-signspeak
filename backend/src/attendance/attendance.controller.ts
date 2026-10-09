@@ -48,9 +48,14 @@ export class AttendanceController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'TEACHER', 'PARENT', 'STUDENT')
   @Get('student/:studentId')
-  async getStudentAttendance(@Param('studentId') studentId: string, @Req() req: any) {
+  async getStudentAttendance(
+    @Param('studentId') studentId: string,
+    @Query('from') from: string | undefined,
+    @Query('to') to: string | undefined,
+    @Req() req: any,
+  ) {
     await assertCanAccessStudent(this.prisma, getAuthUser(req), studentId);
-    return this.attendanceService.getStudentAttendance(studentId);
+    return this.attendanceService.getStudentAttendance(studentId, from, to);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -67,6 +72,13 @@ export class AttendanceController {
   async getTodayAttendance(@Param('studentId') studentId: string, @Req() req: any) {
     await assertCanAccessStudent(this.prisma, getAuthUser(req), studentId);
     return this.attendanceService.getTodayAttendance(studentId);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'TEACHER')
+  @Get('summary/today')
+  async getTodaySummary() {
+    return this.attendanceService.getTodaySummary();
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

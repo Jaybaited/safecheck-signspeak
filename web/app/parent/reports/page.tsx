@@ -8,8 +8,11 @@ import {
 } from 'lucide-react';
 import ParentSidebar from '@/components/parent/ParentSidebar';
 import ThemeToggle from '@/components/ThemeToggle';
-import { api } from '@/lib/api';
+import { api, apiFetch } from '@/lib/api';
 import type { ChildInfo, AttendanceRecord } from '@/lib/api';
+import { logout } from '@/lib/auth';
+import { pickChild } from '@/lib/selected-child';
+import { usePersistedUnreadCount } from '@/hooks/usePersistedUnreadCount';
 
 interface ParentUser {
   id: string; username: string; role: string;
@@ -35,6 +38,7 @@ const formatTime = (iso: string | null | undefined) => {
 export default function ParentReportsPage() {
   const router = useRouter();
   const [parent,         setParent]         = useState<ParentUser | null>(null);
+  const unreadCount = usePersistedUnreadCount(parent?.id);
   const [child,          setChild]          = useState<ChildInfo | null>(null);
   const [allRecords,     setAllRecords]     = useState<AttendanceRecord[]>([]);
   const [authLoading,    setAuthLoading]    = useState(true);
@@ -58,7 +62,7 @@ export default function ParentReportsPage() {
       api.getParentChildren(p.id)
         .then((children) => {
           if (!children.length) return;
-          const firstChild = children[0];
+          const firstChild = pickChild(p.id, children) ?? children[0];
           setChild(firstChild);
           return api.getStudentAttendance(firstChild.id)
             .then(setAllRecords)
@@ -70,7 +74,7 @@ export default function ParentReportsPage() {
   }, [router]);
 
   const handleLogout = () => {
-    localStorage.removeItem('token'); localStorage.removeItem('user');
+    logout();
     router.push('/login');
   };
 
@@ -81,15 +85,61 @@ export default function ParentReportsPage() {
   });
 
   const tappedIn = filteredRecords.filter((r) => r.timeIn).length;
-  const noTap    = filteredRecords.filter((r) => !r.timeIn).length;
-  const total    = filteredRecords.length;
-  const tapRate  = total > 0 ? Math.round((tappedIn / total) * 100) : 0;
+
+  // School days = Monday to Friday from the first tap of the month up to today (or month end).
+  const schoolDays = (() => {
+    if (tappedIn === 0) return 0;
+    const now = new Date();
+    const lastDay = new Date(selectedYear, selectedMonth + 1, 0).getDate();
+    const isCurrent = now.getFullYear() === selectedYear && now.getMonth() === selectedMonth;
+    const end = isCurrent ? now.getDate() : lastDay;
+    const firstDay = Math.min(
+      ...filteredRecords.filter((r) => r.timeIn).map((r) => new Date(r.date).getDate()),
+    );
+    let count = 0;
+    for (let day = firstDay; day <= end; day++) {
+      const dow = new Date(selectedYear, selectedMonth, day).getDay();
+      if (dow !== 0 && dow !== 6) count++;
+    }
+    return count;
+  })();
+  const total   = Math.max(schoolDays, tappedIn);
+  const noTap   = Math.max(0, total - tappedIn);
+  const tapRate = total > 0 ? Math.round((tappedIn / total) * 100) : 0;
+
+  const loadMonth = async (childId: string) => {
+    const mm = String(selectedMonth + 1).padStart(2, '0');
+    const lastDay = new Date(selectedYear, selectedMonth + 1, 0).getDate();
+    const records = await apiFetch<AttendanceRecord[]>(
+      '/attendance/student/' + childId +
+        '?from=' + selectedYear + '-' + mm + '-01' +
+        '&to=' + selectedYear + '-' + mm + '-' + String(lastDay).padStart(2, '0'),
+    );
+    setAllRecords(records);
+  };
 
   const handleGenerate = async () => {
+    if (!child) return;
     setIsGenerating(true);
-    await new Promise((r) => setTimeout(r, 600));
-    setIsGenerating(false);
+    try {
+      await loadMonth(child.id);
+      setError('');
+    } catch {
+      setError('Failed to load attendance data.');
+    } finally {
+      setIsGenerating(false);
+    }
   };
+
+  // Load the selected month whenever the child, month, or year changes
+  useEffect(() => {
+    if (!child) return;
+    setDataLoading(true);
+    loadMonth(child.id)
+      .catch(() => setError('Failed to load attendance data.'))
+      .finally(() => setDataLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [child, selectedMonth, selectedYear]);
 
   const handleExportCSV = () => {
     if (!child || filteredRecords.length === 0) return;
@@ -129,7 +179,7 @@ export default function ParentReportsPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-gray-950 text-slate-900 dark:text-white transition-colors duration-200">
-      <ParentSidebar onLogout={handleLogout} parent={parent} child={sidebarChild} />
+      <ParentSidebar onLogout={handleLogout} parent={parent} child={sidebarChild} unreadCount={unreadCount} />
 
       <main className="ml-64 p-8">
         {/* Header */}
@@ -165,7 +215,7 @@ export default function ParentReportsPage() {
           <div>
             <p className="text-sm font-semibold text-blue-700 dark:text-blue-300">Attendance Reports Only</p>
             <p className="text-sm text-blue-600 dark:text-blue-400 mt-0.5">
-              FSL assessment reports will be available in Phase 2. Currently, you can export your child&apos;s attendance tap records (Date, Time In, Time Out).
+              This report shows your child&apos;s attendance tap records (Date, Time In, Time Out). School days count Monday to Friday from the first tap of the month, and holidays are not known to the system.
             </p>
           </div>
         </div>

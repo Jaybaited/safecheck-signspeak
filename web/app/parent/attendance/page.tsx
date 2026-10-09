@@ -11,6 +11,9 @@ import ThemeToggle from '@/components/ThemeToggle';
 import { api } from '@/lib/api';
 import type { ChildInfo, AttendanceRecord } from '@/lib/api';
 import { usePersistedUnreadCount } from '@/hooks/usePersistedUnreadCount';
+import { logout } from '@/lib/auth';
+import { pickChild } from '@/lib/selected-child';
+import { getHolidays, type Holiday } from '@/lib/calendar-api';
 
 interface ParentUser {
   id: string; username: string; role: string;
@@ -38,6 +41,16 @@ export default function ParentAttendancePage() {
   const [dataLoading,   setDataLoading]   = useState(false);
   const [error,         setError]         = useState('');
   const [selectedMonth, setSelectedMonth] = useState(new Date());
+  const [holidays, setHolidays] = useState<Holiday[]>([]);
+  useEffect(() => {
+    const y = selectedMonth.getFullYear();
+    const m = selectedMonth.getMonth();
+    const mm = String(m + 1).padStart(2, '0');
+    const last = String(new Date(y, m + 1, 0).getDate()).padStart(2, '0');
+    getHolidays(y + '-' + mm + '-01', y + '-' + mm + '-' + last)
+      .then(setHolidays)
+      .catch(() => setHolidays([]));
+  }, [selectedMonth]);
 
   const unreadCount = usePersistedUnreadCount(parent?.id);
 
@@ -54,7 +67,7 @@ export default function ParentAttendancePage() {
       api.getParentChildren(p.id)
         .then((children) => {
           if (!children.length) return;
-          const firstChild = children[0];
+          const firstChild = pickChild(p.id, children) ?? children[0];
           setChild(firstChild);
           setDataLoading(true);
           return Promise.all([
@@ -73,7 +86,7 @@ export default function ParentAttendancePage() {
   }, [router]);
 
   const handleLogout = () => {
-    localStorage.removeItem('token'); localStorage.removeItem('user');
+    logout();
     router.push('/login');
   };
 
@@ -217,9 +230,52 @@ export default function ParentAttendancePage() {
             <div className="grid grid-cols-7 gap-1 text-center text-xs text-slate-400 dark:text-gray-500 font-medium mb-2">
               {['Su','Mo','Tu','We','Th','Fr','Sa'].map((d) => <div key={d}>{d}</div>)}
             </div>
-            <div className="text-center text-slate-400 dark:text-gray-500 py-8 text-sm">
-              Calendar view coming soon
-            </div>
+            {(() => {
+                const year = selectedMonth.getFullYear();
+                const month = selectedMonth.getMonth();
+                const firstWeekday = new Date(year, month, 1).getDay();
+                const daysInMonth = new Date(year, month + 1, 0).getDate();
+                const tapped: Record<number, boolean> = {};
+                filteredRecords.forEach((r) => { if (r.timeIn) tapped[new Date(r.date).getUTCDate()] = true; });
+                const off: Record<number, string> = {};
+                holidays.forEach((h) => { off[new Date(h.date).getUTCDate()] = h.name; });
+                const now = new Date();
+                const isThisMonth = now.getFullYear() === year && now.getMonth() === month;
+                const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                const cells: (number | null)[] = Array(firstWeekday).fill(null);
+                for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+                return (
+                  <div>
+                    <div className="grid grid-cols-7 gap-1">
+                      {cells.map((day, i) => {
+                        if (!day) return <div key={'e' + i} />;
+                        const weekday = new Date(year, month, day).getDay();
+                        const weekend = weekday === 0 || weekday === 6;
+                        const isToday = isThisMonth && day === now.getDate();
+                        const past = new Date(year, month, day) < startOfToday;
+                        let tone = 'text-slate-400 dark:text-gray-600';
+                        if (tapped[day]) tone = 'bg-[#7B1113] text-white font-semibold';
+                        else if (off[day]) tone = 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 font-semibold';
+                        else if (!weekend && past) tone = 'bg-slate-100 dark:bg-gray-800 text-slate-500 dark:text-gray-400';
+                        return (
+                          <div
+                            key={day}
+                            title={off[day] ?? (tapped[day] ? 'Tapped in' : '')}
+                            className={'aspect-square rounded-lg flex items-center justify-center text-xs ' + tone + (isToday ? ' ring-2 ring-[#7B1113] dark:ring-[#E8C96A]' : '')}
+                          >
+                            {day}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {Object.keys(off).length > 0 && (
+                      <p className="mt-3 flex items-center gap-2 text-xs text-slate-500 dark:text-gray-400">
+                        <span className="w-3 h-3 rounded bg-amber-200 dark:bg-amber-500/30" /> No classes (holiday)
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
 
             <div className="pt-4 border-t border-slate-200 dark:border-gray-800 space-y-2">
               {[
