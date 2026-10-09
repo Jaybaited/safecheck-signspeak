@@ -10,6 +10,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { api } from "../lib/api";
 import { useAuthStore } from "../store/authStore";
 import { registerPushToken } from "../lib/notifications";
+import ForgotPasswordModal from "../components/ForgotPasswordModal";
 
 const { width, height } = Dimensions.get("window");
 
@@ -21,6 +22,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showForgot, setShowForgot] = useState(false);
 
   const handleLogin = async () => {
     if (!username.trim() || !password.trim()) {
@@ -34,29 +36,36 @@ export default function LoginScreen() {
       const { accessToken, user } = response.data;
 
       setAuth(accessToken, user);
+
+      // Forced password change (first login or admin reset)
+      if (user.mustChangePassword) {
+        router.replace("/change-password" as any);
+        return;
+      }
+
       if (user.role === "PARENT") {
         registerPushToken().catch(console.error);
       }
 
       switch (user.role) {
-        case "STUDENT":  router.replace("/(student)");  break;
-        case "PARENT":   router.replace("/(parent)");   break;
-        case "TEACHER":  router.replace("/(teacher)");  break;
-        case "ADMIN":    router.replace("/(admin)");    break;
+        case "STUDENT": router.replace("/(student)"); break;
+        case "PARENT": router.replace("/(parent)"); break;
+        case "TEACHER": router.replace("/(teacher)"); break;
+        case "ADMIN": router.replace("/(admin)"); break;
         default:
           Alert.alert("Error", "Unknown role. Contact administrator.");
       }
-   } catch (error: any) {
-  console.log('=== LOGIN ERROR ===');
-  console.log('Message:', error?.message);
-  console.log('Code:', error?.code);
-  console.log('Response:', error?.response?.data);
-  console.log('Status:', error?.response?.status);
-  
-  const message =
-    error?.response?.data?.message || error?.message || "Invalid username or password.";
-  Alert.alert("Login Failed", message);
-} finally {
+    } catch (error: any) {
+      console.log("=== LOGIN ERROR ===");
+      console.log("Message:", error?.message);
+      console.log("Code:", error?.code);
+      console.log("Response:", error?.response?.data);
+      console.log("Status:", error?.response?.status);
+
+      const message =
+        error?.response?.data?.message || error?.message || "Invalid username or password.";
+      Alert.alert("Login Failed", message);
+    } finally {
       setLoading(false);
     }
   };
@@ -92,7 +101,6 @@ export default function LoginScreen() {
 
           {/* ── Card ── */}
           <View style={s.card}>
-            {/* Header */}
             <Text style={s.title}>Welcome Back!</Text>
             <Text style={s.subtitle}>Sign in to your account to continue</Text>
 
@@ -100,12 +108,7 @@ export default function LoginScreen() {
             <View style={s.inputGroup}>
               <Text style={s.label}>Username</Text>
               <View style={s.inputWrapper}>
-                <Ionicons
-                  name="person-outline"
-                  size={18}
-                  color="#C4A0A0"
-                  style={s.inputIcon}
-                />
+                <Ionicons name="person-outline" size={18} color="#C4A0A0" style={s.inputIcon} />
                 <TextInput
                   style={s.input}
                   placeholder="Enter your username"
@@ -122,12 +125,7 @@ export default function LoginScreen() {
             <View style={s.inputGroup}>
               <Text style={s.label}>Password</Text>
               <View style={s.inputWrapper}>
-                <Ionicons
-                  name="lock-closed-outline"
-                  size={18}
-                  color="#C4A0A0"
-                  style={s.inputIcon}
-                />
+                <Ionicons name="lock-closed-outline" size={18} color="#C4A0A0" style={s.inputIcon} />
                 <TextInput
                   style={s.input}
                   placeholder="Enter your password"
@@ -137,10 +135,7 @@ export default function LoginScreen() {
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
                 />
-                <TouchableOpacity
-                  onPress={() => setShowPassword(!showPassword)}
-                  style={s.eyeBtn}
-                >
+                <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={s.eyeBtn}>
                   <Ionicons
                     name={showPassword ? "eye-outline" : "eye-off-outline"}
                     size={20}
@@ -149,6 +144,11 @@ export default function LoginScreen() {
                 </TouchableOpacity>
               </View>
             </View>
+
+            {/* Forgot password */}
+            <TouchableOpacity onPress={() => setShowForgot(true)} style={s.forgotBtn}>
+              <Text style={s.forgotText}>Forgot password?</Text>
+            </TouchableOpacity>
 
             {/* Sign In Button */}
             <TouchableOpacity
@@ -169,6 +169,8 @@ export default function LoginScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <ForgotPasswordModal visible={showForgot} onClose={() => setShowForgot(false)} />
     </SafeAreaView>
   );
 }
@@ -177,29 +179,12 @@ const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#FDF4F4" },
   scroll: { flexGrow: 1 },
 
-  // Logo — top center like the reference image
-  logoWrap: {
-    alignItems: "center",
-    paddingTop: 24,
-    paddingBottom: 4,
-  },
-  logo: {
-    width: 140,
-    height: 48,
-  },
+  logoWrap: { alignItems: "center", paddingTop: 24, paddingBottom: 4 },
+  logo: { width: 140, height: 48 },
 
-  // Illustration — smaller, centered, like the reference
-  illustrationWrap: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 8,
-  },
-  illustration: {
-    width: width * 0.55,   // smaller than before (was 0.82)
-    height: height * 0.22, // shorter than before (was 0.38)
-  },
+  illustrationWrap: { alignItems: "center", justifyContent: "center", paddingVertical: 8 },
+  illustration: { width: width * 0.55, height: height * 0.22 },
 
-  // Card — white rounded top card (same as before)
   card: {
     flex: 1,
     backgroundColor: "#fff",
@@ -214,27 +199,11 @@ const s = StyleSheet.create({
     shadowOffset: { width: 0, height: -4 },
     elevation: 10,
   },
+  title: { color: "#1A0505", fontSize: 26, fontWeight: "800", marginBottom: 6 },
+  subtitle: { color: "#7A4040", fontSize: 14, marginBottom: 24 },
 
-  title: {
-    color: "#1A0505",
-    fontSize: 26,
-    fontWeight: "800",
-    marginBottom: 6,
-  },
-  subtitle: {
-    color: "#7A4040",
-    fontSize: 14,
-    marginBottom: 24,
-  },
-
-  // Inputs
   inputGroup: { marginBottom: 16 },
-  label: {
-    color: "#4A1A1A",
-    fontSize: 13,
-    fontWeight: "600",
-    marginBottom: 6,
-  },
+  label: { color: "#4A1A1A", fontSize: 13, fontWeight: "600", marginBottom: 6 },
   inputWrapper: {
     flexDirection: "row",
     alignItems: "center",
@@ -245,15 +214,12 @@ const s = StyleSheet.create({
     paddingHorizontal: 14,
   },
   inputIcon: { marginRight: 8 },
-  input: {
-    flex: 1,
-    paddingVertical: 14,
-    color: "#1A0505",
-    fontSize: 15,
-  },
+  input: { flex: 1, paddingVertical: 14, color: "#1A0505", fontSize: 15 },
   eyeBtn: { paddingLeft: 8, paddingVertical: 4 },
 
-  // Button
+  forgotBtn: { alignSelf: "flex-end", marginTop: -4, marginBottom: 8, paddingVertical: 4 },
+  forgotText: { color: "#8B1A1A", fontSize: 13, fontWeight: "600" },
+
   signInBtn: {
     width: "100%",
     backgroundColor: "#8B1A1A",
@@ -269,11 +235,5 @@ const s = StyleSheet.create({
   },
   signInText: { color: "#fff", fontWeight: "800", fontSize: 16 },
 
-  // Footer
-  footer: {
-    textAlign: "center",
-    color: "#C4A0A0",
-    fontSize: 12,
-    marginTop: 24,
-  },
+  footer: { textAlign: "center", color: "#C4A0A0", fontSize: 12, marginTop: 24 },
 });
