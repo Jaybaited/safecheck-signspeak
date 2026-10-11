@@ -6,19 +6,23 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
+import * as SecureStore from "expo-secure-store";
 import { useAuthStore } from "../../store/authStore";
 import { useThemeStore } from "../../store/themeStore";
 import { getColors } from "../../lib/theme";
+import { api } from "../../lib/api";
 import {
   TrendingUp, LogOut, ChevronRight,
   Sun, Moon, Smartphone, ChevronDown, Check, Pencil, X,
 } from "lucide-react-native";
+
 
 const THEME_OPTIONS = [
   { label: "Light",  value: "light",  icon: Sun },
   { label: "Dark",   value: "dark",   icon: Moon },
   { label: "Device", value: "device", icon: Smartphone },
 ] as const;
+
 
 const AVATARS = [
   { id: 1, source: require("../../assets/images/avatars/avatar1.png") },
@@ -29,17 +33,21 @@ const AVATARS = [
   { id: 6, source: require("../../assets/images/avatars/avatar6.png") },
 ];
 
+
 export default function ProfileScreen() {
   const router = useRouter();
   const { user, clearAuth } = useAuthStore();
   const { mode, setMode, resolvedTheme } = useThemeStore();
   const C = getColors(resolvedTheme);
 
+
   const [dropdownOpen, setDropdownOpen]   = useState(false);
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
   const [selectedAvatar, setSelectedAvatar]     = useState<number | null>(null);
 
+
   const activeOption = THEME_OPTIONS.find((o) => o.value === mode)!;
+
 
   const handleLogout = () => {
     Alert.alert("Logout", "Are you sure you want to logout?", [
@@ -47,13 +55,29 @@ export default function ProfileScreen() {
       {
         text: "Logout",
         style: "destructive",
-        onPress: () => { clearAuth(); router.replace("/login"); },
+        onPress: async () => {
+          try {
+            // Revoke the refresh token on the server (the route is public on purpose)
+            const refreshToken = await SecureStore.getItemAsync("refreshToken");
+            if (refreshToken) {
+              await api.post("/auth/logout", { refreshToken }, { timeout: 5000 });
+            }
+          } catch {
+            // Best effort: the student is logged out locally even if the server is unreachable
+          } finally {
+            await SecureStore.deleteItemAsync("refreshToken");
+            clearAuth();
+            router.replace("/login");
+          }
+        },
       },
     ]);
   };
 
+
   const getInitials = () =>
     `${user?.firstName?.[0] ?? ""}${user?.lastName?.[0] ?? ""}`.toUpperCase();
+
 
   const menuItems = [
     {
@@ -64,6 +88,7 @@ export default function ProfileScreen() {
     },
   ];
 
+
   return (
     <SafeAreaView style={[s.container, { backgroundColor: C.background }]}>
       <StatusBar style={C.statusBar} />
@@ -73,6 +98,7 @@ export default function ProfileScreen() {
       >
         {/* ── Profile Card ── */}
         <View style={[s.profileCard, { backgroundColor: C.card, borderColor: C.border }]}>
+
 
           {/* Avatar with edit button */}
           <TouchableOpacity
@@ -96,6 +122,7 @@ export default function ProfileScreen() {
             </View>
           </TouchableOpacity>
 
+
           <Text style={[s.name, { color: C.text }]}>
             {user?.firstName} {user?.lastName}
           </Text>
@@ -107,6 +134,7 @@ export default function ProfileScreen() {
             <Text style={[s.changePhotoText, { color: C.primary }]}>Change Photo</Text>
           </TouchableOpacity>
         </View>
+
 
         {/* ── Avatar Picker Modal ── */}
         <Modal
@@ -123,10 +151,12 @@ export default function ProfileScreen() {
             />
           </View>
 
+
           <View style={s.pickerWrapper}>
             <View style={[s.pickerSheet, { backgroundColor: C.card }]}>
               {/* Handle */}
               <View style={[s.sheetHandle, { backgroundColor: C.border }]} />
+
 
               {/* Header */}
               <View style={s.pickerHeader}>
@@ -143,6 +173,7 @@ export default function ProfileScreen() {
                   <X size={18} color={C.muted} />
                 </TouchableOpacity>
               </View>
+
 
               {/* Avatar Grid */}
               <FlatList
@@ -182,6 +213,7 @@ export default function ProfileScreen() {
                 }}
               />
 
+
               {/* Remove photo option */}
               {selectedAvatar !== null && (
                 <TouchableOpacity
@@ -198,6 +230,7 @@ export default function ProfileScreen() {
           </View>
         </Modal>
 
+
         {/* ── Appearance ── */}
         <Text style={[s.sectionLabel, { color: C.subtext }]}>Appearance</Text>
         <View style={[s.card, { backgroundColor: C.card, borderColor: C.border }]}>
@@ -212,6 +245,7 @@ export default function ProfileScreen() {
             </View>
             <ChevronDown size={18} color={C.muted} />
           </TouchableOpacity>
+
 
           {/* Theme Dropdown Modal */}
           <Modal
@@ -263,6 +297,7 @@ export default function ProfileScreen() {
           </Modal>
         </View>
 
+
         {/* ── Account ── */}
         <Text style={[s.sectionLabel, { color: C.subtext }]}>Account</Text>
         <View style={[s.card, { backgroundColor: C.card, borderColor: C.border }]}>
@@ -288,6 +323,7 @@ export default function ProfileScreen() {
           ))}
         </View>
 
+
         {/* ── About ── */}
         <Text style={[s.sectionLabel, { color: C.subtext }]}>About</Text>
         <View style={[s.card, { backgroundColor: C.card, borderColor: C.border }]}>
@@ -305,6 +341,7 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+
         {/* ── Logout ── */}
         <TouchableOpacity
           style={[s.logoutBtn, { backgroundColor: C.card, borderColor: "#EF4444" }]}
@@ -319,8 +356,10 @@ export default function ProfileScreen() {
   );
 }
 
+
 const s = StyleSheet.create({
   container:          { flex: 1, paddingHorizontal: 20 },
+
 
   // Profile card
   profileCard:        { borderRadius: 24, padding: 24, alignItems: "center", marginTop: 16, marginBottom: 20, borderWidth: 1, gap: 6 },
@@ -335,11 +374,14 @@ const s = StyleSheet.create({
   roleBadge:          { borderRadius: 999, paddingHorizontal: 14, paddingVertical: 4, borderWidth: 1, marginTop: 4 },
   roleText:           { fontSize: 12, fontWeight: "600" },
 
+
   // Section label
   sectionLabel:       { fontSize: 12, fontWeight: "700", marginBottom: 8, marginLeft: 4, letterSpacing: 0.5 },
 
+
   // Card
   card:               { borderRadius: 20, borderWidth: 1, marginBottom: 20, overflow: "hidden" },
+
 
   // Avatar Picker
   pickerWrapper:      { flex: 1, justifyContent: "flex-end" },
@@ -356,10 +398,12 @@ const s = StyleSheet.create({
   removeBtn:          { borderWidth: 1.5, borderRadius: 16, paddingVertical: 13, alignItems: "center", marginTop: 12 },
   removeBtnText:      { color: "#EF4444", fontWeight: "700", fontSize: 14 },
 
+
   // Dropdown trigger
   dropdownTrigger:    { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 16 },
   dropdownLeft:       { flexDirection: "row", alignItems: "center", gap: 10 },
   dropdownValue:      { fontSize: 15, fontWeight: "600" },
+
 
   // Modal
   backdrop:           { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.5)" },
@@ -369,16 +413,19 @@ const s = StyleSheet.create({
   dropdownItemIcon:   { width: 32, height: 32, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   dropdownItemText:   { fontSize: 15 },
 
+
   // Menu
   menuItem:           { flexDirection: "row", alignItems: "center", padding: 16, gap: 12 },
   menuIconBox:        { width: 38, height: 38, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   menuLabel:          { fontSize: 15, fontWeight: "600" },
   menuSub:            { fontSize: 12, marginTop: 1 },
 
+
   // Info
   infoRow:            { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 16, paddingVertical: 13 },
   infoLabel:          { fontSize: 13 },
   infoVal:            { fontSize: 13, fontWeight: "600" },
+
 
   // Logout
   logoutBtn:          { borderRadius: 20, borderWidth: 1.5, flexDirection: "row", alignItems: "center", justifyContent: "center", padding: 16, gap: 10 },
