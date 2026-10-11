@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  BackHandler,
   StyleSheet,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -53,9 +54,9 @@ export default function AssessmentRunScreen() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  // Always return to the levels screen (tabs may otherwise send Back to Home)
   const goBack = () => {
-    if (router.canGoBack()) router.back();
-    else router.replace("/(student)/assessment" as any);
+    router.replace("/(student)/assessment" as any);
   };
 
   const redirectIfPasswordChange = (e: unknown): boolean => {
@@ -65,6 +66,28 @@ export default function AssessmentRunScreen() {
     }
     return false;
   };
+
+  // During the exam, ask before leaving. Answers are already saved on every tap.
+  const confirmLeave = () => {
+    Alert.alert("Leave the exam?", "Your answers are saved. You can continue later.", [
+      { text: "Stay", style: "cancel" },
+      { text: "Leave", onPress: goBack },
+    ]);
+  };
+
+  // Android hardware back button
+  useEffect(() => {
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (step === "exam") {
+        confirmLeave();
+        return true;
+      }
+      goBack();
+      return true;
+    });
+    return () => sub.remove();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
 
   // ── Result: only shown when the backend has released the score ─────────────
   async function showResult(c: LevelCard) {
@@ -475,7 +498,7 @@ export default function AssessmentRunScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={["top", "bottom"]}>
-      <Header title={title} onBack={goBack} />
+      <Header title={title} onBack={step === "exam" ? confirmLeave : goBack} />
       {body}
     </SafeAreaView>
   );
