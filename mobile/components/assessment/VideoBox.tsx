@@ -152,7 +152,7 @@ function ExamFileVideo({ uri, colors }: { uri: string; colors: ThemeColors }) {
       <VideoView
         player={player}
         nativeControls
-        allowsFullscreen={false}
+       fullscreenOptions={{ enable: false }}
         allowsPictureInPicture={false}
         contentFit="contain"
         style={styles.fileVideo}
