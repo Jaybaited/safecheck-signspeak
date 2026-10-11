@@ -11,6 +11,7 @@ import { api } from "../lib/api";
 import { useAuthStore } from "../store/authStore";
 import { registerPushToken } from "../lib/notifications";
 import ForgotPasswordModal from "../components/ForgotPasswordModal";
+import * as SecureStore from "expo-secure-store";
 
 const { width, height } = Dimensions.get("window");
 
@@ -33,9 +34,14 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       const response = await api.post("/auth/login", { username, password });
-      const { accessToken, user } = response.data;
+      const { accessToken, refreshToken, user } = response.data;
 
-      setAuth(accessToken, user);
+// api.ts reads this key to renew the 15-minute access token
+if (refreshToken) {
+  await SecureStore.setItemAsync("refreshToken", refreshToken);
+}
+
+setAuth(accessToken, user);
 
       // Forced password change (first login or admin reset)
       if (user.mustChangePassword) {

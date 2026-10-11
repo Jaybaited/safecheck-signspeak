@@ -31,7 +31,9 @@ export const darkColors = {
   statusBar:     "light" as const,
 };
 
-export type ThemeColors = typeof lightColors;
+export type ThemeColors = Omit<typeof lightColors, "statusBar"> & {
+  statusBar: "light" | "dark";
+};
 
 export const getColors = (theme: "light" | "dark"): ThemeColors =>
   theme === "dark" ? darkColors : lightColors;
