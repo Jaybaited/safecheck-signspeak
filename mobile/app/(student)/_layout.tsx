@@ -1,13 +1,15 @@
 import { Tabs } from "expo-router";
-import { House, CalendarFold, HandFist, User } from "lucide-react-native";
+import { House, CalendarFold, HandFist, ClipboardList, User } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useThemeStore } from "../../store/themeStore";
 import { getColors } from "../../lib/theme";
+
 
 export default function StudentLayout() {
   const insets = useSafeAreaInsets();
   const { resolvedTheme } = useThemeStore();
   const C = getColors(resolvedTheme);
+
 
   return (
     <Tabs
@@ -55,6 +57,15 @@ export default function StudentLayout() {
         }}
       />
       <Tabs.Screen
+        name="assessment"
+        options={{
+          title: "Assessment",
+          tabBarIcon: ({ color, size }) => (
+            <ClipboardList color={color} size={size} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="profile"
         options={{
           title: "Profile",
@@ -62,10 +73,16 @@ export default function StudentLayout() {
         }}
       />
 
+
       {/* Hidden from bottom nav */}
       <Tabs.Screen name="fsl-detection" options={{ href: null }} />
       <Tabs.Screen name="fsl-game"      options={{ href: null }} />
       <Tabs.Screen name="fsl-learn"     options={{ href: null }} />
+      {/* Exam screen: reachable only from the Assessment tab, tab bar hidden while taking it */}
+      <Tabs.Screen
+        name="assessment-run"
+        options={{ href: null, tabBarStyle: { display: "none" } }}
+      />
     </Tabs>
   );
 }
