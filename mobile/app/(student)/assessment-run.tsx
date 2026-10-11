@@ -13,10 +13,12 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useThemeStore } from "../../store/themeStore";
 import { getColors } from "../../lib/theme";
+import { getResultColor } from "../../lib/statusColors";
 import VideoBox from "../../components/assessment/VideoBox";
 import {
   AssessmentDetail,
   AssessmentQuestion,
+  AttemptDetail,
   LevelCard,
   completeAssessmentAttempt,
   getApiErrorMessage,
@@ -29,7 +31,7 @@ import {
   startAssessmentAttempt,
 } from "../../lib/assessments-api";
 
-type Step = "loading" | "error" | "lesson" | "exam" | "submitted" | "passed";
+type Step = "loading" | "error" | "lesson" | "exam" | "submitted" | "result";
 
 export default function AssessmentRunScreen() {
   const router = useRouter();
@@ -46,6 +48,7 @@ export default function AssessmentRunScreen() {
   const [attemptId, setAttemptId] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [index, setIndex] = useState(0);
+  const [result, setResult] = useState<AttemptDetail | null>(null);
   const [busy, setBusy] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -55,7 +58,6 @@ export default function AssessmentRunScreen() {
     else router.replace("/(student)/assessment" as any);
   };
 
-  // Returns true when the student was sent to change the password
   const redirectIfPasswordChange = (e: unknown): boolean => {
     if (isPasswordChangeRequired(e)) {
       router.replace("/change-password" as any);
@@ -63,6 +65,21 @@ export default function AssessmentRunScreen() {
     }
     return false;
   };
+
+  // ── Result: only shown when the backend has released the score ─────────────
+  async function showResult(c: LevelCard) {
+    if (!c.attemptId) {
+      setStep("lesson");
+      return;
+    }
+    const detail = await getAssessmentAttempt(c.attemptId);
+    if (detail.score == null) {
+      setStep("submitted"); // not released yet: never show a score
+      return;
+    }
+    setResult(detail);
+    setStep("result");
+  }
 
   // ── Load the assessment and the level card together ────────────────────────
   async function load(autoResume = true) {
@@ -92,7 +109,8 @@ export default function AssessmentRunScreen() {
           setStep("submitted");
           break;
         case "PASSED":
-          setStep("passed");
+        case "FAILED":
+          await showResult(c);
           break;
         case "IN_PROGRESS":
           if (autoResume) {
@@ -102,7 +120,7 @@ export default function AssessmentRunScreen() {
             setStep("lesson");
           }
           break;
-        default: // AVAILABLE, FAILED
+        default: // AVAILABLE
           setStep("lesson");
       }
     } catch (e) {
@@ -122,7 +140,7 @@ export default function AssessmentRunScreen() {
   }, [id]);
 
   // ── Start (or resume) the attempt and restore saved answers ────────────────
-  // Returns true when it handled the screen (entered, redirected, or reloaded)
+  // A retry after a fail creates a new attempt on the backend.
   async function enterExam(a: AssessmentDetail): Promise<boolean> {
     setBusy(true);
     try {
@@ -139,12 +157,12 @@ export default function AssessmentRunScreen() {
       setAnswers(restored);
       setIndex(firstOpen === -1 ? Math.max(a.questions.length - 1, 0) : firstOpen);
       setSaveError(null);
+      setResult(null);
       setStep("exam");
       return true;
     } catch (e) {
       if (redirectIfPasswordChange(e)) return true;
       if (getErrorStatus(e) === 409) {
-        // waiting for review, or already passed: show the message, then refresh the state
         Alert.alert("Not available", getApiErrorMessage(e, "You cannot start this level now."));
         await load(false);
         return true;
@@ -198,13 +216,23 @@ export default function AssessmentRunScreen() {
     } catch (e) {
       if (redirectIfPasswordChange(e)) return;
       if (getErrorStatus(e) === 409) {
-        setStep("submitted"); // already sent
+        setStep("submitted");
         return;
       }
       Alert.alert("Could not send", getApiErrorMessage(e, "Could not send your exam. Please try again."));
     } finally {
       setBusy(false);
     }
+  }
+
+  // Failed result -> back to the lesson; Start the exam then creates a new attempt
+  function retry() {
+    setAnswers({});
+    setAttemptId(null);
+    setIndex(0);
+    setResult(null);
+    setSaveError(null);
+    setStep("lesson");
   }
 
   // ── Small UI pieces ────────────────────────────────────────────────────────
@@ -249,10 +277,10 @@ export default function AssessmentRunScreen() {
     </View>
   );
 
-  const title = assessment ? `Level ${assessment.level ?? ""} ${assessment.title ? "" : ""}`.trim() : "Assessment";
+  const title = assessment?.level ? `Level ${assessment.level}` : "Assessment";
 
   // ── Screens ────────────────────────────────────────────────────────────────
-  let body: React.ReactNode;
+  let body: React.ReactNode = null;
 
   if (step === "loading") {
     body = (
@@ -279,9 +307,59 @@ export default function AssessmentRunScreen() {
         text="Your teacher will check them. Your result will appear here after it is released."
       />
     );
-  } else if (step === "passed") {
+  } else if (step === "result" && assessment && result) {
+    const passed = result.passed === true;
+    const tone = getResultColor(passed, theme);
+    const byQuestion = new Map(result.responses.map((r) => [r.questionId, r]));
+
     body = (
-      <Notice icon="ribbon-outline" title="Level passed" text="You already passed this level." />
+      <ScrollView contentContainerStyle={styles.content}>
+        <View style={[styles.resultCard, { backgroundColor: tone.bg }]}>
+          <Ionicons name={passed ? "checkmark-circle" : "close-circle"} size={60} color={tone.fg} />
+          <Text style={[styles.resultTitle, { color: tone.fg }]}>{passed ? "You passed!" : "Not passed"}</Text>
+          <Text style={[styles.resultLine, { color: tone.fg }]}>Your score: {result.score}%</Text>
+          <Text style={[styles.resultLine, { color: tone.fg }]}>
+            Pass mark: {result.assessment.passMark}%
+          </Text>
+        </View>
+
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Your answers</Text>
+        {assessment.questions.map((q, i) => {
+          const r = byQuestion.get(q.id);
+          const ok = r?.isCorrect === true;
+          const t = getResultColor(ok, theme);
+          const letter = r?.submittedSign ?? null;
+          const answerText = letter
+            ? `${letter}${q.choices?.[letter] ? `. ${q.choices[letter]}` : ""}`
+            : "No answer";
+          return (
+            <View
+              key={q.id}
+              style={[styles.reviewCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+            >
+              <Text style={[styles.reviewPrompt, { color: colors.text }]}>
+                {i + 1}. {q.prompt}
+              </Text>
+              <Text style={[styles.reviewAnswer, { color: colors.subtext }]}>Your answer: {answerText}</Text>
+              <View style={[styles.badge, { backgroundColor: t.bg }]}>
+                <Ionicons name={ok ? "checkmark" : "close"} size={14} color={t.fg} />
+                <Text style={[styles.badgeText, { color: t.fg }]}>{ok ? "Correct" : "Not correct"}</Text>
+              </View>
+            </View>
+          );
+        })}
+
+        {passed ? (
+          <PrimaryButton label="Back to levels" onPress={goBack} />
+        ) : (
+          <>
+            <PrimaryButton label="Try again" onPress={retry} />
+            <TouchableOpacity onPress={goBack} style={{ alignItems: "center" }}>
+              <Text style={[styles.link, { color: colors.primary }]}>Back to levels</Text>
+            </TouchableOpacity>
+          </>
+        )}
+      </ScrollView>
     );
   } else if (step === "lesson" && assessment) {
     body = (
@@ -350,15 +428,8 @@ export default function AssessmentRunScreen() {
                 accessibilityRole="radio"
                 accessibilityState={{ selected }}
               >
-                <View
-                  style={[
-                    styles.letter,
-                    { backgroundColor: selected ? "#ffffff33" : colors.background },
-                  ]}
-                >
-                  <Text style={[styles.letterText, { color: selected ? "#fff" : colors.text }]}>
-                    {letter}
-                  </Text>
+                <View style={[styles.letter, { backgroundColor: selected ? "#ffffff33" : colors.background }]}>
+                  <Text style={[styles.letterText, { color: selected ? "#fff" : colors.text }]}>{letter}</Text>
                 </View>
                 <Text style={[styles.choiceText, { color: selected ? "#fff" : colors.text }]}>{text}</Text>
               </TouchableOpacity>
@@ -400,13 +471,11 @@ export default function AssessmentRunScreen() {
     ) : (
       <Notice icon="alert-circle-outline" title="No questions" text="This level has no questions yet." />
     );
-  } else {
-    body = null;
   }
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={["top", "bottom"]}>
-      <Header title={title || "Assessment"} onBack={goBack} />
+      <Header title={title} onBack={goBack} />
       {body}
     </SafeAreaView>
   );
@@ -441,4 +510,13 @@ const styles = StyleSheet.create({
   footer: { flexDirection: "row", alignItems: "center", gap: 12, padding: 12, borderTopWidth: 1 },
   navBtn: { minHeight: 50, paddingHorizontal: 24, borderRadius: 14, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
   navText: { fontWeight: "700", fontSize: 15 },
+  resultCard: { borderRadius: 18, padding: 20, alignItems: "center", gap: 6 },
+  resultTitle: { fontSize: 24, fontWeight: "800" },
+  resultLine: { fontSize: 15, fontWeight: "600" },
+  sectionTitle: { fontSize: 17, fontWeight: "800", marginTop: 4 },
+  reviewCard: { borderWidth: 1, borderRadius: 14, padding: 14, gap: 8 },
+  reviewPrompt: { fontSize: 15, fontWeight: "700", lineHeight: 22 },
+  reviewAnswer: { fontSize: 14 },
+  badge: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999 },
+  badgeText: { fontSize: 12, fontWeight: "700" },
 });
