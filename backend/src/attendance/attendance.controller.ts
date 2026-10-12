@@ -21,7 +21,7 @@ export class AttendanceController {
   // ✅ Intentionally public — called by RFID hardware device
   @Post('rfid-tap')
   async handleRfidTap(@Body() body: RfidTapDto) {
-    return this.attendanceService.handleRfidTap(body.rfidCard);
+    return this.attendanceService.handleRfidTap(body.rfidCard, body.mode);
   }
 
   // ✅ Intentionally public — demo/debug for panelists

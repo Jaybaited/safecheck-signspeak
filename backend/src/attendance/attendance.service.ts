@@ -6,10 +6,12 @@ import { NetworkTimeService } from '../common/services/network-time.service';
 import { AttendanceQueryDto } from './dto/attendance-query.dto';
 
 type AttendanceAction = 'CHECK_IN' | 'CHECK_OUT';
+type SoftTapAction = 'ALREADY_CHECKED_IN' | 'ALREADY_COMPLETE' | 'NO_CHECK_IN' | 'TOO_SOON';
 
 export interface RfidTapResult {
   success: boolean;
-  action: AttendanceAction;
+  action: AttendanceAction | SoftTapAction;
+  message?: string;
   student: {
     firstName: string;
     lastName: string;
@@ -40,7 +42,7 @@ export class AttendanceService {
     private readonly networkTime: NetworkTimeService,
   ) {}
 
-  async handleRfidTap(rfidCard: string): Promise<RfidTapResult> {
+  async handleRfidTap(rfidCard: string, tapMode?: 'CHECK_IN' | 'CHECK_OUT'): Promise<RfidTapResult> {
     const user = await this.prisma.user.findUnique({
       where: { rfidCard },
       select: {
@@ -77,6 +79,46 @@ export class AttendanceService {
     const isLate       = manilaHour > 8 || (manilaHour === 8 && manilaMinute > 0);
     const status       = isLate ? 'LATE' : 'PRESENT';
 
+    const firstName = user.firstName;
+    const clock = (d: Date | null) =>
+      d
+        ? new Date(d).toLocaleTimeString('en-US', {
+            hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Manila',
+          })
+        : '';
+    const soft = (softAction: SoftTapAction, message: string): RfidTapResult => ({
+      success: false,
+      action: softAction,
+      message,
+      student: {
+        firstName:  user.firstName,
+        lastName:   user.lastName,
+        gradeLevel: user.gradeLevel,
+      },
+      attendance: {
+        timeIn:  existingAttendance?.timeIn ?? null,
+        timeOut: existingAttendance?.timeOut ?? null,
+        status:  existingAttendance?.status ?? null,
+      },
+    });
+
+    if (existingAttendance?.timeOut) {
+      return soft('ALREADY_COMPLETE', `${firstName} is already checked in and out for today. No more taps are needed.`);
+    }
+    if (tapMode === 'CHECK_IN' && existingAttendance) {
+      return soft('ALREADY_CHECKED_IN', `${firstName} already checked in at ${clock(existingAttendance.timeIn)}. Use the Check Out page when leaving.`);
+    }
+    if (tapMode === 'CHECK_OUT' && !existingAttendance) {
+      return soft('NO_CHECK_IN', `${firstName} has not checked in yet today. Please use the Check In page first.`);
+    }
+    if (existingAttendance && existingAttendance.timeIn) {
+      const minGapMs = Number(process.env.RFID_MIN_GAP_SECONDS ?? 120) * 1000;
+      const sinceMs  = serverNow.getTime() - new Date(existingAttendance.timeIn).getTime();
+      if (sinceMs < minGapMs) {
+        return soft('TOO_SOON', `${firstName} just checked in at ${clock(existingAttendance.timeIn)}. Please wait a moment before checking out.`);
+      }
+    }
+
     let attendance = existingAttendance;
     let action: AttendanceAction;
 
@@ -98,18 +140,13 @@ export class AttendanceService {
         throw err;
       }
       action = 'CHECK_IN';
-    } else if (!attendance.timeOut) {
+    } else {
       attendance = await this.prisma.attendance.update({
         where: { id: attendance.id },
         data:  { timeOut: serverNow },
       });
       action = 'CHECK_OUT';
-    } else {
-      throw new NotFoundException(
-        `${user.firstName} has already checked in and out for today.`,
-      );
     }
-
     this.notificationsService
       .notifyParentOnRFID(
         user.id,

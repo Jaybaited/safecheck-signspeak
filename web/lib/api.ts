@@ -241,7 +241,8 @@ export interface AttendanceStats {
 
 export interface RfidTapResponse {
   success: boolean;
-  action:  'CHECK_IN' | 'CHECK_OUT';
+  action:  'CHECK_IN' | 'CHECK_OUT' | 'ALREADY_CHECKED_IN' | 'ALREADY_COMPLETE' | 'NO_CHECK_IN' | 'TOO_SOON';
+  message?: string;
   student: {
     firstName:  string;
     lastName:   string;
@@ -377,10 +378,10 @@ export const checkRfidAvailable = (rfid: string) =>
 // ─── Attendance ───────────────────────────────────────────────────────────────
 
 
-export const handleRfidTap = (rfidCard: string) =>
+export const handleRfidTap = (rfidCard: string, mode?: 'CHECK_IN' | 'CHECK_OUT') =>
   apiFetch<RfidTapResponse>('/attendance/rfid-tap', {
     method: 'POST',
-    body: JSON.stringify({ rfidCard }),
+    body: JSON.stringify(mode ? { rfidCard, mode } : { rfidCard }),
   });
 
 
