@@ -180,7 +180,6 @@ export default function ParentProfilePage() {
               <h3 className="font-semibold mb-4">Account Details</h3>
               <div className="space-y-4">
                 {[
-                  { icon: Hash,   label: 'Parent ID', value: parent.id.slice(0, 8).toUpperCase(), mono: true  },
                   { icon: User,   label: 'First Name',value: parent.firstName,                    mono: false },
                   { icon: User,   label: 'Last Name', value: parent.lastName,                     mono: false },
                   { icon: User,   label: 'Username',  value: parent.username,                     mono: false },

@@ -84,4 +84,20 @@ export class CreateUserDto {
   @IsString()
   @IsOptional()
   photoUrl?: string;
+
+  // Link a new student to an existing parent instead of creating a new parent account.
+  @IsString()
+  @IsOptional()
+  existingParentId?: string;
+
+  // Optional name for the auto-created parent account.
+  @IsString()
+  @IsOptional()
+  @MaxLength(50)
+  parentFirstName?: string;
+
+  @IsString()
+  @IsOptional()
+  @MaxLength(50)
+  parentLastName?: string;
 }

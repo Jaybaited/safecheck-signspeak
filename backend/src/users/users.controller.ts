@@ -5,6 +5,7 @@ import {
 import { UsersService }   from './users.service';
 import { CreateUserDto }  from './dto/create-user.dto';
 import { NewPasswordDto, ChangePasswordDto } from './dto/password.dto';
+import { LinkChildDto } from './dto/link-child.dto';
 import { JwtAuthGuard }   from '../auth/jwt.guard';
 import { RolesGuard }     from '../auth/roles.guard';
 import { Roles }          from '../auth/roles.decorator';
@@ -62,6 +63,24 @@ export class UsersController {
   @Roles('ADMIN')
   checkRfid(@Query('rfid') rfid: string) {
     return this.usersService.checkRfidAvailable(rfid);
+  }
+
+  @Get('parents/search')
+  @Roles('ADMIN')
+  searchParents(@Query('q') q?: string, @Query('by') by?: string) {
+    return this.usersService.searchParents(q, by);
+  }
+
+  @Post('link-child')
+  @Roles('ADMIN')
+  linkChild(@Body() body: LinkChildDto) {
+    return this.usersService.linkChild(body.parentId, body.studentId);
+  }
+
+  @Post('unlink-child')
+  @Roles('ADMIN')
+  unlinkChild(@Body() body: LinkChildDto) {
+    return this.usersService.unlinkChild(body.parentId, body.studentId);
   }
 
   @Get('student-parent/:studentId')

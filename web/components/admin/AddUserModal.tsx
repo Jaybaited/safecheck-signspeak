@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from 'react'; // ← CHANGED: added useEffect
 import { X, CheckCircle, CreditCard, Copy, Check, User, Users, AlertTriangle, Loader2, RefreshCw } from 'lucide-react'; // ← CHANGED: added RefreshCw
-import { CreateUserDto, api } from '@/lib/api';
+import { CreateUserDto, ParentSearchResult, api } from '@/lib/api';
 import { useRfidScanner } from '@/hooks/useRfidScanner';
 
 const GRADE_LEVELS = [
@@ -97,7 +97,53 @@ export default function AddUserModal({ isOpen, onClose, onSubmit, error }: AddUs
   const [rfidChecking, setRfidChecking] = useState(false);
   const [rfidTaken,    setRfidTaken]    = useState(false);
 
+  const [parentFirst,     setParentFirst]     = useState('');
+  const [parentLast,      setParentLast]      = useState('');
+  const [parentNameError, setParentNameError] = useState('');
+  const [confirmOpen,     setConfirmOpen]     = useState(false);
+  const [leaveOpen,       setLeaveOpen]       = useState(false);
+  const [linkParent,      setLinkParent]      = useState<ParentSearchResult | null>(null);
+  const [parentQuery,     setParentQuery]     = useState('');
+  const [parentResults,   setParentResults]   = useState<ParentSearchResult[]>([]);
+  const [parentSearching, setParentSearching] = useState(false);
+
+  const parentSearchTerm = parentQuery.trim() || formData.lastName.trim();
+  useEffect(() => {
+    if (formData.role !== 'STUDENT' || linkParent || parentSearchTerm.length < 2) {
+      setParentResults([]);
+      setParentSearching(false);
+      return;
+    }
+    let cancelled = false;
+    setParentSearching(true);
+    const timer = setTimeout(() => {
+      api.searchParents(parentSearchTerm, parentQuery.trim() ? undefined : 'lastName')
+        .then((r) => { if (!cancelled) setParentResults(r); })
+        .catch(() => { if (!cancelled) setParentResults([]); })
+        .finally(() => { if (!cancelled) setParentSearching(false); });
+    }, 300);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [parentSearchTerm, parentQuery, linkParent, formData.role]);
+
   const { isScanning, scannedRfid, error: rfidError, startScan, resetScan } = useRfidScanner();
+
+  const dirty =
+    formData.firstName.trim() !== '' || formData.lastName.trim() !== '' ||
+    (formData.phoneNumber ?? '').trim() !== '' || (formData.email ?? '').trim() !== '' ||
+    formData.gradeLevel !== '' || !!scannedRfid || !!linkParent ||
+    parentFirst.trim() !== '' || parentLast.trim() !== '';
+
+  useEffect(() => {
+    if (!isOpen || credentials || !dirty) return;
+    const warn = (ev: BeforeUnloadEvent) => { ev.preventDefault(); ev.returnValue = ''; };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [isOpen, credentials, dirty]);
+
+  const requestClose = () => {
+    if (credentials || !dirty) { handleClose(); return; }
+    setLeaveOpen(true);
+  };
 
   const showGrade = ROLES_WITH_GRADE.includes(formData.role);
   const showRfid  = ROLES_WITH_RFID.includes(formData.role);
@@ -169,8 +215,8 @@ export default function AddUserModal({ isOpen, onClose, onSubmit, error }: AddUs
   };
   // ── END CHANGED ────────────────────────────────────────────────────────────
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e: React.FormEvent | null, confirmed = false) => {
+    e?.preventDefault();
 
     const errs: FormErrors = {};
 
@@ -193,7 +239,15 @@ export default function AddUserModal({ isOpen, onClose, onSubmit, error }: AddUs
     if (rfidTaken)
       errs.rfidCard = 'This RFID card is already assigned to another user.';
 
-    if (Object.keys(errs).length > 0) { setFormErrors(errs); return; }
+    let parentErr = '';
+    if (formData.role === 'STUDENT' && !linkParent) {
+      if (parentFirst.trim() && !NAME_REGEX.test(parentFirst.trim()))
+        parentErr = 'Parent first name: must start with a letter and use only letters, spaces, hyphens, apostrophes, and periods.';
+      else if (parentLast.trim() && !NAME_REGEX.test(parentLast.trim()))
+        parentErr = 'Parent last name: must start with a letter and use only letters, spaces, hyphens, apostrophes, and periods.';
+    }
+    setParentNameError(parentErr);
+    if (Object.keys(errs).length > 0 || parentErr) { setFormErrors(errs); return; }
     setFormErrors({});
 
     if (needsScan) {
@@ -207,6 +261,11 @@ export default function AddUserModal({ isOpen, onClose, onSubmit, error }: AddUs
       rfid ?? String(Date.now()),
     );
 
+    if (!confirmed) {
+      setConfirmOpen(true);
+      return;
+    }
+
     setSubmitting(true);
     try {
       const result = await onSubmit({
@@ -216,6 +275,9 @@ export default function AddUserModal({ isOpen, onClose, onSubmit, error }: AddUs
         gradeLevel:  showGrade ? (formData.gradeLevel || undefined) : undefined,
         rfidCard:    showRfid ? rfid : undefined,
         phoneNumber: formData.phoneNumber || undefined,
+        existingParentId: formData.role === 'STUDENT' ? linkParent?.id : undefined,
+        parentFirstName:  formData.role === 'STUDENT' && !linkParent ? (parentFirst.trim() || undefined) : undefined,
+        parentLastName:   formData.role === 'STUDENT' && !linkParent ? (parentLast.trim()  || undefined) : undefined,
       } as CreateUserDto);
 
       setCredentials({
@@ -234,6 +296,12 @@ export default function AddUserModal({ isOpen, onClose, onSubmit, error }: AddUs
   const handleClose = () => {
     setFormData({ username: '', email: '', role: 'STUDENT', firstName: '', lastName: '', gradeLevel: '', rfidCard: '', phoneNumber: '' });
     setCredentials(null);
+    setLinkParent(null);
+    setParentFirst('');
+    setParentLast('');
+    setParentNameError('');
+    setParentQuery('');
+    setParentResults([]);
     setFormErrors({});
     setRfidTaken(false);
     setRfidChecking(false);
@@ -343,7 +411,7 @@ export default function AddUserModal({ isOpen, onClose, onSubmit, error }: AddUs
               A secure password will be generated automatically.
             </p>
           </div>
-          <button onClick={handleClose}
+          <button onClick={requestClose}
             className="w-8 h-8 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
             <X className="w-5 h-5" />
           </button>
@@ -474,36 +542,10 @@ export default function AddUserModal({ isOpen, onClose, onSubmit, error }: AddUs
             )}
           </div>
 
-          {/* RFID manual input — not scanned yet, not scanning */}
+          {/* RFID card: scan only. Manual typing was removed. */}
           {showRfid && !scannedRfid && !isScanning && (
-            <div>
-              <label className={LABEL_CLS}>RFID Card Number <span className="normal-case text-gray-400">(type it, or tap the card on the reader)</span></label>
-              <div className="relative">
-                <input type="text" value={formData.rfidCard}
-                  onChange={(e) => {
-                    setFormData({ ...formData, rfidCard: e.target.value });
-                    setRfidTaken(false);
-                    if (formErrors.rfidCard) setFormErrors((p) => ({ ...p, rfidCard: undefined }));
-                  }}
-                  onBlur={(e) => void handleRfidBlur(e.target.value)}
-                  className={`${INPUT_CLS} pr-9 ${formErrors.rfidCard ? INPUT_ERROR_CLS : ''}`}
-                  placeholder="Tap card or enter manually"
-                />
-                {rfidChecking && (
-                  <Loader2 className="absolute right-3 top-2.5 w-4 h-4 text-gray-400 animate-spin" />
-                )}
-                {!rfidChecking && rfidTaken && (
-                  <AlertTriangle className="absolute right-3 top-2.5 w-4 h-4 text-red-500" />
-                )}
-                {!rfidChecking && !rfidTaken && formData.rfidCard && (
-                  <CheckCircle className="absolute right-3 top-2.5 w-4 h-4 text-emerald-500" />
-                )}
-              </div>
-              {formErrors.rfidCard && (
-                <p className="mt-1 text-xs text-red-500 flex items-center gap-1">
-                  <AlertTriangle className="w-3 h-3 shrink-0" /> {formErrors.rfidCard}
-                </p>
-              )}
+            <div className="rounded-xl border border-dashed border-gray-300 dark:border-gray-600 px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+              RFID card: click <span className="font-semibold">Scan RFID Card</span> below, then tap the card on the reader.
             </div>
           )}
 
@@ -584,9 +626,158 @@ export default function AddUserModal({ isOpen, onClose, onSubmit, error }: AddUs
             </div>
           )}
 
+          {/* Parent account (students only) */}
+          {formData.role === 'STUDENT' && (
+            <div className="rounded-xl border border-gray-200 dark:border-gray-700 p-4 space-y-3">
+              <div>
+                <p className={LABEL_CLS}>Parent account</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {linkParent
+                    ? 'This student will be linked to the parent below. No new parent account will be created.'
+                    : 'A new parent account is created automatically. If a brother or sister is already registered, link to their parent instead.'}
+                </p>
+              </div>
+
+              {linkParent ? (
+                <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30">
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300 truncate">{linkParent.username}</p>
+                    <p className="text-xs text-emerald-700 dark:text-emerald-300 truncate">
+                      Children: {linkParent.children.map((c) => c.name).join(', ')}
+                    </p>
+                  </div>
+                  <button type="button" onClick={() => setLinkParent(null)}
+                    className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors">
+                    Change
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className={LABEL_CLS}>Parent first name <span className="normal-case text-gray-400">(optional)</span></label>
+                      <input type="text" value={parentFirst}
+                        onChange={(e) => setParentFirst(e.target.value)}
+                        className={INPUT_CLS} placeholder="e.g. Maria" />
+                    </div>
+                    <div>
+                      <label className={LABEL_CLS}>Parent last name <span className="normal-case text-gray-400">(optional)</span></label>
+                      <input type="text" value={parentLast}
+                        onChange={(e) => setParentLast(e.target.value)}
+                        className={INPUT_CLS} placeholder={formData.lastName.trim() || 'Same as student'} />
+                    </div>
+                  </div>
+                  {parentNameError && (
+                    <p className="text-xs text-red-500 flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3 shrink-0" /> {parentNameError}
+                    </p>
+                  )}
+                  <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 pt-1">Or link to an existing parent</p>
+                  <input type="text" value={parentQuery}
+                    onChange={(e) => setParentQuery(e.target.value)}
+                    className={INPUT_CLS}
+                    placeholder="Search an existing parent by username or child name (optional)"
+                  />
+                  {parentSearching && (
+                    <p className="text-xs text-gray-400 dark:text-gray-500">Searching...</p>
+                  )}
+                  {!parentSearching && parentResults.length > 0 && (
+                    <>
+                      {!parentQuery.trim() && (
+                        <p className="text-xs text-amber-600 dark:text-amber-400">
+                          {'Parents with the last name "' + formData.lastName.trim() + '" were found. Pick one only if it is the same family.'}
+                        </p>
+                      )}
+                      <ul className="max-h-40 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+                        {parentResults.map((p) => (
+                          <li key={p.id}>
+                            <button type="button"
+                              onClick={() => { setLinkParent(p); setParentQuery(''); }}
+                              className="w-full text-left px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                              <span className="block text-sm font-semibold text-gray-900 dark:text-white">{p.username}</span>
+                              <span className="block text-xs text-gray-500 dark:text-gray-400">
+                                Children: {p.children.map((c) => c.name).join(', ')}
+                              </span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {confirmOpen && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+              <div className="w-full max-w-md rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 p-6 shadow-2xl space-y-4">
+                <h3 className="text-base font-bold text-gray-900 dark:text-white">Create this account?</h3>
+                <dl className="text-sm space-y-2">
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-gray-500 dark:text-gray-400">Name</dt>
+                    <dd className="font-semibold text-gray-900 dark:text-white text-right">{formData.firstName.trim()} {formData.lastName.trim()}</dd>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-gray-500 dark:text-gray-400">Role</dt>
+                    <dd className="font-semibold text-gray-900 dark:text-white text-right">{SELECTABLE_ROLES.find((r) => r.value === formData.role)?.label ?? formData.role}</dd>
+                  </div>
+                  {showGrade && (
+                    <div className="flex justify-between gap-4">
+                      <dt className="text-gray-500 dark:text-gray-400">Grade level</dt>
+                      <dd className="font-semibold text-gray-900 dark:text-white text-right">{String(formData.gradeLevel).replace('GRADE_', 'Grade ')}</dd>
+                    </div>
+                  )}
+                  {showRfid && (
+                    <div className="flex justify-between gap-4">
+                      <dt className="text-gray-500 dark:text-gray-400">RFID card</dt>
+                      <dd className="font-mono font-semibold text-gray-900 dark:text-white text-right">{scannedRfid || formData.rfidCard}</dd>
+                    </div>
+                  )}
+                  {formData.role === 'STUDENT' && (
+                    <div className="flex justify-between gap-4">
+                      <dt className="text-gray-500 dark:text-gray-400">Parent account</dt>
+                      <dd className="font-semibold text-gray-900 dark:text-white text-right">{linkParent ? 'Linked to ' + linkParent.username : ('New account' + ((parentFirst.trim() || parentLast.trim()) ? ' for ' + (parentFirst.trim() || 'Parent') + ' ' + (parentLast.trim() || formData.lastName.trim()) : ' (auto-created)'))}</dd>
+                    </div>
+                  )}
+                </dl>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Check the details. A password is generated and shown once after the account is created.</p>
+                <div className="flex gap-3">
+                  <button type="button" onClick={() => setConfirmOpen(false)}
+                    className="flex-1 h-11 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-700 rounded-full text-sm font-semibold transition-colors">
+                    Go back
+                  </button>
+                  <button type="button" onClick={() => { setConfirmOpen(false); void handleSubmit(null, true); }}
+                    className="flex-1 h-11 bg-[#7B1113] hover:bg-[#9B2020] text-white rounded-full text-sm font-semibold transition-colors">
+                    Yes, create
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {leaveOpen && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+              <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 p-6 shadow-2xl space-y-4">
+                <h3 className="text-base font-bold text-gray-900 dark:text-white">Discard this new user?</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400">You have unsaved changes. If you leave now, they will be lost.</p>
+                <div className="flex gap-3">
+                  <button type="button" onClick={() => setLeaveOpen(false)}
+                    className="flex-1 h-11 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-700 rounded-full text-sm font-semibold transition-colors">
+                    Keep editing
+                  </button>
+                  <button type="button" onClick={() => { setLeaveOpen(false); handleClose(); }}
+                    className="flex-1 h-11 bg-red-600 hover:bg-red-700 text-white rounded-full text-sm font-semibold transition-colors">
+                    Discard
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Actions */}
           <div className="flex gap-3 pt-2">
-            <button type="button" onClick={handleClose}
+            <button type="button" onClick={requestClose}
               className="flex-1 h-11 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-700 rounded-full text-sm font-semibold transition-colors">
               Cancel
             </button>

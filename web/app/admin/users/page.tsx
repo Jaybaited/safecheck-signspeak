@@ -12,6 +12,7 @@ import Sidebar from '@/components/admin/Sidebar';
 import AddUserModal from '@/components/admin/AddUserModal';
 import DeleteUserModal from '@/components/admin/DeleteUserModal';
 import EditUserModal from '@/components/admin/EditUserModal';
+import LinkParentModal from '@/components/admin/LinkParentModal';
 import ThemeToggle from '@/components/ThemeToggle';
 import { logout } from '@/lib/auth';
 
@@ -79,6 +80,7 @@ export default function ManageUsersPage() {
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('ALL');
   const [showFilter, setShowFilter] = useState(false);
 
+  const [linkStudent, setLinkStudent] = useState<ApiUser | null>(null);
   const [parentChildMap, setParentChildMap] = useState<Record<string, ChildInfo>>({});
 
   useEffect(() => {
@@ -462,6 +464,14 @@ export default function ManageUsersPage() {
                             >
                               <Pencil className="w-4 h-4" /> Edit user
                             </button>
+                            {userData.role === 'STUDENT' && (
+                              <button
+                                onClick={() => { setLinkStudent(userData); setOpenDropdown(null); }}
+                                className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-gray-700 text-slate-700 dark:text-gray-200 text-sm transition-colors"
+                              >
+                                <Users className="w-4 h-4" /> Link to parent
+                              </button>
+                            )}
                             <button
                               onClick={() => {
                                 setSelectedUser(userData);
@@ -528,7 +538,12 @@ export default function ManageUsersPage() {
         error={error}
       />
       {/* ✅ Revision 10: Edit modal */}
-      <EditUserModal
+      <LinkParentModal
+          student={linkStudent}
+          onClose={() => setLinkStudent(null)}
+          onChanged={() => { void fetchUsers(); }}
+        />
+        <EditUserModal
         isOpen={showEditModal}
         user={selectedUser}
         onClose={() => { setShowEditModal(false); setSelectedUser(null); }}

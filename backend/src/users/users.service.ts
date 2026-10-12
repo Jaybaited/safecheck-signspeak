@@ -139,6 +139,19 @@ export class UsersService {
   }> {
     const isStudent = createUserDto.role === 'STUDENT';
 
+    // Validate the chosen parent BEFORE inserting the student.
+    let linkParent: { id: string; username: string } | null = null;
+    if (isStudent && createUserDto.existingParentId) {
+      const chosen = await this.prisma.user.findUnique({
+        where:  { id: createUserDto.existingParentId },
+        select: { id: true, username: true, role: true },
+      });
+      if (!chosen || chosen.role !== 'PARENT') {
+        throw new NotFoundException('The selected parent account was not found.');
+      }
+      linkParent = { id: chosen.id, username: chosen.username };
+    }
+
 
     const plainPassword   = await this.generateUniquePassword();
     const hashedPassword  = await bcrypt.hash(plainPassword, 10);
@@ -198,7 +211,17 @@ export class UsersService {
     let parentAccount: { username: string; generatedPassword: string } | undefined;
 
 
-    if (isStudent && createUserDto.rfidCard) {
+    if (isStudent && linkParent) {
+      await this.prisma.parentStudent.upsert({
+        where:  { parentId_studentId: { parentId: linkParent.id, studentId: userId } },
+        create: { parentId: linkParent.id, studentId: userId },
+        update: {},
+      });
+      parentAccount = {
+        username:          linkParent.username,
+        generatedPassword: '(existing account - same password)',
+      };
+    } else if (isStudent && createUserDto.rfidCard) {
       const parentUsername       = await this.buildUniqueParentUsername(
         createUserDto.rfidCard,
         createUserDto.lastName,
@@ -238,8 +261,8 @@ export class UsersService {
             null,
             parentHashedPassword,
             'PARENT',
-            'Parent',
-            createUserDto.lastName,
+            (createUserDto.parentFirstName ?? '').trim() || 'Parent',
+            (createUserDto.parentLastName ?? '').trim() || createUserDto.lastName,
             null,
             null,
             createUserDto.phoneNumber || null,
@@ -424,6 +447,80 @@ export class UsersService {
     if (user?.role === 'STUDENT') {
       await this.notificationsService.notifyParentsPasswordChanged(userId, how);
     }
+  }
+
+  async searchParents(q?: string, by?: string) {
+    const term = (q ?? '').trim();
+    if (term.length < 2) return [];
+
+    const contains = { contains: term, mode: 'insensitive' as const };
+    const exact    = { equals: term, mode: 'insensitive' as const };
+    const matches = await this.prisma.parentStudent.findMany({
+      where: by === 'lastName'
+        ? { OR: [{ parent: { lastName: exact } }, { student: { lastName: exact } }] }
+        : {
+            OR: [
+              { parent:  { username:  contains } },
+              { parent:  { lastName:  contains } },
+              { parent:  { firstName: contains } },
+              { student: { lastName:  contains } },
+              { student: { firstName: contains } },
+            ],
+          },
+      select: { parentId: true },
+      take: 200,
+    });
+    const parentIds = Array.from(new Set(matches.map((m) => m.parentId))).slice(0, 20);
+    if (parentIds.length === 0) return [];
+
+    const links = await this.prisma.parentStudent.findMany({
+      where: { parentId: { in: parentIds } },
+      select: {
+        parent:  { select: { id: true, username: true, firstName: true, lastName: true } },
+        student: { select: { id: true, firstName: true, lastName: true, gradeLevel: true } },
+      },
+    });
+
+    const byParent = new Map<string, {
+      id: string; username: string; name: string;
+      children: { id: string; name: string; gradeLevel: string | null }[];
+    }>();
+    for (const link of links) {
+      const entry = byParent.get(link.parent.id) ?? {
+        id: link.parent.id,
+        username: link.parent.username,
+        name: `${link.parent.firstName} ${link.parent.lastName}`,
+        children: [],
+      };
+      entry.children.push({
+        id: link.student.id,
+        name: `${link.student.firstName} ${link.student.lastName}`,
+        gradeLevel: link.student.gradeLevel,
+      });
+      byParent.set(link.parent.id, entry);
+    }
+    return Array.from(byParent.values());
+  }
+
+  async linkChild(parentId: string, studentId: string) {
+    const [parent, student] = await Promise.all([
+      this.prisma.user.findUnique({ where: { id: parentId },  select: { id: true, role: true, username: true } }),
+      this.prisma.user.findUnique({ where: { id: studentId }, select: { id: true, role: true, firstName: true, lastName: true } }),
+    ]);
+    if (!parent || parent.role !== 'PARENT')   throw new NotFoundException('Parent account not found.');
+    if (!student || student.role !== 'STUDENT') throw new NotFoundException('Student account not found.');
+
+    await this.prisma.parentStudent.upsert({
+      where:  { parentId_studentId: { parentId, studentId } },
+      create: { parentId, studentId },
+      update: {},
+    });
+    return { message: `${student.firstName} ${student.lastName} is now linked to ${parent.username}.` };
+  }
+
+  async unlinkChild(parentId: string, studentId: string) {
+    await this.prisma.parentStudent.deleteMany({ where: { parentId, studentId } });
+    return { message: 'Link removed.' };
   }
 
   async updateFcmToken(userId: string, fcmToken: string) {

@@ -151,6 +151,9 @@ export interface User {
 
 export interface CreateUserDto {
   username:     string;
+  existingParentId?: string;
+  parentFirstName?: string;
+  parentLastName?: string;
   firstName:    string;
   lastName:     string;
   email?:       string;
@@ -334,6 +337,22 @@ export const createUser = (data: CreateUserDto) =>
   }>('/users', { method: 'POST', body: JSON.stringify(data) });
 
 
+export interface ParentSearchResult {
+  id: string;
+  username: string;
+  name: string;
+  children: { id: string; name: string; gradeLevel: string | null }[];
+}
+
+export const searchParents = (q: string, by?: 'lastName') =>
+  apiFetch<ParentSearchResult[]>('/users/parents/search?q=' + encodeURIComponent(q) + (by ? '&by=' + by : ''));
+
+export const linkChild = (parentId: string, studentId: string) =>
+  apiFetch<{ message: string }>('/users/link-child', { method: 'POST', body: JSON.stringify({ parentId, studentId }) });
+
+export const unlinkChild = (parentId: string, studentId: string) =>
+  apiFetch<{ message: string }>('/users/unlink-child', { method: 'POST', body: JSON.stringify({ parentId, studentId }) });
+
 export const updateUser = (id: string, data: Partial<CreateUserDto>) =>
   apiFetch<User>(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
 
@@ -509,6 +528,9 @@ export const api = {
   getUserStats,
   getUserById,
   createUser,
+  searchParents,
+  linkChild,
+  unlinkChild,
   updateUser,
   deleteUser,
   changePassword,
