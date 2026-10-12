@@ -15,6 +15,7 @@ import {
 import StudentSidebar from '@/components/student/StudentSidebar';
 import ThemeToggle from '@/components/ThemeToggle';
 import { api, apiFetch } from '@/lib/api';
+import { getHolidays, type Holiday } from '@/lib/calendar-api';
 import { logout } from '@/lib/auth';
 
 interface User {
@@ -41,6 +42,20 @@ export default function StudentAttendancePage() {
   const [attendance, setAttendance]       = useState<AttendanceRecord[]>([]);
   const [selectedMonth, setSelectedMonth] = useState(new Date());
   const [refreshing, setRefreshing]       = useState(false);
+  const [holidays, setHolidays] = useState<Holiday[]>([]);
+  const off = useMemo(() => {
+    const m: Record<number, string> = {};
+    holidays.forEach((h) => { m[new Date(h.date).getUTCDate()] = h.name; });
+    return m;
+  }, [holidays]);
+  useEffect(() => {
+    const y = selectedMonth.getFullYear();
+    const mm = String(selectedMonth.getMonth() + 1).padStart(2, '0');
+    const last = String(new Date(y, selectedMonth.getMonth() + 1, 0).getDate()).padStart(2, '0');
+    getHolidays(y + '-' + mm + '-01', y + '-' + mm + '-' + last)
+      .then(setHolidays)
+      .catch(() => setHolidays([]));
+  }, [selectedMonth]);
   const router = useRouter();
 
   useEffect(() => {
@@ -291,25 +306,21 @@ export default function StudentAttendancePage() {
                     title={
                       record
                         ? `In: ${record.timeIn ? formatTime(record.timeIn) : '—'} · Out: ${record.timeOut ? formatTime(record.timeOut) : 'Pending'}`
-                        : String(day)
+                        : (off[day] ?? String(day))
                     }
                     className={`relative flex flex-col items-center justify-center rounded-md cursor-default
                       text-[11px] font-medium transition-colors select-none
                       ${isToday
                         ? 'bg-purple-600 text-white'
                         : record
-                        ? 'bg-slate-100 dark:bg-gray-800 text-slate-700 dark:text-gray-200 hover:bg-slate-200 dark:hover:bg-gray-700'
+                        ? (hasOut ? 'bg-emerald-100 text-emerald-700 font-semibold dark:bg-emerald-500/20 dark:text-emerald-300' : hasIn ? 'bg-cyan-100 text-cyan-700 font-semibold dark:bg-cyan-500/20 dark:text-cyan-300' : 'bg-slate-100 text-slate-700 dark:bg-gray-800 dark:text-gray-200')
+                        : off[day]
+                        ? 'bg-amber-100 text-amber-700 font-semibold dark:bg-amber-500/20 dark:text-amber-300'
                         : 'text-slate-400 dark:text-gray-600 hover:bg-slate-50 dark:hover:bg-gray-800/50'
                       }`}
                     style={{ aspectRatio: '1' }}
                   >
                     <span>{day}</span>
-                    {record && !isToday && (
-                      <div className="flex gap-0.5 mt-px">
-                        <div className={`w-1 h-1 rounded-full ${hasIn  ? 'bg-purple-500' : 'bg-slate-300 dark:bg-gray-600'}`} />
-                        <div className={`w-1 h-1 rounded-full ${hasOut ? 'bg-cyan-500'   : 'bg-slate-300 dark:bg-gray-600'}`} />
-                      </div>
-                    )}
                   </div>
                 );
               })}
@@ -318,19 +329,17 @@ export default function StudentAttendancePage() {
             {/* Legend */}
             <div className="pt-2 border-t border-slate-100 dark:border-gray-800 space-y-1.5">
               {[
-                { dot: 'bg-purple-500', label: 'Time-in recorded' },
-                { dot: 'bg-cyan-500',   label: 'Time-out recorded' },
-                { dot: 'bg-slate-300 dark:bg-gray-600', label: 'Not recorded' },
-              ].map(({ dot, label }) => (
+                { swatch: 'bg-emerald-100 dark:bg-emerald-500/20', label: 'Time-in and time-out recorded' },
+                { swatch: 'bg-cyan-100 dark:bg-cyan-500/20',       label: 'Time-in only (no time-out yet)' },
+                { swatch: 'bg-amber-100 dark:bg-amber-500/20',     label: 'Holiday / no classes' },
+                { swatch: 'bg-purple-600',                          label: 'Today' },
+                { swatch: 'border border-slate-300 dark:border-gray-600', label: 'No record' },
+              ].map(({ swatch, label }) => (
                 <div key={label} className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full shrink-0 ${dot}`} />
+                  <div className={'w-4 h-3 rounded-sm shrink-0 ' + swatch} />
                   <span className="text-[10px] text-slate-500 dark:text-gray-500">{label}</span>
                 </div>
               ))}
-              <div className="flex items-center gap-2 mt-1">
-                <div className="w-4 h-3 rounded-sm bg-purple-600 shrink-0" />
-                <span className="text-[10px] text-slate-500 dark:text-gray-500">Today</span>
-              </div>
             </div>
           </div>
 
