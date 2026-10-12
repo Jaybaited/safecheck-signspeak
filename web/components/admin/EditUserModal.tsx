@@ -132,7 +132,7 @@ export default function EditUserModal({
 
     try {
       const payload: Partial<CreateUserDto> = {
-        firstName:   isParent ? 'Parent' : form.firstName.trim(),
+        firstName: form.firstName.trim(),
         lastName:    form.lastName.trim(),
         email:       form.email.trim()       || undefined,
         phoneNumber: form.phoneNumber.trim() || undefined,
@@ -216,46 +216,7 @@ export default function EditUserModal({
           </div>
 
           {/* ── PARENT: Display Name + editable Last Name ── */}
-          {isParent && (
-            <>
-              <div>
-                <label className="block text-xs font-medium text-slate-500 dark:text-gray-400 mb-1">
-                  Display Name <span className="text-slate-400">(auto-generated)</span>
-                </label>
-                <div className="flex items-center gap-2 px-3 py-2 bg-slate-100 dark:bg-gray-800 border border-slate-200 dark:border-gray-700 rounded-lg text-sm font-medium">
-                  <User className="w-3.5 h-3.5 shrink-0 text-[#C4972A]" />
-                  <span className="text-slate-700 dark:text-gray-200">{parentDisplayPreview}</span>
-                </div>
-                <p className="mt-1 text-xs text-slate-400 dark:text-gray-500">
-                  Display name is always "Parent" + last name of the linked student.
-                </p>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-700 dark:text-gray-300 mb-1">
-                  Last Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={form.lastName}
-                  onChange={(e) => handleChange('lastName', e.target.value)}
-                  placeholder="e.g. Cruz"
-                  className={`w-full px-3 py-2 bg-slate-50 dark:bg-gray-800 border rounded-lg text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#7B1113] transition-colors placeholder:text-slate-400 dark:placeholder:text-gray-500 ${
-                    fieldErrors.lastName
-                      ? 'border-red-400 dark:border-red-500 bg-red-50 dark:bg-red-500/5'
-                      : 'border-slate-200 dark:border-gray-700'
-                  }`}
-                />
-                {fieldErrors.lastName && (
-                  <p className="mt-1 text-xs text-red-500 flex items-center gap-1">
-                    <XCircle className="w-3 h-3 shrink-0" />{fieldErrors.lastName}
-                  </p>
-                )}
-              </div>
-            </>
-          )}
-
-          {/* ── TEACHER / STUDENT: First + Last Name ── */}
-          {!isParent && (
+          {(
             <>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -316,12 +277,12 @@ export default function EditUserModal({
                 <select
                   value={form.role}
                   onChange={(e) => handleChange('role', e.target.value)}
-                  disabled={!isAdminCaller}
+                  disabled={!isAdminCaller || isStudent || isParent}
                   className="w-full px-3 py-2 bg-slate-50 dark:bg-gray-800 border border-slate-200 dark:border-gray-700 rounded-lg text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#7B1113] transition-colors appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <option value="TEACHER">Teacher</option>
-                  <option value="STUDENT">Student</option>
-                  <option value="PARENT">Parent</option>
+                  {isStudent && <option value="STUDENT">Student</option>}
+                  {isParent && <option value="PARENT">Parent</option>}
                   <option value="ADMIN">Admin</option>
                 </select>
                 {isAdminCaller && form.role !== user.role && (

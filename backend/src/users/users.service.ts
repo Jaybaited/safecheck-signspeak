@@ -4,11 +4,13 @@ import {
   UnauthorizedException,
   NotFoundException,
   ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import * as bcrypt from 'bcrypt';
 import { NotificationsService } from '../notifications/notifications.service';
+import { AdminLogService } from '../common/admin-log.service';
 
 
 @Injectable()
@@ -16,6 +18,7 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationsService,
+    private readonly adminLog: AdminLogService,
   ) {}
 
 
@@ -132,57 +135,104 @@ export class UsersService {
   }
 
 
-  async create(createUserDto: CreateUserDto): Promise<{
+  async create(createUserDto: CreateUserDto, adminId?: string): Promise<{
     user: Record<string, unknown>;
     generatedPassword: string;
     parentAccount?: { username: string; generatedPassword: string };
   }> {
     const isStudent = createUserDto.role === 'STUDENT';
-
-    // Validate the chosen parent BEFORE inserting the student.
-    let linkParent: { id: string; username: string } | null = null;
-    if (isStudent && createUserDto.existingParentId) {
-      const chosen = await this.prisma.user.findUnique({
-        where:  { id: createUserDto.existingParentId },
-        select: { id: true, username: true, role: true },
-      });
-      if (!chosen || chosen.role !== 'PARENT') {
-        throw new NotFoundException('The selected parent account was not found.');
-      }
-      linkParent = { id: chosen.id, username: chosen.username };
+    if (isStudent && !createUserDto.rfidCard) {
+      throw new BadRequestException(
+        'Scan the student RFID card first. The card is used for the username and the parent account.',
+      );
     }
 
+    const plainPassword  = await this.generateUniquePassword();
+    const hashedPassword = await bcrypt.hash(plainPassword, 10);
+    const username       = await this.buildUniqueUsername(createUserDto.lastName, createUserDto.rfidCard);
+    const userId         = this.generateUuid();
 
-    const plainPassword   = await this.generateUniquePassword();
-    const hashedPassword  = await bcrypt.hash(plainPassword, 10);
+    const needsNewParent = isStudent && !createUserDto.existingParentId;
+    const newParentId    = this.generateUuid();
+    let newParentUsername = '';
+    let newParentPassword = '';
+    let newParentHash     = '';
+    if (needsNewParent) {
+      newParentUsername = await this.buildUniqueParentUsername(
+        createUserDto.rfidCard as string,
+        createUserDto.lastName,
+      );
+      newParentPassword = await this.generateUniquePassword();
+      newParentHash     = await bcrypt.hash(newParentPassword, 10);
+    }
 
+    const insertSql =
+      `INSERT INTO users (id, username, email, password, role, "firstName", "lastName", "gradeLevel", "rfidCard", "phoneNumber", "photoUrl", "mustChangePassword", "createdAt", "updatedAt")
+       VALUES ($1, $2, $3, $4, $5::"Role", $6, $7, $8::"GradeLevel", $9, $10, $11, $12, NOW(), NOW())`;
 
-    // ── Use new retry-safe username builder ───────────────────────────────
-    const username = await this.buildUniqueUsername(
-      createUserDto.lastName,
-      createUserDto.rfidCard,
-    );
-    const userId = this.generateUuid();
-
+    const result: { parentAccount?: { username: string; generatedPassword: string } } = {};
 
     try {
-      await this.prisma.$executeRawUnsafe(
-        `INSERT INTO users (id, username, email, password, role, "firstName", "lastName", "gradeLevel", "rfidCard", "phoneNumber", "photoUrl", "mustChangePassword", "createdAt", "updatedAt")
-         VALUES ($1, $2, $3, $4, $5::"Role", $6, $7, $8::"GradeLevel", $9, $10, $11, $12, NOW(), NOW())`,
-        userId,
-        username,
-        createUserDto.email       || null,
-        hashedPassword,
-        createUserDto.role,
-        createUserDto.firstName,
-        createUserDto.lastName,
-        createUserDto.gradeLevel  || null,
-        createUserDto.rfidCard    || null,
-        createUserDto.phoneNumber || null,
-        createUserDto.photoUrl    || null,
-        true,
-      );
+      // The student, the parent account and the link are saved together or not at all.
+      await this.prisma.$transaction(async (tx) => {
+        let parentIdToLink = newParentId;
+
+        if (isStudent && createUserDto.existingParentId) {
+          const chosen = await tx.user.findUnique({
+            where:  { id: createUserDto.existingParentId },
+            select: { id: true, username: true, role: true },
+          });
+          if (!chosen || chosen.role !== 'PARENT') {
+            throw new NotFoundException('The selected parent account was not found. Please choose the parent again.');
+          }
+          parentIdToLink = chosen.id;
+          result.parentAccount = {
+            username:          chosen.username,
+            generatedPassword: '(existing account - same password)',
+          };
+        }
+
+        await tx.$executeRawUnsafe(
+          insertSql,
+          userId,
+          username,
+          createUserDto.email       || null,
+          hashedPassword,
+          createUserDto.role,
+          createUserDto.firstName,
+          createUserDto.lastName,
+          createUserDto.gradeLevel  || null,
+          createUserDto.rfidCard    || null,
+          createUserDto.phoneNumber || null,
+          createUserDto.photoUrl    || null,
+          true,
+        );
+
+        if (needsNewParent) {
+          await tx.$executeRawUnsafe(
+            insertSql,
+            newParentId,
+            newParentUsername,
+            null,
+            newParentHash,
+            'PARENT',
+            (createUserDto.parentFirstName ?? '').trim() || 'Parent',
+            (createUserDto.parentLastName ?? '').trim() || createUserDto.lastName,
+            null,
+            null,
+            createUserDto.phoneNumber || null,
+            null,
+            true,
+          );
+          result.parentAccount = { username: newParentUsername, generatedPassword: newParentPassword };
+        }
+
+        if (isStudent) {
+          await tx.parentStudent.create({ data: { parentId: parentIdToLink, studentId: userId } });
+        }
+      });
     } catch (error) {
+      if (error instanceof NotFoundException) throw error;
       console.error('Error creating user:', error);
       const msg: string = (error as any)?.meta?.message ?? (error as any)?.message ?? '';
       if (msg.includes('"rfidCard"'))
@@ -193,7 +243,6 @@ export class UsersService {
         throw new ConflictException('This email is already in use.');
       throw error;
     }
-
 
     const createdUser = await this.prisma.user.findFirst({
       where:   { username },
@@ -206,94 +255,21 @@ export class UsersService {
       },
     });
 
-
-    // ── Auto-create parent account when a student is created ──────────────
-    let parentAccount: { username: string; generatedPassword: string } | undefined;
-
-
-    if (isStudent && linkParent) {
-      await this.prisma.parentStudent.upsert({
-        where:  { parentId_studentId: { parentId: linkParent.id, studentId: userId } },
-        create: { parentId: linkParent.id, studentId: userId },
-        update: {},
-      });
-      parentAccount = {
-        username:          linkParent.username,
-        generatedPassword: '(existing account - same password)',
-      };
-    } else if (isStudent && createUserDto.rfidCard) {
-      const parentUsername       = await this.buildUniqueParentUsername(
-        createUserDto.rfidCard,
-        createUserDto.lastName,
-      );
-      const parentPlainPassword  = await this.generateUniquePassword();
-      const parentHashedPassword = await bcrypt.hash(parentPlainPassword, 10);
-      const parentId             = this.generateUuid();
-
-
-      const existingParent = await this.prisma.user.findUnique({
-        where: { username: parentUsername },
-      });
-
-
-      if (existingParent) {
-        await this.prisma.parentStudent.upsert({
-          where: {
-            parentId_studentId: {
-              parentId:  existingParent.id,
-              studentId: userId,
-            },
-          },
-          create: { parentId: existingParent.id, studentId: userId },
-          update: {},
-        });
-        parentAccount = {
-          username:          existingParent.username,
-          generatedPassword: '(existing account — same password)',
-        };
-      } else {
-        try {
-          await this.prisma.$executeRawUnsafe(
-            `INSERT INTO users (id, username, email, password, role, "firstName", "lastName", "gradeLevel", "rfidCard", "phoneNumber", "photoUrl", "mustChangePassword", "createdAt", "updatedAt")
-             VALUES ($1, $2, $3, $4, $5::"Role", $6, $7, $8::"GradeLevel", $9, $10, $11, $12, NOW(), NOW())`,
-            parentId,
-            parentUsername,
-            null,
-            parentHashedPassword,
-            'PARENT',
-            (createUserDto.parentFirstName ?? '').trim() || 'Parent',
-            (createUserDto.parentLastName ?? '').trim() || createUserDto.lastName,
-            null,
-            null,
-            createUserDto.phoneNumber || null,
-            null,
-            true,
-          );
-
-
-          await this.prisma.parentStudent.create({
-            data: { parentId, studentId: userId },
-          });
-
-
-          parentAccount = {
-            username:          parentUsername,
-            generatedPassword: parentPlainPassword,
-          };
-        } catch (err) {
-          console.error('Warning: Parent auto-creation failed:', err);
-        }
-      }
-    }
-
+    await this.adminLog.log(
+      adminId,
+      'USER_CREATED',
+      'USER',
+      userId,
+      'Created ' + String(createUserDto.role).toLowerCase() + ' account ' + username,
+      { role: createUserDto.role, linkedExistingParent: !!createUserDto.existingParentId },
+    );
 
     return {
       user:              createdUser as Record<string, unknown>,
       generatedPassword: plainPassword,
-      ...(parentAccount ? { parentAccount } : {}),
+      ...(result.parentAccount ? { parentAccount: result.parentAccount } : {}),
     };
   }
-
 
   // NOTE: username and password are intentionally NOT editable here.
   // Passwords change only through change-password / force-change-password
@@ -315,6 +291,9 @@ export class UsersService {
 
     const roleChanged =
       updateData.role !== undefined && updateData.role !== existing.role;
+    if (roleChanged && (existing.role === 'STUDENT' || existing.role === 'PARENT' || updateData.role === 'STUDENT' || updateData.role === 'PARENT')) {
+      throw new BadRequestException('Student and parent roles cannot be changed. Create a new account instead.');
+    }
     if (updateData.role) data.role = updateData.role;
 
 
@@ -342,12 +321,84 @@ export class UsersService {
     }
 
 
+    const changes: Record<string, { from: unknown; to: unknown }> = {};
+    for (const f of ['firstName', 'lastName', 'email', 'gradeLevel', 'rfidCard', 'phoneNumber', 'role'] as const) {
+      if (f in data && (data as any)[f] !== (existing as any)[f]) {
+        changes[f] = { from: (existing as any)[f] ?? null, to: (data as any)[f] ?? null };
+      }
+    }
+    if (Object.keys(changes).length > 0) {
+      await this.adminLog.log(
+        changedById,
+        changes.rfidCard ? 'RFID_CARD_CHANGED' : changes.role ? 'USER_ROLE_CHANGED' : 'USER_UPDATED',
+        'USER',
+        id,
+        'Edited ' + String(existing.role).toLowerCase() + ' account ' + existing.username + ': ' +
+          Object.entries(changes).map(([k, v]) => k + ' ' + String(v.from ?? '-') + ' -> ' + String(v.to ?? '-')).join('; '),
+        changes,
+      );
+    }
     return updated;
   }
 
 
-  async remove(id: string) {
-    return this.prisma.user.delete({ where: { id } });
+  async remove(id: string, adminId?: string) {
+    const target = await this.prisma.user.findUnique({
+      where:  { id },
+      select: { id: true, username: true, role: true },
+    });
+    if (!target) throw new NotFoundException('User not found.');
+    if (adminId && target.id === adminId) {
+      throw new ForbiddenException('You cannot delete your own account.');
+    }
+
+    if (target.role === 'PARENT') {
+      const children = await this.prisma.parentStudent.count({ where: { parentId: id } });
+      if (children > 0) {
+        throw new BadRequestException(
+          'A parent account cannot be deleted while it has students. It is removed automatically when its last student is deleted. To remove this family, delete or archive its students.',
+        );
+      }
+    }
+
+    const result = { removedParent: null as string | null };
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const link = target.role === 'STUDENT'
+          ? await tx.parentStudent.findFirst({
+              where:  { studentId: id },
+              select: { parentId: true, parent: { select: { username: true } } },
+            })
+          : null;
+
+        await tx.user.delete({ where: { id } });
+
+        // A parent exists only for its students, so it goes with its last student.
+        if (link) {
+          const left = await tx.parentStudent.count({ where: { parentId: link.parentId } });
+          if (left === 0) {
+            await tx.user.delete({ where: { id: link.parentId } });
+            result.removedParent = link.parent.username;
+          }
+        }
+      });
+    } catch (err: any) {
+      if (err?.code === 'P2003') {
+        throw new ConflictException('This account still owns records (for example assessments it created) and cannot be deleted.');
+      }
+      throw err;
+    }
+
+    await this.adminLog.log(
+      adminId,
+      'USER_DELETED',
+      'USER',
+      id,
+      'Deleted ' + String(target.role).toLowerCase() + ' account ' + target.username +
+        (result.removedParent ? ' and its parent account ' + result.removedParent : ''),
+      { role: target.role, removedParent: result.removedParent },
+    );
+    return { deleted: true, removedParent: result.removedParent };
   }
 
 
@@ -502,25 +553,99 @@ export class UsersService {
     return Array.from(byParent.values());
   }
 
-  async linkChild(parentId: string, studentId: string) {
-    const [parent, student] = await Promise.all([
-      this.prisma.user.findUnique({ where: { id: parentId },  select: { id: true, role: true, username: true } }),
-      this.prisma.user.findUnique({ where: { id: studentId }, select: { id: true, role: true, firstName: true, lastName: true } }),
+  async changeParent(studentId: string, newParentId: string, adminId?: string) {
+    const [student, newParent] = await Promise.all([
+      this.prisma.user.findUnique({ where: { id: studentId },   select: { id: true, role: true, firstName: true, lastName: true } }),
+      this.prisma.user.findUnique({ where: { id: newParentId }, select: { id: true, role: true, username: true } }),
     ]);
-    if (!parent || parent.role !== 'PARENT')   throw new NotFoundException('Parent account not found.');
     if (!student || student.role !== 'STUDENT') throw new NotFoundException('Student account not found.');
+    if (!newParent || newParent.role !== 'PARENT') throw new NotFoundException('Parent account not found.');
 
-    await this.prisma.parentStudent.upsert({
-      where:  { parentId_studentId: { parentId, studentId } },
-      create: { parentId, studentId },
-      update: {},
+    const current = await this.prisma.parentStudent.findFirst({
+      where:  { studentId },
+      select: { parentId: true, parent: { select: { username: true } } },
     });
-    return { message: `${student.firstName} ${student.lastName} is now linked to ${parent.username}.` };
+    if (current?.parentId === newParentId) {
+      throw new BadRequestException('This student is already linked to that parent.');
+    }
+
+    const result = { removedParent: null as string | null };
+    await this.prisma.$transaction(async (tx) => {
+      if (current) await tx.parentStudent.deleteMany({ where: { studentId } });
+      await tx.parentStudent.create({ data: { parentId: newParentId, studentId } });
+
+      // A parent with no students left is removed, so there are never empty parents.
+      if (current) {
+        const left = await tx.parentStudent.count({ where: { parentId: current.parentId } });
+        if (left === 0) {
+          await tx.user.delete({ where: { id: current.parentId } });
+          result.removedParent = current.parent.username;
+        }
+      }
+    });
+
+    await this.adminLog.log(
+      adminId,
+      'STUDENT_PARENT_CHANGED',
+      'USER',
+      studentId,
+      'Moved ' + student.firstName + ' ' + student.lastName + ' from ' + (current ? current.parent.username : 'no parent') + ' to ' + newParent.username,
+      { fromParent: current?.parent.username ?? null, toParent: newParent.username, removedParent: result.removedParent },
+    );
+
+    return {
+      message:
+        student.firstName + ' ' + student.lastName + ' is now linked to ' + newParent.username + '.' +
+        (result.removedParent ? ' The empty parent account ' + result.removedParent + ' was removed.' : ''),
+      removedParent: result.removedParent,
+    };
   }
 
-  async unlinkChild(parentId: string, studentId: string) {
-    await this.prisma.parentStudent.deleteMany({ where: { parentId, studentId } });
-    return { message: 'Link removed.' };
+  async getDeletePreview(id: string) {
+    const target = await this.prisma.user.findUnique({
+      where:  { id },
+      select: { id: true, role: true },
+    });
+    if (!target) throw new NotFoundException('User not found.');
+
+    if (target.role === 'PARENT') {
+      const links = await this.prisma.parentStudent.findMany({
+        where:  { parentId: id },
+        select: { student: { select: { id: true, firstName: true, lastName: true } } },
+      });
+      return {
+        role: 'PARENT',
+        canDelete: links.length === 0,
+        children: links.map((l) => ({ id: l.student.id, name: l.student.firstName + ' ' + l.student.lastName })),
+      };
+    }
+
+    if (target.role === 'STUDENT') {
+      const [attendance, fslProgress, assessmentAttempts, link] = await Promise.all([
+        this.prisma.attendance.count({ where: { studentId: id } }),
+        this.prisma.fSLProgress.count({ where: { studentId: id } }),
+        this.prisma.assessmentAttempt.count({ where: { userId: id } }),
+        this.prisma.parentStudent.findFirst({
+          where:  { studentId: id },
+          select: { parentId: true, parent: { select: { username: true } } },
+        }),
+      ]);
+      let willDeleteParent: string | null = null;
+      if (link) {
+        const others = await this.prisma.parentStudent.count({
+          where: { parentId: link.parentId, NOT: { studentId: id } },
+        });
+        if (others === 0) willDeleteParent = link.parent.username;
+      }
+      return {
+        role: 'STUDENT',
+        canDelete: true,
+        willDeleteParent,
+        records: { attendance, fslProgress, assessmentAttempts },
+      };
+    }
+
+    return { role: target.role, canDelete: true };
   }
 
   async updateFcmToken(userId: string, fcmToken: string) {

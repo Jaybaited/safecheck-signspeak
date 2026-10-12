@@ -347,11 +347,22 @@ export interface ParentSearchResult {
 export const searchParents = (q: string, by?: 'lastName') =>
   apiFetch<ParentSearchResult[]>('/users/parents/search?q=' + encodeURIComponent(q) + (by ? '&by=' + by : ''));
 
-export const linkChild = (parentId: string, studentId: string) =>
-  apiFetch<{ message: string }>('/users/link-child', { method: 'POST', body: JSON.stringify({ parentId, studentId }) });
+export interface DeletePreview {
+  role: string;
+  canDelete: boolean;
+  children?: { id: string; name: string }[];
+  willDeleteParent?: string | null;
+  records?: { attendance: number; fslProgress: number; assessmentAttempts: number };
+}
 
-export const unlinkChild = (parentId: string, studentId: string) =>
-  apiFetch<{ message: string }>('/users/unlink-child', { method: 'POST', body: JSON.stringify({ parentId, studentId }) });
+export const changeParent = (studentId: string, parentId: string) =>
+  apiFetch<{ message: string; removedParent: string | null }>('/users/change-parent', {
+    method: 'POST',
+    body: JSON.stringify({ studentId, parentId }),
+  });
+
+export const getDeletePreview = (id: string) =>
+  apiFetch<DeletePreview>('/users/' + id + '/delete-preview');
 
 export const updateUser = (id: string, data: Partial<CreateUserDto>) =>
   apiFetch<User>(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
@@ -529,8 +540,8 @@ export const api = {
   getUserById,
   createUser,
   searchParents,
-  linkChild,
-  unlinkChild,
+  changeParent,
+  getDeletePreview,
   updateUser,
   deleteUser,
   changePassword,

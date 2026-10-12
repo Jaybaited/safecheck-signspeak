@@ -12,7 +12,7 @@ import Sidebar from '@/components/admin/Sidebar';
 import AddUserModal from '@/components/admin/AddUserModal';
 import DeleteUserModal from '@/components/admin/DeleteUserModal';
 import EditUserModal from '@/components/admin/EditUserModal';
-import LinkParentModal from '@/components/admin/LinkParentModal';
+import ChangeParentModal from '@/components/admin/ChangeParentModal';
 import ThemeToggle from '@/components/ThemeToggle';
 import { logout } from '@/lib/auth';
 
@@ -67,6 +67,17 @@ export default function ManageUsersPage() {
   const [loading,         setLoading]         = useState(true);
   const [users,           setUsers]           = useState<ApiUser[]>([]);
   const [openDropdown,    setOpenDropdown]    = useState<string | null>(null);
+  const [menuPos, setMenuPos] = useState<{ left: number; top?: number; bottom?: number } | null>(null);
+  useEffect(() => {
+    if (!openDropdown) return;
+    const close = () => setOpenDropdown(null);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    return () => {
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+    };
+  }, [openDropdown]);
   const [showAddModal,    setShowAddModal]    = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showEditModal,   setShowEditModal]   = useState(false);
@@ -446,13 +457,20 @@ export default function ManageUsersPage() {
                     <td className="py-3">
                       <div className="relative">
                         <button
-                          onClick={() => setOpenDropdown(openDropdown === userData.id ? null : userData.id)}
+                          onClick={(e) => {
+                            const r = e.currentTarget.getBoundingClientRect();
+                            const openUp = window.innerHeight - r.bottom < 190;
+                            setMenuPos(openUp
+                              ? { left: Math.max(8, r.right - 176), bottom: window.innerHeight - r.top + 4 }
+                              : { left: Math.max(8, r.right - 176), top: r.bottom + 4 });
+                            setOpenDropdown(openDropdown === userData.id ? null : userData.id);
+                          }}
                           className="p-1.5 hover:bg-slate-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
                         >
                           <MoreVertical className="w-4 h-4 text-slate-400" />
                         </button>
                         {openDropdown === userData.id && (
-                          <div className="absolute right-0 mt-1 w-44 bg-white dark:bg-gray-800 border border-slate-200 dark:border-gray-700 rounded-xl shadow-xl z-50 overflow-hidden">
+                          <div style={menuPos ?? undefined} className="fixed w-44 bg-white dark:bg-gray-800 border border-slate-200 dark:border-gray-700 rounded-xl shadow-xl z-50 overflow-hidden">
                             {/* ✅ Revision 10: Edit user */}
                             <button
                               onClick={() => {
@@ -469,7 +487,7 @@ export default function ManageUsersPage() {
                                 onClick={() => { setLinkStudent(userData); setOpenDropdown(null); }}
                                 className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-gray-700 text-slate-700 dark:text-gray-200 text-sm transition-colors"
                               >
-                                <Users className="w-4 h-4" /> Link to parent
+                                <Users className="w-4 h-4" /> Change parent
                               </button>
                             )}
                             <button
@@ -538,7 +556,7 @@ export default function ManageUsersPage() {
         error={error}
       />
       {/* ✅ Revision 10: Edit modal */}
-      <LinkParentModal
+      <ChangeParentModal
           student={linkStudent}
           onClose={() => setLinkStudent(null)}
           onChanged={() => { void fetchUsers(); }}

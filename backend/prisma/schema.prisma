@@ -24,6 +24,11 @@ model User {
   pushToken             String?
   mustChangePassword    Boolean                @default(true)
   phoneNumber           String?
+  archivedAt            DateTime?
+  archiveStatus         ArchiveStatus?
+  archiveNote           String?
+  archivedById          String?
+  @@index([archivedAt])
   attendances           Attendance[]
   fslProgress           FSLProgress[]
   parentLinks           ParentStudent[]        @relation("ParentUser")
@@ -50,6 +55,7 @@ model ParentStudent {
   student   User     @relation("StudentUser", fields: [studentId], references: [id], onDelete: Cascade)
 
   @@unique([parentId, studentId])
+  @@unique([studentId])
   @@map("parent_students")
 }
 
@@ -401,4 +407,28 @@ model SchoolHoliday {
   createdAt DateTime @default(now())
 
   @@map("school_holidays")
+}
+
+enum ArchiveStatus {
+  GRADUATED
+  TRANSFERRED_OUT
+  DROPPED_OUT
+  OTHER
+}
+
+// Every admin change is recorded here: who did it, what, on which record, and when.
+model AdminActionLog {
+  id         String   @id @default(uuid())
+  adminId    String
+  action     String
+  targetType String
+  targetId   String?
+  summary    String
+  details    Json?
+  createdAt  DateTime @default(now())
+
+  @@index([adminId])
+  @@index([createdAt])
+  @@index([targetType, targetId])
+  @@map("admin_action_logs")
 }

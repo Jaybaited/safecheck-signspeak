@@ -71,16 +71,17 @@ export class UsersController {
     return this.usersService.searchParents(q, by);
   }
 
-  @Post('link-child')
+  @Post('change-parent')
   @Roles('ADMIN')
-  linkChild(@Body() body: LinkChildDto) {
-    return this.usersService.linkChild(body.parentId, body.studentId);
+  changeParent(@Body() body: LinkChildDto, @Req() req: any) {
+    const adminId = req.user?.id ?? req.user?.sub;
+    return this.usersService.changeParent(body.studentId, body.parentId, adminId);
   }
 
-  @Post('unlink-child')
+  @Get(':id/delete-preview')
   @Roles('ADMIN')
-  unlinkChild(@Body() body: LinkChildDto) {
-    return this.usersService.unlinkChild(body.parentId, body.studentId);
+  deletePreview(@Param('id') id: string) {
+    return this.usersService.getDeletePreview(id);
   }
 
   @Get('student-parent/:studentId')
@@ -122,8 +123,9 @@ export class UsersController {
 
   @Post()
   @Roles('ADMIN')
-  create(@Body() createUserDto: CreateUserDto) {
-    return this.usersService.create(createUserDto);
+  create(@Body() createUserDto: CreateUserDto, @Req() req: any) {
+    const adminId = req.user?.id ?? req.user?.sub;
+    return this.usersService.create(createUserDto, adminId);
   }
 
   @Post(':id/change-password')
@@ -168,7 +170,8 @@ export class UsersController {
 
   @Delete(':id')
   @Roles('ADMIN')
-  remove(@Param('id') id: string) {
-    return this.usersService.remove(id);
+  remove(@Param('id') id: string, @Req() req: any) {
+    const adminId = req.user?.id ?? req.user?.sub;
+    return this.usersService.remove(id, adminId);
   }
 }

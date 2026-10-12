@@ -373,7 +373,7 @@ export default function AddUserModal({ isOpen, onClose, onSubmit, error }: AddUs
                       <p className="text-xs text-gray-400 dark:text-gray-500 mb-0.5">Password</p>
                       <p className="text-sm font-mono font-semibold text-gray-900 dark:text-white">{credentials.parentPassword}</p>
                     </div>
-                    <CopyButton text={credentials.parentPassword!} />
+                    {credentials.parentPassword && !credentials.parentPassword.startsWith('(') && <CopyButton text={credentials.parentPassword} />}
                   </div>
                 </div>
               </div>

@@ -94,10 +94,12 @@ export class CreateUserDto {
   @IsString()
   @IsOptional()
   @MaxLength(50)
+  @Matches(/^[A-Za-z\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u00FF][A-Za-z\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u00FF\s'\-.]*$/, { message: 'Name must start with a letter and can only contain letters, spaces, hyphens, apostrophes, and periods' })
   parentFirstName?: string;
 
   @IsString()
   @IsOptional()
   @MaxLength(50)
+  @Matches(/^[A-Za-z\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u00FF][A-Za-z\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u00FF\s'\-.]*$/, { message: 'Name must start with a letter and can only contain letters, spaces, hyphens, apostrophes, and periods' })
   parentLastName?: string;
 }
