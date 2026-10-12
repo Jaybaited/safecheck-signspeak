@@ -115,7 +115,10 @@ export class UsersController {
     @Req() req: any,
   ) {
     this.assertSelf(req, id);
-    return this.usersService.changePassword(id, body.currentPassword, body.newPassword);
+    return this.usersService.changePassword(id, body.currentPassword, body.newPassword).then(async (result) => {
+      await this.usersService.notifyParentsOfPasswordChange(id, 'CHANGED');
+      return result;
+    });
   }
 
   @Post(':id/force-change-password')
@@ -126,7 +129,10 @@ export class UsersController {
     @Req() req: any,
   ) {
     this.assertSelf(req, id);
-    return this.usersService.forceChangePassword(id, body.newPassword);
+    return this.usersService.forceChangePassword(id, body.newPassword).then(async (result) => {
+      await this.usersService.notifyParentsOfPasswordChange(id, 'CHANGED');
+      return result;
+    });
   }
 
   // Admin only. password and username are no longer handled by this route.

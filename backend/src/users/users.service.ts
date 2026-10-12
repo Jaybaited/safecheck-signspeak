@@ -8,11 +8,15 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import * as bcrypt from 'bcrypt';
+import { NotificationsService } from '../notifications/notifications.service';
 
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationsService: NotificationsService,
+  ) {}
 
 
   private generatePassword(): string {
@@ -414,6 +418,13 @@ export class UsersService {
     return { message: 'Password changed successfully.' };
   }
 
+
+  async notifyParentsOfPasswordChange(userId: string, how: 'RESET' | 'CHANGED'): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
+    if (user?.role === 'STUDENT') {
+      await this.notificationsService.notifyParentsPasswordChanged(userId, how);
+    }
+  }
 
   async updateFcmToken(userId: string, fcmToken: string) {
     return this.prisma.user.update({

@@ -60,6 +60,54 @@ export class NotificationsService {
     }
   }
 
+  async notifyParentsPasswordChanged(studentId: string, how: 'RESET' | 'CHANGED'): Promise<void> {
+    try {
+      const links = await this.prisma.parentStudent.findMany({
+        where: { studentId },
+        select: {
+          parent:  { select: { id: true, pushToken: true } },
+          student: { select: { firstName: true, lastName: true } },
+        },
+      });
+      if (links.length === 0) return;
+
+      const when = new Date().toLocaleString('en-PH', {
+        timeZone: 'Asia/Manila', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+      });
+
+      for (const link of links) {
+        const name  = `${link.student.firstName} ${link.student.lastName}`;
+        const title = 'Password Updated';
+        const body  = how === 'RESET'
+          ? `${name}'s account password was reset by the school administrator on ${when}. If you did not expect this, please contact the school.`
+          : `${name} changed their account password on ${when}. If you did not expect this, please contact the school.`;
+
+        await this.prisma.notification.create({
+          data: {
+            userId:  link.parent.id,
+            type:    NotificationType.SYSTEM,
+            message: body,
+            status:  NotificationStatus.UNREAD,
+          },
+        });
+
+        if (link.parent.pushToken) {
+          fetch('https://exp.host/--/api/v2/push/send', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to: link.parent.pushToken, title, body,
+              data: { type: 'SYSTEM', studentId },
+              sound: 'default', priority: 'high',
+            }),
+          }).catch((e) => console.error('Password push failed:', e));
+        }
+      }
+    } catch (err) {
+      console.error('notifyParentsPasswordChanged failed:', err);
+    }
+  }
+
   async notifyParentOnRFID(
   studentId: string,
   type: 'RFID_ENTRY' | 'RFID_EXIT' | 'RFID_NO_TIMEOUT',  // ← added

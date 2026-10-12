@@ -1,3 +1,4 @@
+import { NotificationsService } from '../notifications/notifications.service';
 import {
   Injectable,
   NotFoundException,
@@ -8,7 +9,9 @@ import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class PasswordResetService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService,
+    private readonly notificationsService: NotificationsService,
+  ) {}
 
   private generatePassword(): string {
     const crypto = require('crypto') as typeof import('crypto');
@@ -101,6 +104,12 @@ export class PasswordResetService {
         data: { status: 'APPROVED', resolvedAt: new Date(), resolvedBy: adminId },
       }),
     ]);
+
+    // Tell the linked parent(s). Best effort; it never blocks the reset.
+    const resetUser = await this.prisma.user.findUnique({ where: { id: request.userId }, select: { role: true } });
+    if (resetUser?.role === 'STUDENT') {
+      await this.notificationsService.notifyParentsPasswordChanged(request.userId, 'RESET');
+    }
 
     return {
       message: 'Password reset approved.',
