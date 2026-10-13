@@ -28,6 +28,8 @@ interface AddUserModalProps {
     parentAccount?: { username: string; generatedPassword: string };
   }>;
   error: string | null;
+  presetParent?: ParentSearchResult | null;
+  onRegisterSibling?: (parentUsername: string) => void;
 }
 
 interface GeneratedCredentials {
@@ -85,7 +87,7 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-export default function AddUserModal({ isOpen, onClose, onSubmit, error }: AddUserModalProps) {
+export default function AddUserModal({ isOpen, onClose, onSubmit, error, presetParent, onRegisterSibling }: AddUserModalProps) {
   const [formData, setFormData] = useState<Omit<CreateUserDto, 'password'>>({
     username: '', email: '', role: 'STUDENT',
     firstName: '', lastName: '', gradeLevel: '',
@@ -124,6 +126,12 @@ export default function AddUserModal({ isOpen, onClose, onSubmit, error }: AddUs
     }, 300);
     return () => { cancelled = true; clearTimeout(timer); };
   }, [parentSearchTerm, parentQuery, linkParent, formData.role]);
+
+  useEffect(() => {
+    if (!isOpen || !presetParent) return;
+    setLinkParent(presetParent);
+    setFormData((f) => ({ ...f, role: 'STUDENT', lastName: f.lastName || presetParent.childLastName || '' }));
+  }, [isOpen, presetParent]);
 
   const { isScanning, scannedRfid, error: rfidError, startScan, resetScan } = useRfidScanner();
 
@@ -387,7 +395,14 @@ export default function AddUserModal({ isOpen, onClose, onSubmit, error }: AddUs
             </div>
           </div>
 
-          <div className="px-6 pb-6">
+          <div className="px-6 pb-6 space-y-2">
+            {credentials.parentUsername && formData.role === 'STUDENT' && onRegisterSibling && (
+              <button type="button"
+                onClick={() => { const u = credentials.parentUsername as string; handleClose(); onRegisterSibling(u); }}
+                className="w-full h-11 bg-[#7B1113] hover:bg-[#9B2020] text-white rounded-full text-sm font-semibold transition-colors">
+                Register a sibling for this parent
+              </button>
+            )}
             <button onClick={handleClose}
               className="w-full h-11 bg-gray-900 hover:bg-gray-700 dark:bg-white dark:hover:bg-gray-100 text-white dark:text-gray-900 rounded-full text-sm font-semibold transition-colors">
               Done

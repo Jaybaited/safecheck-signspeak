@@ -7,7 +7,7 @@ import {
   GraduationCap, UserCheck, Users,
   MoreVertical, Trash2, CheckCircle, XCircle, X, Pencil, Archive,
 } from 'lucide-react';
-import { api, User as ApiUser, CreateUserDto, ChildInfo } from '@/lib/api';
+import { api, User as ApiUser, CreateUserDto, ChildInfo, ParentSearchResult } from '@/lib/api';
 import Sidebar from '@/components/admin/Sidebar';
 import AddUserModal from '@/components/admin/AddUserModal';
 import DeleteUserModal from '@/components/admin/DeleteUserModal';
@@ -94,6 +94,7 @@ export default function ManageUsersPage() {
 
   const [linkStudent, setLinkStudent] = useState<ApiUser | null>(null);
   const [archiveTarget, setArchiveTarget] = useState<ApiUser | null>(null);
+  const [presetParent, setPresetParent] = useState<ParentSearchResult | null>(null);
   const [parentChildMap, setParentChildMap] = useState<Record<string, ChildInfo>>({});
 
   useEffect(() => {
@@ -138,6 +139,16 @@ export default function ManageUsersPage() {
     setError(friendlyError(err));
   }
 };
+
+  const openWithParent = async (username: string) => {
+    try {
+      const found = await api.searchParents(username);
+      const match = found.find((p) => p.username === username) ?? null;
+      if (!match) { setError('Could not find that parent account.'); return; }
+      setPresetParent(match);
+      setShowAddModal(true);
+    } catch (err) { setError(friendlyError(err)); }
+  };
 
   const handleLogout = () => {
     logout();
@@ -500,6 +511,14 @@ export default function ManageUsersPage() {
                                 <Archive className="w-4 h-4" /> Archive student
                               </button>
                             )}
+                            {userData.role === 'PARENT' && (
+                              <button
+                                onClick={() => { void openWithParent(userData.username); setOpenDropdown(null); }}
+                                className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-gray-700 text-slate-700 dark:text-gray-200 text-sm transition-colors"
+                              >
+                                <UserPlus className="w-4 h-4" /> Add child
+                              </button>
+                            )}
                             <button
                               onClick={() => {
                                 setSelectedUser(userData);
@@ -553,7 +572,9 @@ export default function ManageUsersPage() {
 
       <AddUserModal
         isOpen={showAddModal}
-        onClose={() => { setShowAddModal(false); setError(null); }}
+        onClose={() => { setShowAddModal(false); setError(null); setPresetParent(null); }}
+        presetParent={presetParent}
+        onRegisterSibling={(u) => { void openWithParent(u); }}
         onSubmit={handleAddUser}
         error={error}
       />

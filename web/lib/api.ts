@@ -341,6 +341,7 @@ export interface ParentSearchResult {
   id: string;
   username: string;
   name: string;
+  childLastName?: string;
   children: { id: string; name: string; gradeLevel: string | null; archived?: boolean }[];
 }
 

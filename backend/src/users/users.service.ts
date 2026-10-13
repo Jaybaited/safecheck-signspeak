@@ -543,6 +543,7 @@ export class UsersService {
 
     const byParent = new Map<string, {
       id: string; username: string; name: string;
+      childLastName: string;
       children: { id: string; name: string; gradeLevel: string | null; archived: boolean }[];
     }>();
     for (const link of links) {
@@ -550,6 +551,7 @@ export class UsersService {
         id: link.parent.id,
         username: link.parent.username,
         name: `${link.parent.firstName} ${link.parent.lastName}`,
+        childLastName: link.student.lastName,
         children: [],
       };
       entry.children.push({
