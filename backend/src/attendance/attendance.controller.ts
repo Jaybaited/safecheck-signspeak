@@ -18,8 +18,10 @@ export class AttendanceController {
     private readonly prisma: PrismaService,
   ) {}
 
-  // ✅ Intentionally public — called by RFID hardware device
+  // Only the kiosk account (the gate computer) may record taps
   @Post('rfid-tap')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('KIOSK')
   async handleRfidTap(@Body() body: RfidTapDto) {
     return this.attendanceService.handleRfidTap(body.rfidCard, body.mode);
   }

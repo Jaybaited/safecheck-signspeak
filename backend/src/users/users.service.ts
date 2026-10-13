@@ -116,6 +116,7 @@ export class UsersService {
         AND: [
           { id:   { not: currentUserId } },
           { role: { not: 'ADMIN' } },
+          { role: { not: 'KIOSK' } },
           { archivedAt: null },
           { NOT: inactiveParents },
         ],

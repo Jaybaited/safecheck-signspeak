@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { Wifi, CheckCircle, Info, Shield } from 'lucide-react';
-import { api, RfidTapResponse } from '@/lib/api';
+import type { RfidTapResponse } from '@/lib/api';
+import { kioskHasSession, kioskSignIn, kioskSignOut, kioskTap, KioskAuthError } from '@/lib/kiosk';
 
 type KioskMode = 'CHECK_IN' | 'CHECK_OUT';
 
@@ -24,11 +25,19 @@ export default function RfidKiosk({ mode }: { mode: KioskMode }) {
   const [notice, setNotice] = useState<{ title: string; message: string } | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [mounted, setMounted] = useState(false);
+  const [signedIn, setSignedIn] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [kUser, setKUser] = useState('');
+  const [kPass, setKPass] = useState('');
+  const [kBusy, setKBusy] = useState(false);
+  const [kError, setKError] = useState('');
   const timeOffsetRef = useRef(0); // ms difference: networkTime - Date.now()
 
   // ✅ Sync clock from network time on mount, then tick every second
   useEffect(() => {
     setMounted(true);
+    setSignedIn(kioskHasSession());
+    setAuthChecked(true);
 
     const syncTime = async () => {
       try {
@@ -55,6 +64,7 @@ export default function RfidKiosk({ mode }: { mode: KioskMode }) {
 
   // Listen for RFID card input (USB HID keyboard emulation)
   useEffect(() => {
+    if (!signedIn) return;
     let buffer = '';
     let timeout: NodeJS.Timeout;
 
@@ -84,7 +94,7 @@ export default function RfidKiosk({ mode }: { mode: KioskMode }) {
       window.removeEventListener('keypress', handleKeyPress);
       clearTimeout(timeout);
     };
-  }, []);
+  }, [signedIn]);
 
   const handleRfidTap = async (rfidCard: string) => {
     setIsScanning(true);
@@ -92,7 +102,7 @@ export default function RfidKiosk({ mode }: { mode: KioskMode }) {
     setNotice(null);
     setLastTap(null);
     try {
-      const response = await api.handleRfidTap(rfidCard, mode);
+      const response = await kioskTap(rfidCard, mode);
       if (response.success === false) {
         setNotice({ title: noticeTitle(response.action), message: response.message ?? 'Please try again.' });
         setTimeout(() => setNotice(null), 6000);
@@ -101,8 +111,13 @@ export default function RfidKiosk({ mode }: { mode: KioskMode }) {
         setTimeout(() => setLastTap(null), 5000);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Invalid RFID card');
-      setTimeout(() => setError(''), 5000);
+      if (err instanceof KioskAuthError) {
+        setSignedIn(false);
+        setKError(err.message);
+      } else {
+        setError(err instanceof Error ? err.message : 'Invalid RFID card');
+        setTimeout(() => setError(''), 5000);
+      }
     } finally {
       setIsScanning(false);
     }
@@ -132,9 +147,63 @@ export default function RfidKiosk({ mode }: { mode: KioskMode }) {
 
   const isCheckIn = lastTap?.action === 'CHECK_IN';
 
+  const doSignIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (kBusy) return;
+    setKBusy(true);
+    setKError('');
+    try {
+      await kioskSignIn(kUser.trim(), kPass);
+      setKPass('');
+      setSignedIn(true);
+    } catch (err) {
+      setKError(err instanceof Error ? err.message : 'Sign-in failed. Please try again.');
+    } finally {
+      setKBusy(false);
+    }
+  };
+
+  if (!authChecked) return <div style={{ minHeight: '100vh' }} />;
+  if (!signedIn) {
+    const field = {
+      width: '100%', height: 44, padding: '0 14px', borderRadius: 12, border: '1px solid #e5e7eb',
+      background: '#f9fafb', fontSize: 15, marginBottom: 12, boxSizing: 'border-box' as const,
+    };
+    return (
+      <div style={{
+        minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+        background: 'linear-gradient(135deg, #f8f7ff 0%, #f0eeff 50%, #f8f7ff 100%)',
+        fontFamily: 'Inter, -apple-system, sans-serif',
+      }}>
+        <form onSubmit={doSignIn} style={{
+          background: '#fff', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 24, padding: '40px 36px',
+          width: '100%', maxWidth: 420, boxShadow: '0 8px 40px rgba(0,0,0,0.08)',
+        }}>
+          <div style={{ width: 48, height: 48, borderRadius: 14, background: '#8B1A1A', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+            <Shield size={24} color="#fff" />
+          </div>
+          <h1 style={{ fontSize: 24, fontWeight: 800, textAlign: 'center', margin: '0 0 4px', color: '#0f0f0f' }}>Kiosk sign-in</h1>
+          <p style={{ fontSize: 14, color: '#6b7280', textAlign: 'center', margin: '0 0 20px' }}>Only the kiosk account can record taps.</p>
+          {kError && <p style={{ fontSize: 14, color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 12, padding: '10px 12px', margin: '0 0 14px' }}>{kError}</p>}
+          <input type="text" value={kUser} onChange={(e) => setKUser(e.target.value)} placeholder="Kiosk username" autoComplete="username" style={field} />
+          <input type="password" value={kPass} onChange={(e) => setKPass(e.target.value)} placeholder="Password" autoComplete="current-password" style={field} />
+          <button type="submit" disabled={kBusy || !kUser.trim() || !kPass} style={{
+            width: '100%', height: 46, borderRadius: 999, border: 'none', background: '#8B1A1A', color: '#fff',
+            fontSize: 15, fontWeight: 700, cursor: 'pointer', opacity: (kBusy || !kUser.trim() || !kPass) ? 0.5 : 1,
+          }}>
+            {kBusy ? 'Signing in...' : 'Sign in'}
+          </button>
+          <p style={{ textAlign: 'center', marginTop: 16 }}>
+            <a href="/rfid-portal" style={{ fontSize: 13, color: '#6b7280' }}>Back to portal menu</a>
+          </p>
+        </form>
+      </div>
+    );
+  }
+
   return (
     <div
-      onMouseDown={(e) => e.preventDefault()}
+      onMouseDown={signedIn ? (e) => e.preventDefault() : undefined}
       style={{
         minHeight: '100vh',
         background: 'linear-gradient(135deg, #f8f7ff 0%, #f0eeff 50%, #f8f7ff 100%)',
@@ -377,7 +446,10 @@ export default function RfidKiosk({ mode }: { mode: KioskMode }) {
         </div>
 
         {/* Footer */}
-        <a href="/rfid-portal" style={{ fontSize: 13, color: '#6b7280' }}>Back to portal menu</a>
+        <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+          <a href="/rfid-portal" style={{ fontSize: 13, color: '#6b7280' }}>Back to portal menu</a>
+          <button type="button" onClick={() => { kioskSignOut(); setSignedIn(false); setKError(''); }} style={{ fontSize: 13, color: '#6b7280', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>Sign out of kiosk</button>
+        </div>
         <p style={{ fontSize: 13, color: '#9ca3af', marginTop: 8 }}>
           Admin · Teacher · Student · Parent
         </p>
@@ -386,6 +458,7 @@ export default function RfidKiosk({ mode }: { mode: KioskMode }) {
       <style>{`
         * { user-select: none; -webkit-user-select: none; }
         body { cursor: default; }
+        input { user-select: text; -webkit-user-select: text; }
         p, h1, h2, h3, span, div { cursor: default; caret-color: transparent; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }

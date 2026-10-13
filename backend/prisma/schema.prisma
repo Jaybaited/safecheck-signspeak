@@ -277,6 +277,7 @@ enum Role {
   TEACHER
   PARENT
   STUDENT
+  KIOSK
 }
 
 enum GradeLevel {

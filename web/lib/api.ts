@@ -303,6 +303,9 @@ export const login = async (username: string, password: string) => {
     body: JSON.stringify({ username, password }),
     skipAuthRedirect: true,
   });
+  if (res.user.role === 'KIOSK') {
+    throw new Error('Kiosk accounts sign in at the gate portal (/rfid-portal), not here.');
+  }
   if (typeof window !== 'undefined') {
     localStorage.setItem('token',        res.accessToken);
     localStorage.setItem('accessToken',  res.accessToken);
