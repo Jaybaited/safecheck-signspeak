@@ -6,7 +6,7 @@ import { NetworkTimeService } from '../common/services/network-time.service';
 import { AttendanceQueryDto } from './dto/attendance-query.dto';
 
 type AttendanceAction = 'CHECK_IN' | 'CHECK_OUT';
-type SoftTapAction = 'ALREADY_CHECKED_IN' | 'ALREADY_COMPLETE' | 'NO_CHECK_IN' | 'TOO_SOON';
+type SoftTapAction = 'ALREADY_CHECKED_IN' | 'ALREADY_COMPLETE' | 'NO_CHECK_IN' | 'TOO_SOON' | 'ARCHIVED';
 
 export interface RfidTapResult {
   success: boolean;
@@ -51,12 +51,22 @@ export class AttendanceService {
         lastName:   true,
         gradeLevel: true,
         role:       true,
+        archivedAt: true,
       },
     });
 
     if (!user) throw new NotFoundException('RFID card not registered');
     if (user.role !== 'STUDENT')
       throw new NotFoundException('Only students can use attendance system');
+    if (user.archivedAt) {
+      return {
+        success: false,
+        action:  'ARCHIVED',
+        message: user.firstName + ' is archived and cannot use the attendance system. Please see the school office.',
+        student: { firstName: user.firstName, lastName: user.lastName, gradeLevel: user.gradeLevel },
+        attendance: { timeIn: null, timeOut: null, status: null },
+      };
+    }
 
     const serverNow = await this.networkTime.getNow();
 
@@ -254,7 +264,7 @@ export class AttendanceService {
     const { todayStart, todayEnd } = getManilaToday(manilaDate);
 
     const [totalStudents, records] = await Promise.all([
-      this.prisma.user.count({ where: { role: 'STUDENT' } }),
+      this.prisma.user.count({ where: { role: 'STUDENT', archivedAt: null } }),
       this.prisma.attendance.findMany({
         where: { date: { gte: todayStart, lt: todayEnd } },
         select: { status: true, noTapOut: true, timeIn: true, timeOut: true },
@@ -301,6 +311,7 @@ export class AttendanceService {
         date:    { gte: todayStart, lt: todayEnd },
         timeIn:  { not: null },
         timeOut: null,
+        student: { archivedAt: null },
       },
       include: {
         student: {
@@ -337,6 +348,7 @@ export class AttendanceService {
         date:    { gte: todayStart, lt: todayEnd },
         timeIn:  { not: null },
         timeOut: null,
+        student: { archivedAt: null },
       },
       include: {
         student: {

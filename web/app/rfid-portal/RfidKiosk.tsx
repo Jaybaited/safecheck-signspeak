@@ -12,6 +12,7 @@ const noticeTitle = (action: string) => {
     case 'ALREADY_CHECKED_IN': return 'Already checked in';
     case 'NO_CHECK_IN':        return 'Check in first';
     case 'TOO_SOON':           return 'Just a moment';
+    case 'ARCHIVED':           return 'Student archived';
     default:                   return 'Please note';
   }
 };

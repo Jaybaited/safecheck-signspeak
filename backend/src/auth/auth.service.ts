@@ -8,6 +8,7 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
 import { LoginResponse } from './types';
+import { getAccountBlock } from '../common/account-status.util';
 
 const MAX_ATTEMPTS    = 5;
 const WINDOW_MINUTES  = 15;
@@ -50,6 +51,9 @@ export class AuthService {
     if (!user || !isValid) {
       throw new UnauthorizedException('Invalid credentials');
     }
+
+    const block = await getAccountBlock(this.prisma, user);
+    if (block) throw new ForbiddenException(block);
 
     const payload = { sub: user.id, username: user.username, role: user.role };
 
@@ -99,6 +103,8 @@ export class AuthService {
 
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new UnauthorizedException('User not found');
+    const block = await getAccountBlock(this.prisma, user);
+    if (block) throw new UnauthorizedException(block);
 
     const payload = { sub: user.id, username: user.username, role: user.role };
 

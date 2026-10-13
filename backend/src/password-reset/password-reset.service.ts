@@ -28,6 +28,7 @@ export class PasswordResetService {
   async requestReset(username: string) {
     const user = await this.prisma.user.findUnique({ where: { username } });
     if (!user) throw new NotFoundException('Incorrect username, please try again.');
+    if (user.archivedAt) throw new BadRequestException('This account has been archived. Please contact the school.');
 
     const existing = await this.prisma.passwordResetRequest.findFirst({
       where: { userId: user.id, status: 'PENDING' },

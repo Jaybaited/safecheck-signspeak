@@ -244,7 +244,7 @@ export interface AttendanceStats {
 
 export interface RfidTapResponse {
   success: boolean;
-  action:  'CHECK_IN' | 'CHECK_OUT' | 'ALREADY_CHECKED_IN' | 'ALREADY_COMPLETE' | 'NO_CHECK_IN' | 'TOO_SOON';
+  action:  'CHECK_IN' | 'CHECK_OUT' | 'ALREADY_CHECKED_IN' | 'ALREADY_COMPLETE' | 'NO_CHECK_IN' | 'TOO_SOON' | 'ARCHIVED';
   message?: string;
   student: {
     firstName:  string;

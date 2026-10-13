@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
+import { ArchiveStudentDto, RestoreStudentDto } from './dto/archive.dto';
 import * as bcrypt from 'bcrypt';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AdminLogService } from '../common/admin-log.service';
@@ -104,11 +105,19 @@ export class UsersService {
 
 
   async findAll(currentUserId: string) {
+    // Archived students, and parents whose students are all archived, stay out of the main list.
+    const inactiveParents = {
+      role: 'PARENT' as const,
+      parentLinks: { some: {} },
+      NOT: { parentLinks: { some: { student: { archivedAt: null } } } },
+    };
     return this.prisma.user.findMany({
       where: {
         AND: [
           { id:   { not: currentUserId } },
-          { role: { not: 'ADMIN'       } },
+          { role: { not: 'ADMIN' } },
+          { archivedAt: null },
+          { NOT: inactiveParents },
         ],
       },
       select: {
@@ -406,8 +415,8 @@ export class UsersService {
     const [admins, teachers, students, parents] = await Promise.all([
       this.prisma.user.count({ where: { role: 'ADMIN'   } }),
       this.prisma.user.count({ where: { role: 'TEACHER' } }),
-      this.prisma.user.count({ where: { role: 'STUDENT' } }),
-      this.prisma.user.count({ where: { role: 'PARENT'  } }),
+      this.prisma.user.count({ where: { role: 'STUDENT', archivedAt: null } }),
+      this.prisma.user.count({ where: { role: 'PARENT', NOT: { parentLinks: { some: {} }, NOT: { parentLinks: { some: { student: { archivedAt: null } } } } } } }),
     ]);
     return { admins, teachers, students, parents, total: admins + teachers + students + parents };
   }
@@ -428,7 +437,7 @@ export class UsersService {
 
   async getMyChildren(parentId: string) {
     const links = await this.prisma.parentStudent.findMany({
-      where:   { parentId },
+      where:   { parentId, student: { archivedAt: null } },
       include: {
         student: {
           select: {
@@ -528,13 +537,13 @@ export class UsersService {
       where: { parentId: { in: parentIds } },
       select: {
         parent:  { select: { id: true, username: true, firstName: true, lastName: true } },
-        student: { select: { id: true, firstName: true, lastName: true, gradeLevel: true } },
+        student: { select: { id: true, firstName: true, lastName: true, gradeLevel: true, archivedAt: true } },
       },
     });
 
     const byParent = new Map<string, {
       id: string; username: string; name: string;
-      children: { id: string; name: string; gradeLevel: string | null }[];
+      children: { id: string; name: string; gradeLevel: string | null; archived: boolean }[];
     }>();
     for (const link of links) {
       const entry = byParent.get(link.parent.id) ?? {
@@ -547,6 +556,7 @@ export class UsersService {
         id: link.student.id,
         name: `${link.student.firstName} ${link.student.lastName}`,
         gradeLevel: link.student.gradeLevel,
+        archived: link.student.archivedAt !== null,
       });
       byParent.set(link.parent.id, entry);
     }
@@ -646,6 +656,163 @@ export class UsersService {
     }
 
     return { role: target.role, canDelete: true };
+  }
+
+  async listArchived(filters: { status?: string; gradeLevel?: string; from?: string; to?: string; q?: string }) {
+    const where: Record<string, unknown> = { role: 'STUDENT' };
+
+    const statuses = ['GRADUATED', 'TRANSFERRED_OUT', 'DROPPED_OUT', 'OTHER'];
+    if (filters.status && statuses.includes(filters.status)) where.archiveStatus = filters.status;
+    if (filters.gradeLevel && /^GRADE_(1[0-2]|[1-9])$/.test(filters.gradeLevel)) where.gradeLevel = filters.gradeLevel;
+
+    const day = /^\d{4}-\d{2}-\d{2}$/;
+    const range: { not: null; gte?: Date; lt?: Date } = { not: null };
+    if (filters.from && day.test(filters.from)) range.gte = new Date(filters.from + 'T00:00:00+08:00');
+    if (filters.to && day.test(filters.to)) {
+      range.lt = new Date(new Date(filters.to + 'T00:00:00+08:00').getTime() + 24 * 60 * 60 * 1000);
+    }
+    where.archivedAt = range;
+
+    const q = (filters.q ?? '').trim();
+    if (q) {
+      const contains = { contains: q, mode: 'insensitive' };
+      where.OR = [{ firstName: contains }, { lastName: contains }, { username: contains }];
+    }
+
+    const rows = await this.prisma.user.findMany({
+      where: where as any,
+      orderBy: { archivedAt: 'desc' },
+      take: 500,
+      select: {
+        id: true, username: true, firstName: true, lastName: true, gradeLevel: true,
+        rfidCard: true, archiveStatus: true, archiveNote: true, archivedAt: true, archivedById: true,
+      },
+    });
+
+    const adminIds = Array.from(new Set(rows.map((r) => r.archivedById).filter((x): x is string => !!x)));
+    const admins = adminIds.length
+      ? await this.prisma.user.findMany({
+          where:  { id: { in: adminIds } },
+          select: { id: true, firstName: true, lastName: true },
+        })
+      : [];
+    const adminName = new Map(admins.map((a) => [a.id, a.firstName + ' ' + a.lastName]));
+
+    const links = rows.length
+      ? await this.prisma.parentStudent.findMany({
+          where:  { studentId: { in: rows.map((r) => r.id) } },
+          select: { studentId: true, parent: { select: { username: true, firstName: true, lastName: true } } },
+        })
+      : [];
+    const parentOf = new Map(links.map((l) => [l.studentId, l.parent]));
+
+    return {
+      total: rows.length,
+      data: rows.map((r) => {
+        const parent = parentOf.get(r.id);
+        return {
+          id:            r.id,
+          username:      r.username,
+          firstName:     r.firstName,
+          lastName:      r.lastName,
+          gradeLevel:    r.gradeLevel,
+          rfidCard:      r.rfidCard,
+          archiveStatus: r.archiveStatus,
+          archiveNote:   r.archiveNote,
+          archivedAt:    r.archivedAt,
+          archivedBy:    r.archivedById ? (adminName.get(r.archivedById) ?? null) : null,
+          parent:        parent ? { username: parent.username, name: parent.firstName + ' ' + parent.lastName } : null,
+        };
+      }),
+    };
+  }
+
+  async archiveStudent(id: string, dto: ArchiveStudentDto, adminId?: string) {
+    const note = (dto.note ?? '').trim();
+    if (dto.status === 'OTHER' && note.length < 3) {
+      throw new BadRequestException('Please write a short note when the status is Other.');
+    }
+
+    const student = await this.prisma.user.findUnique({
+      where:  { id },
+      select: { id: true, role: true, username: true, firstName: true, lastName: true, archivedAt: true },
+    });
+    if (!student || student.role !== 'STUDENT') throw new NotFoundException('Student account not found.');
+    if (student.archivedAt) throw new BadRequestException('This student is already archived.');
+
+    const link = await this.prisma.parentStudent.findFirst({
+      where:  { studentId: id },
+      select: { parentId: true, parent: { select: { username: true } } },
+    });
+
+    const now = new Date();
+    const result = { parentInactive: false };
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id },
+        data:  { archivedAt: now, archiveStatus: dto.status as any, archiveNote: note || null, archivedById: adminId ?? null },
+      });
+      // End every login session and close any open password request.
+      await tx.refreshToken.deleteMany({ where: { userId: id } });
+      await tx.passwordResetRequest.updateMany({
+        where: { userId: id, status: 'PENDING' },
+        data:  { status: 'REJECTED', resolvedAt: now, resolvedBy: adminId ?? null },
+      });
+      // A parent with no active students left cannot log in until a student is restored or linked.
+      if (link) {
+        const active = await tx.parentStudent.count({
+          where: { parentId: link.parentId, student: { archivedAt: null } },
+        });
+        if (active === 0) {
+          await tx.refreshToken.deleteMany({ where: { userId: link.parentId } });
+          result.parentInactive = true;
+        }
+      }
+    });
+
+    await this.adminLog.log(
+      adminId,
+      'STUDENT_ARCHIVED',
+      'USER',
+      id,
+      'Archived student ' + student.username + ' (' + dto.status + ')',
+      { status: dto.status, note: note || null, parentInactive: result.parentInactive, parent: link?.parent.username ?? null },
+    );
+
+    return {
+      message:
+        student.firstName + ' ' + student.lastName + ' was archived.' +
+        (result.parentInactive
+          ? ' The parent account ' + (link?.parent.username ?? '') + ' is inactive until a student is restored or linked.'
+          : ''),
+      parentInactive: result.parentInactive,
+    };
+  }
+
+  async restoreStudent(id: string, dto: RestoreStudentDto, adminId?: string) {
+    const student = await this.prisma.user.findUnique({
+      where:  { id },
+      select: { id: true, role: true, username: true, firstName: true, lastName: true, archivedAt: true, archiveStatus: true, archiveNote: true },
+    });
+    if (!student || student.role !== 'STUDENT') throw new NotFoundException('Student account not found.');
+    if (!student.archivedAt) throw new BadRequestException('This student is not archived.');
+
+    await this.prisma.user.update({
+      where: { id },
+      data:  { archivedAt: null, archiveStatus: null, archiveNote: null, archivedById: null, gradeLevel: dto.gradeLevel as any },
+    });
+
+    await this.adminLog.log(
+      adminId,
+      'STUDENT_RESTORED',
+      'USER',
+      id,
+      'Restored student ' + student.username + ' to ' + dto.gradeLevel,
+      { previousStatus: student.archiveStatus, previousNote: student.archiveNote, archivedAt: student.archivedAt, gradeLevel: dto.gradeLevel },
+    );
+
+    return { message: student.firstName + ' ' + student.lastName + ' was restored to ' + String(dto.gradeLevel).replace('GRADE_', 'Grade ') + '.' };
   }
 
   async updateFcmToken(userId: string, fcmToken: string) {

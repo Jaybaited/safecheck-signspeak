@@ -8,6 +8,7 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
 import type { Request } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
+import { getAccountBlock } from '../common/account-status.util';
 
 /**
  * While a user's mustChangePassword flag is set, only these routes may be
@@ -39,9 +40,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     // not the (possibly stale) token claims.
     const user = await this.prisma.user.findUnique({
       where:  { id: payload.sub },
-      select: { id: true, username: true, role: true, mustChangePassword: true },
+      select: { id: true, username: true, role: true, mustChangePassword: true, archivedAt: true },
     });
     if (!user) throw new UnauthorizedException();
+    const block = await getAccountBlock(this.prisma, user);
+    if (block) throw new UnauthorizedException(block);
 
     if (user.mustChangePassword && !isAllowedWhilePasswordChangeRequired(req)) {
       throw new ForbiddenException({

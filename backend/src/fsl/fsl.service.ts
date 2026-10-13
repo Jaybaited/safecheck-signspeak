@@ -214,7 +214,7 @@ export class FslService {
   // Admin and teacher list: one row per student.
   async overview() {
     const students = await this.prisma.user.findMany({
-      where: { role: 'STUDENT' },
+      where: { role: 'STUDENT', archivedAt: null },
       select: { id: true, firstName: true, lastName: true, gradeLevel: true },
       orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
     });
