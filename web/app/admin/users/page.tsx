@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   Search, Filter, Download, UserPlus,
   GraduationCap, UserCheck, Users,
-  MoreVertical, Trash2, CheckCircle, XCircle, X, Pencil,
+  MoreVertical, Trash2, CheckCircle, XCircle, X, Pencil, Archive,
 } from 'lucide-react';
 import { api, User as ApiUser, CreateUserDto, ChildInfo } from '@/lib/api';
 import Sidebar from '@/components/admin/Sidebar';
@@ -13,6 +13,7 @@ import AddUserModal from '@/components/admin/AddUserModal';
 import DeleteUserModal from '@/components/admin/DeleteUserModal';
 import EditUserModal from '@/components/admin/EditUserModal';
 import ChangeParentModal from '@/components/admin/ChangeParentModal';
+import ArchiveStudentModal from '@/components/admin/ArchiveStudentModal';
 import ThemeToggle from '@/components/ThemeToggle';
 import { logout } from '@/lib/auth';
 
@@ -92,6 +93,7 @@ export default function ManageUsersPage() {
   const [showFilter, setShowFilter] = useState(false);
 
   const [linkStudent, setLinkStudent] = useState<ApiUser | null>(null);
+  const [archiveTarget, setArchiveTarget] = useState<ApiUser | null>(null);
   const [parentChildMap, setParentChildMap] = useState<Record<string, ChildInfo>>({});
 
   useEffect(() => {
@@ -490,6 +492,14 @@ export default function ManageUsersPage() {
                                 <Users className="w-4 h-4" /> Change parent
                               </button>
                             )}
+                            {userData.role === 'STUDENT' && (
+                              <button
+                                onClick={() => { setArchiveTarget(userData); setOpenDropdown(null); }}
+                                className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-gray-700 text-slate-700 dark:text-gray-200 text-sm transition-colors"
+                              >
+                                <Archive className="w-4 h-4" /> Archive student
+                              </button>
+                            )}
                             <button
                               onClick={() => {
                                 setSelectedUser(userData);
@@ -556,6 +566,15 @@ export default function ManageUsersPage() {
         error={error}
       />
       {/* ✅ Revision 10: Edit modal */}
+      <ArchiveStudentModal
+        student={archiveTarget}
+        onClose={() => setArchiveTarget(null)}
+        onDone={(msg) => {
+          setSuccessMsg(msg);
+          setTimeout(() => setSuccessMsg(null), 4000);
+          void fetchUsers();
+        }}
+      />
       <ChangeParentModal
           student={linkStudent}
           onClose={() => setLinkStudent(null)}

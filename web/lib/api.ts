@@ -341,7 +341,7 @@ export interface ParentSearchResult {
   id: string;
   username: string;
   name: string;
-  children: { id: string; name: string; gradeLevel: string | null }[];
+  children: { id: string; name: string; gradeLevel: string | null; archived?: boolean }[];
 }
 
 export const searchParents = (q: string, by?: 'lastName') =>
@@ -363,6 +363,52 @@ export const changeParent = (studentId: string, parentId: string) =>
 
 export const getDeletePreview = (id: string) =>
   apiFetch<DeletePreview>('/users/' + id + '/delete-preview');
+
+export type ArchiveStatus = 'GRADUATED' | 'TRANSFERRED_OUT' | 'DROPPED_OUT' | 'OTHER';
+
+export interface ArchivedStudent {
+  id: string;
+  username: string;
+  firstName: string;
+  lastName: string;
+  gradeLevel: string | null;
+  rfidCard: string | null;
+  archiveStatus: ArchiveStatus | null;
+  archiveNote: string | null;
+  archivedAt: string | null;
+  archivedBy: string | null;
+  parent: { username: string; name: string } | null;
+}
+
+export interface ArchiveFilters {
+  status?: string;
+  gradeLevel?: string;
+  from?: string;
+  to?: string;
+  q?: string;
+}
+
+export const getArchivedStudents = (f: ArchiveFilters) => {
+  const params = new URLSearchParams();
+  (Object.keys(f) as (keyof ArchiveFilters)[]).forEach((k) => {
+    const v = f[k];
+    if (v) params.set(k, v);
+  });
+  const qs = params.toString();
+  return apiFetch<{ total: number; data: ArchivedStudent[] }>('/users/archive' + (qs ? '?' + qs : ''));
+};
+
+export const archiveStudent = (id: string, status: ArchiveStatus, note?: string) =>
+  apiFetch<{ message: string; parentInactive: boolean }>('/users/' + id + '/archive', {
+    method: 'POST',
+    body: JSON.stringify(note ? { status, note } : { status }),
+  });
+
+export const restoreStudent = (id: string, gradeLevel: string) =>
+  apiFetch<{ message: string }>('/users/' + id + '/restore', {
+    method: 'POST',
+    body: JSON.stringify({ gradeLevel }),
+  });
 
 export const updateUser = (id: string, data: Partial<CreateUserDto>) =>
   apiFetch<User>(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
@@ -542,6 +588,9 @@ export const api = {
   searchParents,
   changeParent,
   getDeletePreview,
+  getArchivedStudents,
+  archiveStudent,
+  restoreStudent,
   updateUser,
   deleteUser,
   changePassword,

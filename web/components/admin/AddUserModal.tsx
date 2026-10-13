@@ -643,7 +643,7 @@ export default function AddUserModal({ isOpen, onClose, onSubmit, error }: AddUs
                   <div className="min-w-0">
                     <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300 truncate">{linkParent.username}</p>
                     <p className="text-xs text-emerald-700 dark:text-emerald-300 truncate">
-                      Children: {linkParent.children.map((c) => c.name).join(', ')}
+                      Children: {linkParent.children.map((c) => (c.archived ? c.name + ' (archived)' : c.name)).join(', ')}
                     </p>
                   </div>
                   <button type="button" onClick={() => setLinkParent(null)}
@@ -696,7 +696,7 @@ export default function AddUserModal({ isOpen, onClose, onSubmit, error }: AddUs
                               className="w-full text-left px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                               <span className="block text-sm font-semibold text-gray-900 dark:text-white">{p.username}</span>
                               <span className="block text-xs text-gray-500 dark:text-gray-400">
-                                Children: {p.children.map((c) => c.name).join(', ')}
+                                Children: {p.children.map((c) => (c.archived ? c.name + ' (archived)' : c.name)).join(', ')}
                               </span>
                             </button>
                           </li>

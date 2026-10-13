@@ -132,7 +132,7 @@ export default function ChangeParentModal({ student, onClose, onChanged }: Chang
                         )}
                       </p>
                       <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                        {p.name} | Children: {p.children.map((c) => c.name).join(', ')}
+                        {p.name} | Children: {p.children.map((c) => (c.archived ? c.name + ' (archived)' : c.name)).join(', ')}
                       </p>
                     </div>
                     {!isCurrent && (

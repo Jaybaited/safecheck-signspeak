@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import {
   LayoutDashboard, Users, Wifi, FileText,
-  BookOpen, Settings, CalendarDays, LogOut, Cpu, GraduationCap, KeyRound, ClipboardCheck,
+  BookOpen, Settings, CalendarDays, LogOut, Cpu, GraduationCap, KeyRound, ClipboardCheck, Archive,
 } from 'lucide-react';
 import { getPendingResetCount } from '@/lib/api';
 import LogoutModal from '@/components/shared/LogoutModal';
@@ -47,6 +47,7 @@ export default function Sidebar({ onLogout, admin }: SidebarProps) {
   const NAV_ITEMS = [
     { name: 'Dashboard',         href: '/admin/dashboard',          icon: LayoutDashboard, badge: 0            },
     { name: 'Manage Users',      href: '/admin/users',              icon: Users,           badge: 0            },
+  { name: 'Archive', href: '/admin/archive', icon: Archive, badge: 0 },
     { name: 'RFID Management',   href: '/admin/rfid-management',    icon: Wifi,            badge: 0            },
     { name: 'Reports',           href: '/admin/reports',            icon: FileText,        badge: 0            },
     { name: 'FSL Progress',      href: '/admin/fsl',                icon: BookOpen,        badge: 0            },
