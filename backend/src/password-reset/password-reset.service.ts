@@ -1,4 +1,5 @@
 import { NotificationsService } from '../notifications/notifications.service';
+import { AdminLogService } from '../common/admin-log.service';
 import {
   Injectable,
   NotFoundException,
@@ -11,6 +12,7 @@ import * as bcrypt from 'bcrypt';
 export class PasswordResetService {
   constructor(private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationsService,
+    private readonly adminLog: AdminLogService,
   ) {}
 
   private generatePassword(): string {
@@ -112,6 +114,15 @@ export class PasswordResetService {
       await this.notificationsService.notifyParentsPasswordChanged(request.userId, 'RESET');
     }
 
+    await this.adminLog.log(
+      adminId,
+      'PASSWORD_RESET_APPROVED',
+      'USER',
+      request.userId,
+      `Approved password reset for ${request.username}`,
+      { requestId, username: request.username },
+    );
+
     return {
       message: 'Password reset approved.',
       username: request.username,
@@ -132,6 +143,15 @@ export class PasswordResetService {
       where: { id: requestId },
       data: { status: 'REJECTED', resolvedAt: new Date(), resolvedBy: adminId },
     });
+
+    await this.adminLog.log(
+      adminId,
+      'PASSWORD_RESET_REJECTED',
+      'USER',
+      request.userId,
+      `Rejected password reset for ${request.username}`,
+      { requestId, username: request.username },
+    );
 
     return { message: 'Password reset request rejected.' };
   }

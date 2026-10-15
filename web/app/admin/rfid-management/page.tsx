@@ -6,6 +6,8 @@ import { Search, Plus, Edit, Trash2, User, X, RefreshCw, Activity, Clock, AlertT
 import Sidebar from '@/components/admin/Sidebar';
 import ThemeToggle from '@/components/ThemeToggle';
 import EditRfidModal from '@/components/admin/EditRfidModal';
+import DeleteUserModal from '@/components/admin/DeleteUserModal';
+import type { User as ApiUser } from '@/lib/api';
 import { api } from '@/lib/api';
 import { logout } from '@/lib/auth';
 
@@ -195,6 +197,39 @@ export default function RfidManagement() {
   const handleLogout = () => {
     logout();
     router.push('/login');
+  };
+
+  // Delete student (trash icon): same flow as Manage Users, with the preview and typed Confirm.
+  const [deleteTarget, setDeleteTarget] = useState<ApiUser | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const openDelete = async (userId: string) => {
+    setDeleteError(null);
+    try {
+      setDeleteTarget(await api.getUserById(userId));
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : 'Could not open this student.');
+      setTimeout(() => setNotice(null), 4000);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget || isDeleting) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      await api.deleteUser(deleteTarget.id);
+      setDeleteTarget(null);
+      setNotice('Student deleted successfully.');
+      setTimeout(() => setNotice(null), 3000);
+      await fetchData(true);
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const handleRfidUpdate = async (userId: string, rfidCard: string) => {
@@ -549,10 +584,11 @@ export default function RfidManagement() {
                         <Edit className="w-4 h-4" />
                       </button>
                       <button
-                        className="inline-flex items-center justify-center p-1.5 text-slate-400
+                        onClick={() => void openDelete(card.id)}
+                      className="inline-flex items-center justify-center p-1.5 text-slate-400
                           hover:text-rose-600 dark:hover:text-rose-400 transition-colors
                           rounded-lg hover:bg-slate-100 dark:hover:bg-gray-800"
-                        title="Remove student"
+                        title="Delete student"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -582,6 +618,19 @@ export default function RfidManagement() {
         </div>
       </main>
 
+      <DeleteUserModal
+        isOpen={deleteTarget !== null}
+        user={deleteTarget}
+        onClose={() => { setDeleteTarget(null); setDeleteError(null); }}
+        onConfirm={handleConfirmDelete}
+        isDeleting={isDeleting}
+        error={deleteError}
+      />
+      {notice && (
+        <div className="fixed bottom-6 right-6 z-[60] px-4 py-3 bg-slate-900 dark:bg-gray-100 text-white dark:text-gray-900 text-sm rounded-xl shadow-xl">
+          {notice}
+        </div>
+      )}
       <EditRfidModal
         isOpen={editModal.open}
         onClose={() => setEditModal({ open: false, userId: '', studentName: '', currentRfid: null })}

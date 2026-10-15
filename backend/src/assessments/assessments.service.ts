@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { AdminLogService } from '../common/admin-log.service';
 import { CreateAssessmentDto } from './dto/create-assessment.dto';
 import { SubmitResponseDto } from './dto/submit-response.dto';
 import { ReviewAttemptDto } from './dto/review-attempt.dto';
@@ -20,7 +21,10 @@ const USER_BRIEF = { id: true, firstName: true, lastName: true, username: true, 
 
 @Injectable()
 export class AssessmentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly adminLog: AdminLogService,
+  ) {}
 
   /**
    * Students see their result only after an admin reviews the attempt.
@@ -421,6 +425,26 @@ export class AssessmentsService {
         reviewedAt: new Date(),
       },
     });
+
+    const student = await this.prisma.user.findUnique({
+      where: { id: attempt.userId },
+      select: { firstName: true, lastName: true },
+    });
+    const overridden = dto.score !== undefined && dto.score !== attempt.score;
+    await this.adminLog.log(
+      adminId,
+      overridden ? 'ASSESSMENT_SCORE_OVERRIDDEN' : 'ASSESSMENT_RELEASED',
+      'ASSESSMENT_ATTEMPT',
+      attemptId,
+      `${overridden ? 'Overrode the score and released' : 'Released'} the ${attempt.assessment.title} result for ${student ? student.firstName + ' ' + student.lastName : 'a student'}: ${score}% (${passed ? 'passed' : 'failed'})`,
+      {
+        assessment: attempt.assessment.title,
+        previousScore: attempt.score,
+        newScore: score,
+        passMark: attempt.assessment.passMark,
+        passed,
+      },
+    );
 
     return this.getAttemptForAdmin(attemptId);
   }

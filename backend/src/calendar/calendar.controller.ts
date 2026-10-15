@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -18,13 +18,15 @@ export class CalendarController {
 
   @Post('holidays')
   @Roles('ADMIN')
-  create(@Body() dto: CreateHolidayDto) {
-    return this.calendar.create(dto.date, dto.name);
+  create(@Body() dto: CreateHolidayDto, @Req() req: any) {
+    const adminId = req.user?.id ?? req.user?.sub;
+    return this.calendar.create(dto.date, dto.name, adminId);
   }
 
   @Delete('holidays/:id')
   @Roles('ADMIN')
-  remove(@Param('id') id: string) {
-    return this.calendar.remove(id);
+  remove(@Param('id') id: string, @Req() req: any) {
+    const adminId = req.user?.id ?? req.user?.sub;
+    return this.calendar.remove(id, adminId);
   }
 }
