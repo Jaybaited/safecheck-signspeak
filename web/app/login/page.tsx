@@ -34,13 +34,14 @@ function LoginPageContent() {
     }
   }, [router, searchParams])
 
-  const [isExpired, setIsExpired] = useState(() => {
-    const expired = searchParams.get('reason') === 'expired'
-    if (expired && typeof window !== 'undefined') {
+  const [isExpired, setIsExpired] = useState(() => searchParams.get('reason') === 'expired')
+
+  // Clean the ?reason=expired from the address bar after rendering (never during render).
+  useEffect(() => {
+    if (searchParams.get('reason') === 'expired') {
       window.history.replaceState({}, '', '/login')
     }
-    return expired
-  })
+  }, [searchParams])
 
   const [username,           setUsername]           = useState('')
   const [password,           setPassword]           = useState('')

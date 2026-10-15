@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { CalendarDays, Plus, Trash2, XCircle, CheckCircle, Info, ChevronLeft, ChevronRight } from 'lucide-react';
 import Sidebar from '@/components/admin/Sidebar';
 import ThemeToggle from '@/components/ThemeToggle';
+import SummaryDialog from '@/components/shared/SummaryDialog';
 import { logout } from '@/lib/auth';
 import { getHolidays, addHoliday, deleteHoliday, Holiday } from '@/lib/calendar-api';
 
@@ -42,6 +43,8 @@ export default function SchoolCalendarPage() {
   const [date, setDate] = useState('');
   const [name, setName] = useState('');
   const [saving, setSaving] = useState(false);
+  const [confirmAdd, setConfirmAdd] = useState(false);
+  const [removeTarget, setRemoveTarget] = useState<Holiday | null>(null);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -82,8 +85,14 @@ export default function SchoolCalendarPage() {
     setTimeout(() => setSuccess(''), 3000);
   };
 
-  const handleAdd = async (e: React.FormEvent) => {
+  const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!date || !name.trim()) { setError('Pick a date and type a name.'); return; }
+    setError('');
+    setConfirmAdd(true);
+  };
+
+  const doAdd = async () => {
     if (!date || !name.trim()) { setError('Pick a date and type a name.'); return; }
     setSaving(true);
     setError('');
@@ -101,8 +110,9 @@ export default function SchoolCalendarPage() {
     }
   };
 
-  const handleDelete = async (h: Holiday) => {
-    if (!window.confirm('Remove "' + h.name + '" (' + formatDay(h.date) + ') from the calendar?')) return;
+  const handleDelete = (h: Holiday) => setRemoveTarget(h);
+
+  const doDelete = async (h: Holiday) => {
     setError('');
     try {
       await deleteHoliday(h.id);
@@ -123,6 +133,27 @@ export default function SchoolCalendarPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-gray-950 text-slate-900 dark:text-white transition-colors duration-200">
+      <SummaryDialog
+        open={confirmAdd}
+        title="Add this day to the calendar?"
+        confirmLabel="Add day"
+        busy={saving}
+        onCancel={() => setConfirmAdd(false)}
+        onConfirm={() => { setConfirmAdd(false); void doAdd(); }}
+      >
+        <p><strong>{name.trim()}</strong> on {date ? formatDay(date) : ''}</p>
+        <p>It will not be counted as an absence in the attendance rate.</p>
+      </SummaryDialog>
+      <SummaryDialog
+        open={removeTarget !== null}
+        title="Remove this day from the calendar?"
+        confirmLabel="Remove day"
+        onCancel={() => setRemoveTarget(null)}
+        onConfirm={() => { const h = removeTarget; setRemoveTarget(null); if (h) void doDelete(h); }}
+      >
+        <p><strong>{removeTarget?.name}</strong> on {removeTarget ? formatDay(removeTarget.date) : ''}</p>
+        <p>After this, the day counts as a normal school day again in the attendance rate.</p>
+      </SummaryDialog>
       <Sidebar onLogout={handleLogout} admin={adminUser} />
 
       <main className="ml-64 p-6">

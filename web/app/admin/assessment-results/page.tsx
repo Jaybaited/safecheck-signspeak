@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { ClipboardCheck, CheckCircle, XCircle, Clock, X, Loader2 } from 'lucide-react';
 import Sidebar from '@/components/admin/Sidebar';
 import ThemeToggle from '@/components/ThemeToggle';
+import ConfirmDialog from '@/components/shared/ConfirmDialog';
 import { logout } from '@/lib/auth';
 import {
   getAdminAttempts, getAdminAttempt, reviewAttempt,
@@ -41,6 +42,7 @@ export default function AssessmentResultsPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [override, setOverride] = useState('');
   const [saving, setSaving] = useState(false);
+  const [confirmRelease, setConfirmRelease] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -141,6 +143,23 @@ export default function AssessmentResultsPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-gray-950 text-slate-900 dark:text-white transition-colors duration-200">
+      <ConfirmDialog
+        open={confirmRelease}
+        title={selected?.status === 'SUBMITTED' ? 'Release this result?' : 'Save changes to this result?'}
+        confirmLabel={selected?.status === 'SUBMITTED' ? 'Release result' : 'Save changes'}
+        busy={saving}
+        onCancel={() => setConfirmRelease(false)}
+        onConfirm={() => { setConfirmRelease(false); void save(); }}
+      >
+        {selected && (
+          <>
+            <p>Student: <strong>{selected.user.firstName} {selected.user.lastName}</strong></p>
+            <p>Result: <strong>{effective}%</strong> ({willPass ? 'pass' : 'not passed'}; pass mark {passMark}%)</p>
+            {override.trim() && <p>The score is changed from {selected.score ?? 0}% to {effective}%.</p>}
+            <p>The student can see this result afterwards. This is recorded in the Action Log.</p>
+          </>
+        )}
+      </ConfirmDialog>
       <Sidebar onLogout={handleLogout} admin={adminUser} />
 
       <main className="ml-64 p-6">
@@ -332,7 +351,7 @@ export default function AssessmentResultsPage() {
                   Cancel
                 </button>
                 <button
-                  onClick={save}
+                  onClick={() => setConfirmRelease(true)}
                   disabled={!overrideValid || saving}
                   className="inline-flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold bg-[#7B1113] hover:bg-[#9B2020] disabled:opacity-50 text-white"
                 >

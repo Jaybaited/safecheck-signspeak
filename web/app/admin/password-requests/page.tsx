@@ -13,6 +13,7 @@ import {
 } from '@/lib/api';
 import Sidebar from '@/components/admin/Sidebar';
 import ThemeToggle from '@/components/ThemeToggle';
+import SummaryDialog from '@/components/shared/SummaryDialog';
 import { logout } from '@/lib/auth';
 
 
@@ -27,6 +28,7 @@ export default function PasswordRequestsPage() {
   const [requests,     setRequests]     = useState<PasswordResetRequest[]>([]);
   const [loading,      setLoading]      = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{ type: 'approve' | 'reject'; req: PasswordResetRequest } | null>(null);
   const [approveResult, setApproveResult] = useState<ApproveResult>(null);
   const [copied,       setCopied]       = useState(false);
   const [hasCopied,    setHasCopied]    = useState(false);
@@ -111,7 +113,6 @@ export default function PasswordRequestsPage() {
 
 
   const handleReject = async (id: string) => {
-    if (!window.confirm('Are you sure you want to reject this password reset request?')) return;
     setActionLoading(id);
     setError(null);
     try {
@@ -175,6 +176,28 @@ export default function PasswordRequestsPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-gray-950 text-slate-900 dark:text-white transition-colors duration-200">
+      <SummaryDialog
+        open={confirmAction !== null}
+        title={confirmAction?.type === 'approve' ? 'Approve this password reset?' : 'Reject this reset request?'}
+        confirmLabel={confirmAction?.type === 'approve' ? 'Approve reset' : 'Reject request'}
+        busy={actionLoading !== null}
+        onCancel={() => setConfirmAction(null)}
+        onConfirm={() => {
+          const a = confirmAction;
+          setConfirmAction(null);
+          if (!a) return;
+          if (a.type === 'approve') void handleApprove(a.req.id);
+          else void handleReject(a.req.id);
+        }}
+      >
+        <p>Account: <strong className="font-mono">{confirmAction?.req.username}</strong></p>
+        {confirmAction?.type === 'approve' ? (
+          <p>A new temporary password is made and shown once. The user is signed out everywhere and must change it at the next login.</p>
+        ) : (
+          <p>The request is closed. The user has to ask again if they still need a reset.</p>
+        )}
+        <p>This is recorded in the Action Log.</p>
+      </SummaryDialog>
       <Sidebar onLogout={handleLogout} admin={adminUser} />
 
 
@@ -286,14 +309,14 @@ export default function PasswordRequestsPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={() => handleReject(req.id)}
+                      onClick={() => setConfirmAction({ type: 'reject', req })}
                       disabled={actionLoading === req.id}
                       className="px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-gray-400 hover:bg-slate-100 dark:hover:bg-gray-800 border border-slate-200 dark:border-gray-700 rounded-lg transition-colors disabled:opacity-50"
                     >
                       Reject
                     </button>
                     <button
-                      onClick={() => handleApprove(req.id)}
+                      onClick={() => setConfirmAction({ type: 'approve', req })}
                       disabled={actionLoading === req.id}
                       className="flex items-center gap-1.5 px-3 py-1.5 bg-[#7B1113] hover:bg-[#9B2020] disabled:opacity-50 text-white rounded-lg text-xs font-medium transition-colors"
                     >

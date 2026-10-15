@@ -6,6 +6,7 @@ import {
   User, Mail, Phone, GraduationCap, ShieldCheck,
 } from 'lucide-react';
 import { api, User as ApiUser, CreateUserDto } from '@/lib/api';
+import ConfirmDialog from '@/components/shared/ConfirmDialog';
 
 interface EditUserModalProps {
   isOpen:    boolean;
@@ -88,6 +89,7 @@ export default function EditUserModal({
   const [apiError,    setApiError]    = useState<string | null>(null);
   const [successMsg,  setSuccessMsg]  = useState<string | null>(null);
   const [isSaving,    setIsSaving]    = useState(false);
+  const [confirmRole, setConfirmRole] = useState(false);
 
   const callerRole    = getCallerRole();
   const isAdminCaller = callerRole === 'ADMIN';
@@ -120,7 +122,15 @@ export default function EditUserModal({
     setApiError(null);
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
+    if (isSaving) return;
+    const errs = validateFields(form, user.role);
+    if (Object.keys(errs).length > 0) { setFieldErrors(errs); return; }
+    if (isAdminCaller && form.role !== user.role) { setConfirmRole(true); return; }
+    void doSave();
+  };
+
+  const doSave = async () => {
     if (isSaving) return;
 
     const errs = validateFields(form, user.role);
@@ -169,6 +179,17 @@ export default function EditUserModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <ConfirmDialog
+        open={confirmRole}
+        title="Change this role?"
+        confirmLabel="Change role"
+        busy={isSaving}
+        onCancel={() => setConfirmRole(false)}
+        onConfirm={() => { setConfirmRole(false); void doSave(); }}
+      >
+        <p>{user.firstName} {user.lastName} ({user.username}) will change from <strong>{user.role}</strong> to <strong>{form.role}</strong>.</p>
+        <p>Their access changes immediately. This is recorded in the Action Log.</p>
+      </ConfirmDialog>
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"

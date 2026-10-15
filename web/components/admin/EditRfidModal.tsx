@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { X, CheckCircle, CreditCard } from 'lucide-react';
 import { useRfidScanner } from '@/hooks/useRfidScanner';
+import ConfirmDialog from '@/components/shared/ConfirmDialog';
 
 interface EditRfidModalProps {
   isOpen:      boolean;
@@ -30,6 +31,7 @@ export default function EditRfidModal({
   studentName, userId, currentRfid,
 }: EditRfidModalProps) {
   const [submitting, setSubmitting] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [error,      setError]      = useState<string | null>(null);
 
   const {
@@ -45,6 +47,8 @@ export default function EditRfidModal({
 
   const handleSubmit = async () => {
     if (!scannedRfid) { startScan(); return; }
+    if (!confirmOpen) { setConfirmOpen(true); return; }
+    setConfirmOpen(false);
     if (submitting) return; // ← double-submit guard
     setSubmitting(true);
     setError(null);
@@ -62,6 +66,20 @@ export default function EditRfidModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Change this RFID card?"
+        confirmLabel="Change card"
+        busy={submitting}
+        onCancel={() => setConfirmOpen(false)}
+        onConfirm={() => { void handleSubmit(); }}
+      >
+        <p>Student: <strong>{studentName}</strong></p>
+        <p>Current card: <span className="font-mono">{currentRfid ?? 'Not assigned'}</span></p>
+        <p>New card: <span className="font-mono">{scannedRfid}</span></p>
+        <p>The student and parent usernames do not change.</p>
+        <p>The old card will no longer match this student. This is recorded in the Action Log.</p>
+      </ConfirmDialog>
       <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl w-full max-w-md shadow-2xl">
 
         {/* Header */}
