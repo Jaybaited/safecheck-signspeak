@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { ALL_GRADES, gradeText } from '@/lib/grade';
 import {
   X, Save, Loader2, CheckCircle, XCircle,
   User, Mail, Phone, GraduationCap, ShieldCheck,
@@ -23,11 +24,8 @@ interface FieldErrors {
   gradeLevel?:  string;
 }
 
-const GRADE_LEVELS = [
-  'GRADE_1','GRADE_2','GRADE_3','GRADE_4','GRADE_5','GRADE_6',
-  'GRADE_7','GRADE_8','GRADE_9','GRADE_10','GRADE_11','GRADE_12',
-];
-const formatGradeLabel = (g: string) => g.replace('GRADE_', 'Grade ');
+const GRADE_LEVELS: readonly string[] = ALL_GRADES;
+const formatGradeLabel = (g: string) => gradeText(g);
 
 const EMPTY_FORM = {
   firstName:   '',

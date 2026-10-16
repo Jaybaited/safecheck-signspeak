@@ -3,13 +3,10 @@
 import { useState, useCallback, useEffect } from 'react'; // ← CHANGED: added useEffect
 import { X, CheckCircle, CreditCard, Copy, Check, User, Users, AlertTriangle, Loader2, RefreshCw } from 'lucide-react'; // ← CHANGED: added RefreshCw
 import { CreateUserDto, ParentSearchResult, api } from '@/lib/api';
+import { ALL_GRADES, gradeText } from '@/lib/grade';
 import { useRfidScanner } from '@/hooks/useRfidScanner';
 
-const GRADE_LEVELS = [
-  'GRADE_1','GRADE_2','GRADE_3','GRADE_4',
-  'GRADE_5','GRADE_6','GRADE_7','GRADE_8',
-  'GRADE_9','GRADE_10','GRADE_11','GRADE_12',
-];
+const GRADE_LEVELS: readonly string[] = ALL_GRADES;
 
 const SELECTABLE_ROLES = [
   { value: 'STUDENT', label: 'Student' },
@@ -545,7 +542,7 @@ export default function AddUserModal({ isOpen, onClose, onSubmit, error, presetP
                 >
                   <option value="">Select Grade</option>
                   {GRADE_LEVELS.map((g) => (
-                    <option key={g} value={g}>{g.replace('GRADE_', 'Grade ')}</option>
+                    <option key={g} value={g}>{gradeText(g)}</option>
                   ))}
                 </select>
                 {formErrors.gradeLevel && (
@@ -740,7 +737,7 @@ export default function AddUserModal({ isOpen, onClose, onSubmit, error, presetP
                   {showGrade && (
                     <div className="flex justify-between gap-4">
                       <dt className="text-gray-500 dark:text-gray-400">Grade level</dt>
-                      <dd className="font-semibold text-gray-900 dark:text-white text-right">{String(formData.gradeLevel).replace('GRADE_', 'Grade ')}</dd>
+                      <dd className="font-semibold text-gray-900 dark:text-white text-right">{gradeText(String(formData.gradeLevel))}</dd>
                     </div>
                   )}
                   {showRfid && (

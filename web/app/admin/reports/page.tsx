@@ -2,6 +2,7 @@
 
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { ALL_GRADES, gradeText } from '@/lib/grade';
 import { useRouter } from 'next/navigation';
 import {
   Download, Search, RefreshCw, Calendar as CalendarIcon,
@@ -48,14 +49,11 @@ function SkeletonRow() {
 }
 
 
-const GRADE_LEVELS = [
-  'GRADE_1','GRADE_2','GRADE_3','GRADE_4','GRADE_5','GRADE_6',
-  'GRADE_7','GRADE_8','GRADE_9','GRADE_10','GRADE_11','GRADE_12',
-];
+const GRADE_LEVELS: readonly string[] = ALL_GRADES;
 const STATUS_OPTIONS = ['PRESENT','LATE','ABSENT','UNCONFIRMED_OUT'];
 
 
-function formatGradeLabel(g: string) { return g.replace('GRADE_', 'Grade '); }
+function formatGradeLabel(g: string) { return gradeText(g); }
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', {
     month: 'short', day: 'numeric', year: 'numeric',

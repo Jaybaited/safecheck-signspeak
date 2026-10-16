@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { gradeText, gradeShort } from '@/lib/grade';
 import { useRouter } from 'next/navigation';
 import {
   Search, Filter, Download, UserPlus,
@@ -26,7 +27,7 @@ type RoleFilter = 'ALL' | 'TEACHER' | 'STUDENT' | 'PARENT';
 
 function exportToExcel(users: ApiUser[], filename: string) {
   const headers = ['First Name','Last Name','Username','Email','Role','Grade Level','RFID Card','Created Date'];
-  const formatGrade = (g: string | null | undefined) => g ? g.replace('GRADE_', 'Grade ') : 'N/A';
+  const formatGrade = (g: string | null | undefined) => g ? gradeText(g) : 'N/A';
   const formatDate  = (d: string) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   const rows = users.map((u) => [
     u.firstName, u.lastName, u.username,
@@ -210,7 +211,7 @@ export default function ManageUsersPage() {
   const formatDate       = (d: string) =>
     new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   const formatGradeLevel = (g: string | null | undefined) =>
-    g ? g.replace('GRADE_', 'Grade ') : 'N/A';
+    g ? gradeText(g) : 'N/A';
 
   if (loading || !user) {
     return (
@@ -421,7 +422,7 @@ export default function ManageUsersPage() {
       {/* Option B: child chip for parent rows */}
       {userData.role === 'PARENT' && parentChildMap[userData.id] && (() => {
         const child = parentChildMap[userData.id];
-        const grade = child.gradeLevel ? child.gradeLevel.replace('GRADE_', 'Gr. ') : null;
+        const grade = child.gradeLevel ? gradeShort(child.gradeLevel) : null;
         return (
           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-[#C4972A]/10 dark:bg-[#C4972A]/15 border border-[#C4972A]/20 dark:border-[#C4972A]/25 rounded-full text-[10px] font-medium text-[#8B6818] dark:text-[#E8C96A] leading-none w-fit">
             <span>👦</span>

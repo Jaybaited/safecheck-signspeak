@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { ALL_GRADES, gradeText } from '@/lib/grade';
 import { useRouter } from 'next/navigation';
 import {
   Search, Filter, ChevronLeft, ChevronRight,
@@ -14,10 +15,7 @@ import {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const GRADE_LEVELS = [
-  'GRADE_1','GRADE_2','GRADE_3','GRADE_4','GRADE_5','GRADE_6',
-  'GRADE_7','GRADE_8','GRADE_9','GRADE_10','GRADE_11','GRADE_12',
-];
+const GRADE_LEVELS: readonly string[] = ALL_GRADES;
 
 const STATUS_OPTIONS = [
   { value: '',                label: 'All Statuses'    },
@@ -63,7 +61,7 @@ function formatDate(iso: string): string {
 
 function formatGrade(g: string | null): string {
   if (!g) return '—';
-  return g.replace('GRADE_', 'Grade ');
+  return gradeText(g);
 }
 
 function getToday(): string {

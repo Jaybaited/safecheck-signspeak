@@ -2,6 +2,7 @@
 
 
 import { useState, useEffect } from 'react';
+import { gradeText } from '@/lib/grade';
 import { useRouter }           from 'next/navigation';
 import {
   User, Hash, Shield, Lock, Eye, EyeOff,
@@ -24,7 +25,7 @@ interface ParentUser {
 
 
 const formatGradeLevel = (gl: string | null) =>
-  gl ? gl.replace('GRADE_', 'Grade ') : 'N/A';
+  gl ? gradeText(gl) : 'N/A';
 
 
 // Placeholder child so ParentSidebar never receives undefined

@@ -18,6 +18,7 @@ export enum Role {
 }
 
 export enum GradeLevel {
+  KINDERGARTEN = 'KINDERGARTEN',
   GRADE_1  = 'GRADE_1',
   GRADE_2  = 'GRADE_2',
   GRADE_3  = 'GRADE_3',

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { gradeText } from '@/lib/grade';
 import { useRouter } from 'next/navigation';
 import { Search, Plus, Edit, Trash2, User, X, RefreshCw, Activity, Clock, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 import Sidebar from '@/components/admin/Sidebar';
@@ -98,7 +99,7 @@ export default function RfidManagement() {
     currentRfid: string | null;
   }>({ open: false, userId: '', studentName: '', currentRfid: null });
 
-  const formatGradeLevel = (g: string | null) => g ? g.replace('GRADE_', 'Grade ') : 'N/A';
+  const formatGradeLevel = (g: string | null) => g ? gradeText(g) : 'N/A';
   const formatDate = (d: string) =>
     new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   const formatTime = (iso: string | null) => {

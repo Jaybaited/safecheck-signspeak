@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { gradeText } from '@/lib/grade';
 import { useRouter } from 'next/navigation';
 import {
   User, Hash, GraduationCap, CreditCard, Shield,
@@ -22,7 +23,7 @@ interface UserProfile {
 
 
 const formatGradeLevel = (gl: string | null) =>
-  gl ? gl.replace('GRADE_', 'Grade ') : 'Not Set';
+  gl ? gradeText(gl) : 'Not Set';
 
 
 // ── Reusable password input (defined OUTSIDE the page so typing keeps focus) ──

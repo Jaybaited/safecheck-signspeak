@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { gradeText } from '@/lib/grade';
 import { useRouter } from 'next/navigation';
 import { ClipboardCheck, CheckCircle, XCircle, Clock, X, Loader2 } from 'lucide-react';
 import Sidebar from '@/components/admin/Sidebar';
@@ -27,7 +28,7 @@ const fmtDate = (d: string | null) =>
       })
     : '-';
 
-const fmtGrade = (g: string | null) => (g ? g.replace('GRADE_', 'Grade ') : '');
+const fmtGrade = (g: string | null) => (g ? gradeText(g) : '');
 
 export default function AssessmentResultsPage() {
   const router = useRouter();

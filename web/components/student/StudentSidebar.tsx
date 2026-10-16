@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { gradeText } from '@/lib/grade';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -46,7 +47,7 @@ const INACTIVE_CLS = 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:ho
 
 function formatGradeLevel(gradeLevel: string | null) {
   if (!gradeLevel) return 'Not Set';
-  return gradeLevel.replace('GRADE_', 'Grade ');
+  return gradeText(gradeLevel);
 }
 
 export default function StudentSidebar({ onLogout, student }: StudentSidebarProps) {

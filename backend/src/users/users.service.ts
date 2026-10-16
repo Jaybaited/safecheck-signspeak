@@ -666,7 +666,7 @@ export class UsersService {
 
     const statuses = ['GRADUATED', 'TRANSFERRED_OUT', 'DROPPED_OUT', 'OTHER'];
     if (filters.status && statuses.includes(filters.status)) where.archiveStatus = filters.status;
-    if (filters.gradeLevel && /^GRADE_(1[0-2]|[1-9])$/.test(filters.gradeLevel)) where.gradeLevel = filters.gradeLevel;
+    if (filters.gradeLevel && /^(?:KINDERGARTEN|GRADE_(?:1[0-2]|[1-9]))$/.test(filters.gradeLevel)) where.gradeLevel = filters.gradeLevel;
 
     const day = /^\d{4}-\d{2}-\d{2}$/;
     const range: { not: null; gte?: Date; lt?: Date } = { not: null };
@@ -815,7 +815,7 @@ export class UsersService {
       { previousStatus: student.archiveStatus, previousNote: student.archiveNote, archivedAt: student.archivedAt, gradeLevel: dto.gradeLevel },
     );
 
-    return { message: student.firstName + ' ' + student.lastName + ' was restored to ' + String(dto.gradeLevel).replace('GRADE_', 'Grade ') + '.' };
+    return { message: student.firstName + ' ' + student.lastName + ' was restored to ' + (String(dto.gradeLevel) === 'KINDERGARTEN' ? 'Kindergarten' : String(dto.gradeLevel).replace('GRADE_', 'Grade ')) + '.' };
   }
 
   async updateFcmToken(userId: string, fcmToken: string) {

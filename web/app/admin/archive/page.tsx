@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { ALL_GRADES, gradeText } from '@/lib/grade';
 import { useRouter } from 'next/navigation';
 import { Search, RotateCcw, Archive as ArchiveIcon, X, CheckCircle, XCircle } from 'lucide-react';
 import Sidebar from '@/components/admin/Sidebar';
@@ -20,8 +21,8 @@ const STATUS_CLS: Record<string, string> = {
   DROPPED_OUT:     'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/20',
   OTHER:           'bg-slate-100 text-slate-700 border-slate-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700',
 };
-const GRADES = Array.from({ length: 12 }, (_, i) => 'GRADE_' + (i + 1));
-const gradeLabel = (g: string | null | undefined) => (g ? g.replace('GRADE_', 'Grade ') : 'N/A');
+const GRADES: readonly string[] = ALL_GRADES;
+const gradeLabel = (g: string | null | undefined) => (g ? gradeText(g) : 'N/A');
 const formatDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '-';
 

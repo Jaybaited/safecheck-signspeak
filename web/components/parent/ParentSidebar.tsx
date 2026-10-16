@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { gradeText } from '@/lib/grade';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -43,7 +44,7 @@ const navigation = [
 ];
 
 const formatGrade = (gl: string | null) =>
-  gl ? gl.replace('GRADE_', 'Grade ') : 'N/A';
+  gl ? gradeText(gl) : 'N/A';
 
 export default function ParentSidebar({ onLogout, parent, child, unreadCount = 0 }: Props) {
   const pathname = usePathname();

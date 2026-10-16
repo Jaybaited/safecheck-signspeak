@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { gradeText } from '@/lib/grade';
 import { useRouter } from 'next/navigation';
 import { RefreshCw, Search, Users, TrendingUp, Activity, Hand } from 'lucide-react';
 import Sidebar from '@/components/admin/Sidebar';
@@ -19,7 +20,7 @@ interface AdminUser {
 
 type SortKey = 'name' | 'progress' | 'activity';
 
-const formatGrade = (g: string | null) => (g ? g.replace('GRADE_', 'Grade ') : '-');
+const formatGrade = (g: string | null) => (g ? gradeText(g) : '-');
 const formatDate = (s: string | null) =>
   s ? new Date(s).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Never';
 

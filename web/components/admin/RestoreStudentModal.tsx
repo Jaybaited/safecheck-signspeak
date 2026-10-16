@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { ALL_GRADES, gradeText } from '@/lib/grade';
 import { X, RotateCcw, Loader2 } from 'lucide-react';
 import { api, ArchivedStudent } from '@/lib/api';
 
@@ -10,8 +11,8 @@ interface RestoreStudentModalProps {
   onDone: (message: string) => void;
 }
 
-const GRADES = Array.from({ length: 12 }, (_, i) => 'GRADE_' + (i + 1));
-const gradeLabel = (g: string) => g.replace('GRADE_', 'Grade ');
+const GRADES: readonly string[] = ALL_GRADES;
+const gradeLabel = (g: string) => gradeText(g);
 
 export default function RestoreStudentModal({ student, onClose, onDone }: RestoreStudentModalProps) {
   const [grade,      setGrade]      = useState('');

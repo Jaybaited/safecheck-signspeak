@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { gradeText } from '@/lib/grade';
 import { Wifi, CheckCircle, Info, Shield } from 'lucide-react';
 import type { RfidTapResponse } from '@/lib/api';
 import { kioskHasSession, kioskSignIn, kioskSignOut, kioskTap, KioskAuthError } from '@/lib/kiosk';
@@ -142,7 +143,7 @@ export default function RfidKiosk({ mode }: { mode: KioskMode }) {
 
   const formatGradeLevel = (gradeLevel: string | null | undefined) => {
     if (!gradeLevel) return '';
-    return gradeLevel.replace('GRADE_', 'Grade ');
+    return gradeText(gradeLevel);
   };
 
   const isCheckIn = lastTap?.action === 'CHECK_IN';

@@ -281,6 +281,7 @@ enum Role {
 }
 
 enum GradeLevel {
+  KINDERGARTEN
   GRADE_1
   GRADE_2
   GRADE_3
