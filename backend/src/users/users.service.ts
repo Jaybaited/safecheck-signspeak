@@ -12,6 +12,7 @@ import { ArchiveStudentDto, RestoreStudentDto } from './dto/archive.dto';
 import * as bcrypt from 'bcrypt';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AdminLogService } from '../common/admin-log.service';
+import { PhotoService } from '../common/photo.service';
 
 
 @Injectable()
@@ -20,6 +21,7 @@ export class UsersService {
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationsService,
     private readonly adminLog: AdminLogService,
+    private readonly photos: PhotoService,
   ) {}
 
 
@@ -390,7 +392,7 @@ export class UsersService {
   async remove(id: string, adminId?: string) {
     const target = await this.prisma.user.findUnique({
       where:  { id },
-      select: { id: true, username: true, role: true },
+      select: { id: true, username: true, role: true, photoUrl: true },
     });
     if (!target) throw new NotFoundException('User not found.');
     if (adminId && target.id === adminId) {
@@ -433,6 +435,8 @@ export class UsersService {
       }
       throw err;
     }
+
+    if (target.photoUrl) void this.photos.remove(target.photoUrl);
 
     await this.adminLog.log(
       adminId,
@@ -903,6 +907,47 @@ export class UsersService {
       message: student.firstName + ' ' + student.lastName + "'s card is now " + to.toLowerCase() + '.',
       rfidCardStatus: to,
     };
+  }
+
+  async setPhoto(id: string, image: string, adminId?: string) {
+    const student = await this.prisma.user.findUnique({
+      where:  { id },
+      select: { id: true, role: true, username: true, photoUrl: true, firstName: true, lastName: true },
+    });
+    if (!student || student.role !== 'STUDENT') throw new NotFoundException('Student account not found.');
+
+    const storedPath = await this.photos.upload(id, image, student.lastName + ' ' + student.firstName);
+    // A changed photo gets a new file name when the student's name changed; remove the old file.
+    if (student.photoUrl && student.photoUrl !== storedPath) void this.photos.remove(student.photoUrl);
+    await this.prisma.user.update({ where: { id }, data: { photoUrl: storedPath } });
+
+    await this.adminLog.log(
+      adminId,
+      student.photoUrl ? 'STUDENT_PHOTO_CHANGED' : 'STUDENT_PHOTO_ADDED',
+      'USER',
+      id,
+      (student.photoUrl ? 'Changed' : 'Added') + ' the photo of ' + student.username,
+    );
+    return { message: 'Photo saved.' };
+  }
+
+  async removePhoto(id: string, adminId?: string) {
+    const student = await this.prisma.user.findUnique({
+      where:  { id },
+      select: { id: true, role: true, username: true, photoUrl: true },
+    });
+    if (!student || student.role !== 'STUDENT') throw new NotFoundException('Student account not found.');
+    if (!student.photoUrl) return { message: 'This student has no photo.' };
+
+    await this.prisma.user.update({ where: { id }, data: { photoUrl: null } });
+    await this.photos.remove(student.photoUrl);
+    await this.adminLog.log(adminId, 'STUDENT_PHOTO_REMOVED', 'USER', id, 'Removed the photo of ' + student.username);
+    return { message: 'Photo removed.' };
+  }
+
+  async getPhotoUrl(id: string) {
+    const u = await this.prisma.user.findUnique({ where: { id }, select: { photoUrl: true } });
+    return { url: await this.photos.signedUrl(u?.photoUrl ?? null, 300) };
   }
 
   async updateFcmToken(userId: string, fcmToken: string) {

@@ -8,6 +8,7 @@ import { NewPasswordDto, ChangePasswordDto } from './dto/password.dto';
 import { LinkChildDto } from './dto/link-child.dto';
 import { ArchiveStudentDto, RestoreStudentDto } from './dto/archive.dto';
 import { CardStatusDto } from './dto/card-status.dto';
+import { PhotoDto } from './dto/photo.dto';
 import { JwtAuthGuard }   from '../auth/jwt.guard';
 import { RolesGuard }     from '../auth/roles.guard';
 import { Roles }          from '../auth/roles.decorator';
@@ -92,6 +93,27 @@ export class UsersController {
   setCardStatus(@Param('id') id: string, @Body() body: CardStatusDto, @Req() req: any) {
     const adminId = req.user?.id ?? req.user?.sub;
     return this.usersService.setCardStatus(id, body.action, adminId, body.note);
+  }
+
+  @Post(':id/photo')
+  @Roles('ADMIN')
+  setPhoto(@Param('id') id: string, @Body() body: PhotoDto, @Req() req: any) {
+    const adminId = req.user?.id ?? req.user?.sub;
+    return this.usersService.setPhoto(id, body.image, adminId);
+  }
+
+  @Delete(':id/photo')
+  @Roles('ADMIN')
+  removePhoto(@Param('id') id: string, @Req() req: any) {
+    const adminId = req.user?.id ?? req.user?.sub;
+    return this.usersService.removePhoto(id, adminId);
+  }
+
+  @Get(':id/photo-url')
+  @Roles('ADMIN', 'TEACHER', 'PARENT', 'STUDENT')
+  async getPhotoUrl(@Param('id') id: string, @Req() req: any) {
+    await this.assertCanViewUser(req, id);
+    return this.usersService.getPhotoUrl(id);
   }
 
   @Get('stats')

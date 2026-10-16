@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { api, User as ApiUser, CreateUserDto } from '@/lib/api';
 import ConfirmDialog from '@/components/shared/ConfirmDialog';
+import PhotoField from '@/components/admin/PhotoField';
 
 interface EditUserModalProps {
   isOpen:    boolean;
@@ -88,6 +89,18 @@ export default function EditUserModal({
   const [successMsg,  setSuccessMsg]  = useState<string | null>(null);
   const [isSaving,    setIsSaving]    = useState(false);
   const [confirmRole, setConfirmRole] = useState(false);
+  const [photoData, setPhotoData] = useState<string | null>(null);
+  const [currentPhoto, setCurrentPhoto] = useState<string | null>(null);
+  useEffect(() => {
+    setPhotoData(null);
+    setCurrentPhoto(null);
+    if (!isOpen || !user || user.role !== 'STUDENT') return;
+    let off = false;
+    api.getStudentPhotoUrl(user.id)
+      .then((r) => { if (!off) setCurrentPhoto(r.url); })
+      .catch(() => { /* no photo yet */ });
+    return () => { off = true; };
+  }, [isOpen, user?.id]);
 
   const callerRole    = getCallerRole();
   const isAdminCaller = callerRole === 'ADMIN';
@@ -150,6 +163,9 @@ export default function EditUserModal({
       };
 
       const updated = await api.updateUser(user.id, payload);
+      if (isStudent && photoData) {
+        await api.uploadStudentPhoto(user.id, photoData);
+      }
       setSuccessMsg(`${updated.firstName} ${updated.lastName} updated successfully.`);
       onSuccess(updated);
       setTimeout(() => { onClose(); setSuccessMsg(null); }, 1500);
@@ -406,6 +422,10 @@ export default function EditUserModal({
           )}
 
           {/* API Error */}
+          {isStudent && (
+            <PhotoField value={photoData} currentUrl={currentPhoto} onChange={setPhotoData} />
+          )}
+
           {apiError && (
             <div className="flex items-center gap-2.5 p-3 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-lg text-sm">
               <XCircle className="w-4 h-4 text-red-500 shrink-0" />

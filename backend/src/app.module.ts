@@ -16,6 +16,7 @@ import { MaintenanceModule } from './maintenance/maintenance.module';
 import { HealthModule } from './health/health.module';
 import { CalendarModule } from './calendar/calendar.module';
 import { AdminLogModule } from './common/admin-log.module';
+import { PhotosModule } from './common/photos.module';
 
 @Module({
   imports: [
@@ -32,8 +33,9 @@ import { AdminLogModule } from './common/admin-log.module';
     FslModule,
     MaintenanceModule,
     HealthModule,
-    CalendarModule,
+    CalendarModule,
     AdminLogModule,
+    PhotosModule,
   ],
   controllers: [AppController],
   providers: [AppService],

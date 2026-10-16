@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { AppModule } from './app.module';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 
 
 function parseOrigins(raw: string | undefined): string[] {
@@ -13,7 +14,9 @@ function parseOrigins(raw: string | undefined): string[] {
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
-  const app    = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // Photos are sent as base64 JSON (about 550 KB at most), so allow a bigger body than the 100 KB default.
+  app.useBodyParser('json', { limit: '1mb' });
 
 
   const isProd         = process.env.NODE_ENV === 'production';

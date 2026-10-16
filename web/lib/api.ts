@@ -251,6 +251,7 @@ export interface RfidTapResponse {
     firstName:  string;
     lastName:   string;
     gradeLevel: string | null;
+    photoUrl?:  string | null;
   };
   attendance: {
     timeIn:  string | null;
@@ -435,6 +436,18 @@ export const setCardStatus = (id: string, action: CardAction, note?: string) =>
 
 export const getRetiredCards = () => apiFetch<RetiredCardRow[]>('/users/retired-cards');
 
+export const uploadStudentPhoto = (id: string, image: string) =>
+  apiFetch<{ message: string }>('/users/' + id + '/photo', {
+    method: 'POST',
+    body: JSON.stringify({ image }),
+  });
+
+export const removeStudentPhoto = (id: string) =>
+  apiFetch<{ message: string }>('/users/' + id + '/photo', { method: 'DELETE' });
+
+export const getStudentPhotoUrl = (id: string) =>
+  apiFetch<{ url: string | null }>('/users/' + id + '/photo-url');
+
 export const updateUser = (id: string, data: Partial<CreateUserDto>) =>
   apiFetch<User>(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
 
@@ -617,8 +630,11 @@ export const api = {
   archiveStudent,
   restoreStudent,
   updateUser,
-  setCardStatus,
+  setCardStatus,
   getRetiredCards,
+  uploadStudentPhoto,
+  removeStudentPhoto,
+  getStudentPhotoUrl,
   deleteUser,
   changePassword,
   forceChangePassword,

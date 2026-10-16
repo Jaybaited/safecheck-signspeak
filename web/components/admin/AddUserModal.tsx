@@ -5,6 +5,7 @@ import { X, CheckCircle, CreditCard, Copy, Check, User, Users, AlertTriangle, Lo
 import { CreateUserDto, ParentSearchResult, api } from '@/lib/api';
 import { ALL_GRADES, gradeText } from '@/lib/grade';
 import { useRfidScanner } from '@/hooks/useRfidScanner';
+import PhotoField from '@/components/admin/PhotoField';
 
 const GRADE_LEVELS: readonly string[] = ALL_GRADES;
 
@@ -92,6 +93,8 @@ export default function AddUserModal({ isOpen, onClose, onSubmit, error, presetP
   });
   const [formErrors,   setFormErrors]   = useState<FormErrors>({});
   const [submitting,   setSubmitting]   = useState(false);
+  const [photoData, setPhotoData] = useState<string | null>(null);
+  const [photoNotice, setPhotoNotice] = useState<string | null>(null);
   const [credentials,  setCredentials]  = useState<GeneratedCredentials | null>(null);
   const [rfidChecking, setRfidChecking] = useState(false);
   const [rfidTaken,    setRfidTaken]    = useState(false);
@@ -285,6 +288,16 @@ export default function AddUserModal({ isOpen, onClose, onSubmit, error, presetP
         parentLastName:   formData.role === 'STUDENT' && !linkParent ? (parentLast.trim()  || undefined) : undefined,
       } as CreateUserDto);
 
+      const newId = (result as any)?.user?.id as string | undefined;
+      let photoWarning: string | null = null;
+      if (photoData && newId) {
+        try {
+          await api.uploadStudentPhoto(newId, photoData);
+        } catch {
+          photoWarning = 'The account was created, but the photo could not be saved. Open Edit user to add it again.';
+        }
+      }
+      setPhotoNotice(photoWarning);
       setCredentials({
         studentUsername: username,
         studentPassword: result.generatedPassword,
@@ -301,6 +314,8 @@ export default function AddUserModal({ isOpen, onClose, onSubmit, error, presetP
   const handleClose = () => {
     setFormData({ username: '', email: '', role: 'STUDENT', firstName: '', lastName: '', gradeLevel: '', rfidCard: '', phoneNumber: '' });
     setCredentials(null);
+    setPhotoData(null);
+    setPhotoNotice(null);
     setLinkParent(null);
     setParentFirst('');
     setParentLast('');
@@ -331,6 +346,9 @@ export default function AddUserModal({ isOpen, onClose, onSubmit, error, presetP
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-11">
               Save these credentials — the password will not be shown again.
             </p>
+            {photoNotice && (
+              <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 ml-11">{photoNotice}</p>
+            )}
           </div>
 
           <div className="p-6 space-y-4">
@@ -788,6 +806,8 @@ export default function AddUserModal({ isOpen, onClose, onSubmit, error, presetP
           )}
 
           {/* Actions */}
+          {showGrade && <PhotoField value={photoData} onChange={setPhotoData} />}
+
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={requestClose}
               className="flex-1 h-11 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-700 rounded-full text-sm font-semibold transition-colors">

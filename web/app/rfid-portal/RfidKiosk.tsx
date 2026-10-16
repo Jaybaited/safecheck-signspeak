@@ -26,7 +26,7 @@ export default function RfidKiosk({ mode }: { mode: KioskMode }) {
   const [isScanning, setIsScanning] = useState(false);
   const [lastTap, setLastTap] = useState<RfidTapResponse | null>(null);
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState<{ title: string; message: string; blocked?: boolean } | null>(null);
+  const [notice, setNotice] = useState<{ title: string; message: string; blocked?: boolean; photoUrl?: string | null } | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [mounted, setMounted] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
@@ -108,11 +108,11 @@ export default function RfidKiosk({ mode }: { mode: KioskMode }) {
     try {
       const response = await kioskTap(rfidCard, mode);
       if (response.success === false) {
-        setNotice({ title: noticeTitle(response.action), message: response.message ?? 'Please try again.', blocked: String(response.action).startsWith('CARD_') });
+        setNotice({ title: noticeTitle(response.action), message: response.message ?? 'Please try again.', blocked: String(response.action).startsWith('CARD_'), photoUrl: response.student?.photoUrl ?? null });
         setTimeout(() => setNotice(null), String(response.action).startsWith('CARD_') ? 10000 : 6000);
       } else {
         setLastTap(response);
-        setTimeout(() => setLastTap(null), 5000);
+        setTimeout(() => setLastTap(null), 8000);
       }
     } catch (err) {
       if (err instanceof KioskAuthError) {
@@ -372,6 +372,15 @@ export default function RfidKiosk({ mode }: { mode: KioskMode }) {
               >
                 <CheckCircle size={36} color={isCheckIn ? '#22c55e' : '#3b82f6'} />
               </div>
+              {lastTap.student.photoUrl && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={lastTap.student.photoUrl}
+                  alt=""
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                  style={{ width: 150, height: 188, objectFit: 'cover', borderRadius: 16, border: '4px solid ' + (isCheckIn ? '#22c55e' : '#3b82f6'), boxShadow: '0 4px 16px rgba(0,0,0,0.12)' }}
+                />
+              )}
               <p style={{ fontSize: 28, fontWeight: 900, color: '#0f0f0f', margin: 0, letterSpacing: '-0.8px' }}>
                 {isCheckIn ? 'Welcome!' : 'Goodbye!'}
               </p>
@@ -426,6 +435,15 @@ export default function RfidKiosk({ mode }: { mode: KioskMode }) {
               >
                 <Info size={36} color={notice.blocked ? '#d97706' : '#3b82f6'} />
               </div>
+              {notice.photoUrl && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={notice.photoUrl}
+                  alt=""
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                  style={{ width: 130, height: 163, objectFit: 'cover', borderRadius: 16, border: '4px solid ' + (notice.blocked ? '#d97706' : '#3b82f6'), boxShadow: '0 4px 16px rgba(0,0,0,0.12)' }}
+                />
+              )}
               <p style={{ fontSize: 22, fontWeight: 800, color: '#0f0f0f', margin: 0 }}>{notice.title}</p>
               <p style={{ fontSize: 16, color: '#374151', margin: 0 }}>{notice.message}</p>
             </>

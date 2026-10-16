@@ -3,6 +3,7 @@ import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NetworkTimeService } from '../common/services/network-time.service';
+import { PhotoService } from '../common/photo.service';
 import { AttendanceQueryDto } from './dto/attendance-query.dto';
 
 type AttendanceAction = 'CHECK_IN' | 'CHECK_OUT';
@@ -16,6 +17,7 @@ export interface RfidTapResult {
     firstName: string;
     lastName: string;
     gradeLevel: string | null;
+    photoUrl?: string | null;
   };
   attendance: {
     timeIn: Date | null;
@@ -40,6 +42,7 @@ export class AttendanceService {
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationsService,
     private readonly networkTime: NetworkTimeService,
+    private readonly photos: PhotoService,
   ) {}
 
   async handleRfidTap(rfidCard: string, tapMode?: 'CHECK_IN' | 'CHECK_OUT'): Promise<RfidTapResult> {
@@ -53,6 +56,7 @@ export class AttendanceService {
         role:       true,
         archivedAt: true,
         rfidCardStatus: true,
+        photoUrl: true,
       },
     });
 
@@ -76,12 +80,14 @@ export class AttendanceService {
     }
     if (user.role !== 'STUDENT')
       throw new NotFoundException('Only students can use attendance system');
+    // A short-lived link so the kiosk can show the student photo for the guard.
+    const photo = await this.photos.signedUrl(user.photoUrl, 120);
     if (user.archivedAt) {
       return {
         success: false,
         action:  'ARCHIVED',
         message: user.firstName + ' is archived and cannot use the attendance system. Please see the school office.',
-        student: { firstName: user.firstName, lastName: user.lastName, gradeLevel: user.gradeLevel },
+        student: { firstName: user.firstName, lastName: user.lastName, gradeLevel: user.gradeLevel, photoUrl: photo },
         attendance: { timeIn: null, timeOut: null, status: null },
       };
     }
@@ -97,7 +103,7 @@ export class AttendanceService {
         message: lost
           ? user.firstName + "'s card was reported lost and cannot be used. Please see the school office."
           : user.firstName + "'s card is suspended. Please see the school office.",
-        student: { firstName: user.firstName, lastName: user.lastName, gradeLevel: user.gradeLevel },
+        student: { firstName: user.firstName, lastName: user.lastName, gradeLevel: user.gradeLevel, photoUrl: photo },
         attendance: { timeIn: null, timeOut: null, status: null },
       };
     }
@@ -137,7 +143,7 @@ export class AttendanceService {
       student: {
         firstName:  user.firstName,
         lastName:   user.lastName,
-        gradeLevel: user.gradeLevel,
+        gradeLevel: user.gradeLevel, photoUrl: photo,
       },
       attendance: {
         timeIn:  existingAttendance?.timeIn ?? null,
@@ -204,7 +210,7 @@ export class AttendanceService {
       student: {
         firstName:  user.firstName,
         lastName:   user.lastName,
-        gradeLevel: user.gradeLevel,
+        gradeLevel: user.gradeLevel, photoUrl: photo,
       },
       attendance: {
         timeIn:  attendance.timeIn,
