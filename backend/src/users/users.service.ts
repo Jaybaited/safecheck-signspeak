@@ -124,7 +124,7 @@ export class UsersService {
       select: {
         id: true, username: true, email: true, role: true,
         firstName: true, lastName: true, gradeLevel: true,
-        rfidCard: true, phoneNumber: true, photoUrl: true,
+        rfidCard: true, rfidCardStatus: true, phoneNumber: true, photoUrl: true,
         mustChangePassword: true, createdAt: true, updatedAt: true,
       },
       orderBy: { createdAt: 'desc' },
@@ -155,6 +155,13 @@ export class UsersService {
       throw new BadRequestException(
         'Scan the student RFID card first. The card is used for the username and the parent account.',
       );
+    }
+
+    if (createUserDto.rfidCard) {
+      const retiredCard = await this.prisma.retiredCard.findUnique({ where: { cardNumber: createUserDto.rfidCard } });
+      if (retiredCard) {
+        throw new ConflictException('This card was retired (reported lost or replaced) and cannot be used again.');
+      }
     }
 
     const plainPassword  = await this.generateUniquePassword();
@@ -295,9 +302,22 @@ export class UsersService {
     if (updateData.lastName)                  data.lastName    = updateData.lastName;
     if (updateData.gradeLevel !== undefined)  data.gradeLevel  = updateData.gradeLevel;
     if (updateData.rfidCard !== undefined)    data.rfidCard    = updateData.rfidCard;
+    if (updateData.rfidCard !== undefined && updateData.rfidCard !== existing.rfidCard) data.rfidCardStatus = 'ACTIVE';
     if (updateData.phoneNumber !== undefined) data.phoneNumber = updateData.phoneNumber;
     if (updateData.photoUrl !== undefined)    data.photoUrl    = updateData.photoUrl;
 
+
+    const newCardValue = updateData.rfidCard;
+    let cardChange: { oldCard: string; reason: 'LOST' | 'REPLACED' } | null = null;
+    if (newCardValue && newCardValue !== existing.rfidCard) {
+      const retiredCard = await this.prisma.retiredCard.findUnique({ where: { cardNumber: newCardValue } });
+      if (retiredCard) {
+        throw new ConflictException('This card was retired (reported lost or replaced) and cannot be used again.');
+      }
+      if (existing.rfidCard) {
+        cardChange = { oldCard: existing.rfidCard, reason: existing.rfidCardStatus === 'LOST' ? 'LOST' : 'REPLACED' };
+      }
+    }
 
     const roleChanged =
       updateData.role !== undefined && updateData.role !== existing.role;
@@ -318,6 +338,21 @@ export class UsersService {
       },
     });
 
+
+    if (cardChange) {
+      await this.prisma.retiredCard.upsert({
+        where:  { cardNumber: cardChange.oldCard },
+        update: {},
+        create: {
+          cardNumber:  cardChange.oldCard,
+          reason:      cardChange.reason,
+          studentId:   id,
+          studentName: existing.firstName + ' ' + existing.lastName,
+          retiredById: changedById ?? null,
+        },
+      });
+      this.notificationsService.notifyParentCardEvent(id, 'REPLACED').catch(console.error);
+    }
 
     if (roleChanged && changedById) {
       await this.prisma.auditLog.create({
@@ -454,10 +489,11 @@ export class UsersService {
 
   // ── Real-time RFID availability check ─────────────────────────────────────
   async checkRfidAvailable(rfidCard: string): Promise<{ available: boolean }> {
-    const existing = await this.prisma.user.findFirst({
-      where: { rfidCard },
-    });
-    return { available: !existing };
+    const existing = await this.prisma.user.findFirst({ where: { rfidCard } });
+    const retired = existing
+      ? null
+      : await this.prisma.retiredCard.findUnique({ where: { cardNumber: rfidCard } });
+    return { available: !existing && !retired };
   }
 
 
@@ -816,6 +852,57 @@ export class UsersService {
     );
 
     return { message: student.firstName + ' ' + student.lastName + ' was restored to ' + (String(dto.gradeLevel) === 'KINDERGARTEN' ? 'Kindergarten' : String(dto.gradeLevel).replace('GRADE_', 'Grade ')) + '.' };
+  }
+
+  async getRetiredCards() {
+    return this.prisma.retiredCard.findMany({ orderBy: { retiredAt: 'desc' }, take: 200 });
+  }
+
+  async setCardStatus(id: string, action: 'LOST' | 'SUSPEND' | 'REACTIVATE', adminId?: string, note?: string) {
+    const student = await this.prisma.user.findUnique({
+      where:  { id },
+      select: { id: true, role: true, username: true, firstName: true, lastName: true, rfidCard: true, rfidCardStatus: true },
+    });
+    if (!student || student.role !== 'STUDENT') throw new NotFoundException('Student account not found.');
+    if (!student.rfidCard) throw new BadRequestException('This student has no RFID card assigned.');
+
+    const from = student.rfidCardStatus;
+    let to: 'ACTIVE' | 'SUSPENDED' | 'LOST';
+    let logAction: string;
+    if (action === 'LOST') {
+      if (from === 'LOST') throw new BadRequestException('This card is already marked as lost.');
+      to = 'LOST';
+      logAction = 'RFID_CARD_LOST';
+    } else if (action === 'SUSPEND') {
+      if (from !== 'ACTIVE') throw new BadRequestException('Only an active card can be suspended.');
+      to = 'SUSPENDED';
+      logAction = 'RFID_CARD_SUSPENDED';
+    } else {
+      if (from === 'ACTIVE') throw new BadRequestException('This card is already active.');
+      to = 'ACTIVE';
+      logAction = 'RFID_CARD_REACTIVATED';
+    }
+
+    await this.prisma.user.update({ where: { id }, data: { rfidCardStatus: to } });
+
+    const last4 = student.rfidCard.slice(-4);
+    await this.adminLog.log(
+      adminId,
+      logAction,
+      'USER',
+      id,
+      'Card ending ' + last4 + ' of ' + student.username + ': ' + from + ' -> ' + to,
+      { from, to, note: (note ?? '').trim() || null },
+    );
+
+    this.notificationsService
+      .notifyParentCardEvent(id, to === 'LOST' ? 'LOST' : to === 'SUSPENDED' ? 'SUSPENDED' : 'REACTIVATED')
+      .catch(console.error);
+
+    return {
+      message: student.firstName + ' ' + student.lastName + "'s card is now " + to.toLowerCase() + '.',
+      rfidCardStatus: to,
+    };
   }
 
   async updateFcmToken(userId: string, fcmToken: string) {

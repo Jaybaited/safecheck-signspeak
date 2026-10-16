@@ -18,6 +18,7 @@ model User {
   lastName              String
   gradeLevel            GradeLevel?
   rfidCard              String?                @unique
+  rfidCardStatus     RfidCardStatus @default(ACTIVE)
   photoUrl              String?
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
@@ -433,4 +434,29 @@ model AdminActionLog {
   @@index([createdAt])
   @@index([targetType, targetId])
   @@map("admin_action_logs")
+}
+
+enum RfidCardStatus {
+  ACTIVE
+  SUSPENDED
+  LOST
+}
+
+enum RetiredCardReason {
+  LOST
+  REPLACED
+}
+
+model RetiredCard {
+  id          String            @id @default(uuid())
+  cardNumber  String            @unique
+  reason      RetiredCardReason
+  studentId   String?
+  studentName String?
+  note        String?
+  retiredById String?
+  retiredAt   DateTime          @default(now())
+
+  @@index([retiredAt])
+  @@map("retired_cards")
 }

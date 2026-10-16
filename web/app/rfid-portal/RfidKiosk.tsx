@@ -15,6 +15,9 @@ const noticeTitle = (action: string) => {
     case 'NO_CHECK_IN':        return 'Check in first';
     case 'TOO_SOON':           return 'Just a moment';
     case 'ARCHIVED':           return 'Student archived';
+    case 'CARD_LOST':         return 'Card reported lost';
+    case 'CARD_SUSPENDED':    return 'Card suspended';
+    case 'CARD_RETIRED':      return 'Card no longer valid';
     default:                   return 'Please note';
   }
 };
@@ -23,7 +26,7 @@ export default function RfidKiosk({ mode }: { mode: KioskMode }) {
   const [isScanning, setIsScanning] = useState(false);
   const [lastTap, setLastTap] = useState<RfidTapResponse | null>(null);
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState<{ title: string; message: string } | null>(null);
+  const [notice, setNotice] = useState<{ title: string; message: string; blocked?: boolean } | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [mounted, setMounted] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
@@ -105,8 +108,8 @@ export default function RfidKiosk({ mode }: { mode: KioskMode }) {
     try {
       const response = await kioskTap(rfidCard, mode);
       if (response.success === false) {
-        setNotice({ title: noticeTitle(response.action), message: response.message ?? 'Please try again.' });
-        setTimeout(() => setNotice(null), 6000);
+        setNotice({ title: noticeTitle(response.action), message: response.message ?? 'Please try again.', blocked: String(response.action).startsWith('CARD_') });
+        setTimeout(() => setNotice(null), String(response.action).startsWith('CARD_') ? 10000 : 6000);
       } else {
         setLastTap(response);
         setTimeout(() => setLastTap(null), 5000);
@@ -417,11 +420,11 @@ export default function RfidKiosk({ mode }: { mode: KioskMode }) {
               <div
                 style={{
                   width: 72, height: 72, borderRadius: '50%',
-                  background: 'rgba(59,130,246,0.1)',
+                  background: notice.blocked ? 'rgba(217,119,6,0.12)' : 'rgba(59,130,246,0.1)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}
               >
-                <Info size={36} color="#3b82f6" />
+                <Info size={36} color={notice.blocked ? '#d97706' : '#3b82f6'} />
               </div>
               <p style={{ fontSize: 22, fontWeight: 800, color: '#0f0f0f', margin: 0 }}>{notice.title}</p>
               <p style={{ fontSize: 16, color: '#374151', margin: 0 }}>{notice.message}</p>

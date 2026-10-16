@@ -7,6 +7,7 @@ import { CreateUserDto }  from './dto/create-user.dto';
 import { NewPasswordDto, ChangePasswordDto } from './dto/password.dto';
 import { LinkChildDto } from './dto/link-child.dto';
 import { ArchiveStudentDto, RestoreStudentDto } from './dto/archive.dto';
+import { CardStatusDto } from './dto/card-status.dto';
 import { JwtAuthGuard }   from '../auth/jwt.guard';
 import { RolesGuard }     from '../auth/roles.guard';
 import { Roles }          from '../auth/roles.decorator';
@@ -78,6 +79,19 @@ export class UsersController {
   restoreStudent(@Param('id') id: string, @Body() body: RestoreStudentDto, @Req() req: any) {
     const adminId = req.user?.id ?? req.user?.sub;
     return this.usersService.restoreStudent(id, body, adminId);
+  }
+
+  @Get('retired-cards')
+  @Roles('ADMIN')
+  getRetiredCards() {
+    return this.usersService.getRetiredCards();
+  }
+
+  @Post(':id/card-status')
+  @Roles('ADMIN')
+  setCardStatus(@Param('id') id: string, @Body() body: CardStatusDto, @Req() req: any) {
+    const adminId = req.user?.id ?? req.user?.sub;
+    return this.usersService.setCardStatus(id, body.action, adminId, body.note);
   }
 
   @Get('stats')

@@ -108,6 +108,107 @@ export class NotificationsService {
     }
   }
 
+  async notifyParentCardEvent(studentId: string, kind: 'LOST' | 'SUSPENDED' | 'REACTIVATED' | 'REPLACED'): Promise<void> {
+    try {
+      const links = await this.prisma.parentStudent.findMany({
+        where: { studentId },
+        select: {
+          parent:  { select: { id: true, pushToken: true } },
+          student: { select: { firstName: true, lastName: true } },
+        },
+      });
+      for (const link of links) {
+        const name = link.student.firstName + ' ' + link.student.lastName;
+        const title = 'RFID Card Update';
+        const body =
+          kind === 'LOST'
+            ? name + "'s RFID card was reported lost and is now blocked. Please contact the school for a replacement."
+            : kind === 'SUSPENDED'
+              ? name + "'s RFID card was suspended. It cannot be used until the school reactivates it."
+              : kind === 'REACTIVATED'
+                ? name + "'s RFID card is active again."
+                : name + ' has a new RFID card. The old card no longer works.';
+        await this.prisma.notification.create({
+          data: {
+            userId:  link.parent.id,
+            type:    NotificationType.SYSTEM,
+            message: body,
+            status:  NotificationStatus.UNREAD,
+          },
+        });
+        if (link.parent.pushToken) {
+          fetch('https://exp.host/--/api/v2/push/send', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to: link.parent.pushToken, title, body,
+              data: { type: 'SYSTEM', studentId },
+              sound: 'default', priority: 'high',
+            }),
+          }).catch((e) => console.error('Card update push failed:', e));
+        }
+      }
+    } catch (err) {
+      console.error('notifyParentCardEvent failed:', err);
+    }
+  }
+
+  async notifyParentBlockedCardTap(studentId: string, kind: 'LOST' | 'SUSPENDED' | 'RETIRED'): Promise<void> {
+    try {
+      const links = await this.prisma.parentStudent.findMany({
+        where: { studentId },
+        select: {
+          parent:  { select: { id: true, pushToken: true } },
+          student: { select: { firstName: true, lastName: true } },
+        },
+      });
+      if (links.length === 0) return;
+
+      const since = new Date(Date.now() - 10 * 60 * 1000);
+      const time = new Date().toLocaleTimeString('en-PH', { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit' });
+      const state = kind === 'SUSPENDED' ? 'suspended' : kind === 'LOST' ? 'reported lost' : 'replaced';
+
+      for (const link of links) {
+        const name = link.student.firstName + ' ' + link.student.lastName;
+        // At most one alert per 10 minutes so repeated taps do not spam the parent.
+        const recent = await this.prisma.notification.findFirst({
+          where: {
+            userId: link.parent.id,
+            type: NotificationType.SYSTEM,
+            sentAt: { gte: since },
+            message: { startsWith: name + "'s card" },
+          },
+          select: { id: true },
+        });
+        if (recent) continue;
+
+        const title = 'Card Alert';
+        const body = name + "'s card (" + state + ') was tapped at the gate at ' + time + '. Please contact the school.';
+        await this.prisma.notification.create({
+          data: {
+            userId:  link.parent.id,
+            type:    NotificationType.SYSTEM,
+            message: body,
+            status:  NotificationStatus.UNREAD,
+          },
+        });
+        if (link.parent.pushToken) {
+          fetch('https://exp.host/--/api/v2/push/send', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to: link.parent.pushToken, title, body,
+              data: { type: 'SYSTEM', studentId },
+              sound: 'default', priority: 'high',
+            }),
+          }).catch((e) => console.error('Card alert push failed:', e));
+        }
+      }
+    } catch (err) {
+      console.error('notifyParentBlockedCardTap failed:', err);
+    }
+  }
+
   async notifyParentOnRFID(
   studentId: string,
   type: 'RFID_ENTRY' | 'RFID_EXIT' | 'RFID_NO_TIMEOUT',  // ← added

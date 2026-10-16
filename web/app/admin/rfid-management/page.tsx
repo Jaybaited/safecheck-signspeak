@@ -8,7 +8,8 @@ import Sidebar from '@/components/admin/Sidebar';
 import ThemeToggle from '@/components/ThemeToggle';
 import EditRfidModal from '@/components/admin/EditRfidModal';
 import DeleteUserModal from '@/components/admin/DeleteUserModal';
-import type { User as ApiUser } from '@/lib/api';
+import ConfirmDialog from '@/components/shared/ConfirmDialog';
+import type { User as ApiUser, RetiredCardRow } from '@/lib/api';
 import { api } from '@/lib/api';
 import { logout } from '@/lib/auth';
 
@@ -23,6 +24,7 @@ interface RfidCard {
   studentName: string;
   gradeLevel:  string;
   status:      'active' | 'unassigned';
+  cardStatus:  'ACTIVE' | 'SUSPENDED' | 'LOST' | null;
   lastScanned: string;
 }
 
@@ -124,6 +126,7 @@ export default function RfidManagement() {
         studentName: `${s.firstName} ${s.lastName}`,
         gradeLevel:  formatGradeLevel(s.gradeLevel ?? null),
         status:      s.rfidCard ? 'active' : 'unassigned',
+        cardStatus:  s.rfidCard ? ((s.rfidCardStatus as RfidCard['cardStatus']) ?? 'ACTIVE') : null,
         lastScanned: formatDate(s.updatedAt ?? s.createdAt),
       }));
       setRfidCards(cards);
@@ -170,6 +173,12 @@ export default function RfidManagement() {
         setNoTapOutList(noTapOut);
       } catch {
         setNoTapOutList([]);
+      }
+
+      try {
+        setRetired(await api.getRetiredCards());
+      } catch {
+        setRetired([]);
       }
 
       setLastUpdated(new Date());
@@ -230,6 +239,28 @@ export default function RfidManagement() {
       setDeleteError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const [cardAction, setCardAction] = useState<{ userId: string; name: string; action: 'LOST' | 'SUSPEND' | 'REACTIVATE' } | null>(null);
+  const [cardBusy, setCardBusy] = useState(false);
+  const [retired, setRetired] = useState<RetiredCardRow[]>([]);
+
+  const runCardAction = async () => {
+    if (!cardAction || cardBusy) return;
+    setCardBusy(true);
+    try {
+      const res = await api.setCardStatus(cardAction.userId, cardAction.action);
+      setCardAction(null);
+      setNotice(res.message);
+      setTimeout(() => setNotice(null), 4000);
+      await fetchData(true);
+    } catch (err) {
+      setCardAction(null);
+      setNotice(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
+      setTimeout(() => setNotice(null), 5000);
+    } finally {
+      setCardBusy(false);
     }
   };
 
@@ -562,11 +593,28 @@ export default function RfidManagement() {
                     </td>
                     <td className="py-3">
                       <div className="flex items-center gap-1.5">
-                        <div className={`w-2 h-2 rounded-full ${card.status === 'active' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                        <span className="text-xs font-medium text-slate-700 dark:text-gray-200 capitalize">
-                          {card.status}
+                        <div className={'w-2 h-2 rounded-full ' + (card.cardStatus === 'ACTIVE' ? 'bg-emerald-500' : card.cardStatus === 'SUSPENDED' ? 'bg-amber-500' : card.cardStatus === 'LOST' ? 'bg-red-600' : 'bg-rose-500')} />
+                        <span className="text-xs font-medium text-slate-700 dark:text-gray-200">
+                          {card.cardStatus === 'ACTIVE' ? 'Active' : card.cardStatus === 'SUSPENDED' ? 'Suspended' : card.cardStatus === 'LOST' ? 'Lost' : 'Unassigned'}
                         </span>
                       </div>
+                      {card.cardStatus && (
+                        <div className="mt-1.5 flex items-center gap-1.5 text-[11px] font-medium">
+                          {card.cardStatus === 'ACTIVE' ? (
+                            <>
+                              <button onClick={() => setCardAction({ userId: card.id, name: card.studentName, action: 'LOST' })} className="px-2 py-0.5 rounded-md border border-rose-200 dark:border-rose-500/30 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors">Report lost</button>
+                              <button onClick={() => setCardAction({ userId: card.id, name: card.studentName, action: 'SUSPEND' })} className="px-2 py-0.5 rounded-md border border-amber-200 dark:border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-500/10 transition-colors">Suspend</button>
+                            </>
+                          ) : (
+                            <>
+                              <button onClick={() => setCardAction({ userId: card.id, name: card.studentName, action: 'REACTIVATE' })} className="px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-colors">Reactivate</button>
+                              {card.cardStatus === 'SUSPENDED' && (
+                                <button onClick={() => setCardAction({ userId: card.id, name: card.studentName, action: 'LOST' })} className="text-rose-600 dark:text-rose-400 hover:underline">Report lost</button>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      )}
                     </td>
                     <td className="py-3 text-slate-500 dark:text-gray-400 text-xs">{card.lastScanned}</td>
                     <td className="py-3 text-right space-x-1">
@@ -617,8 +665,64 @@ export default function RfidManagement() {
             )}
           </div>
         </div>
+      {retired.length > 0 && (
+          <div className="mt-6 bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 p-5 rounded-xl shadow-sm">
+            <h2 className="text-base font-bold">Retired Cards</h2>
+            <p className="text-xs text-slate-500 dark:text-gray-400 mt-0.5 mb-3">
+              These cards can never be registered or assigned again. A tap shows a notice at the gate.
+            </p>
+            <div className="max-h-64 overflow-y-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-slate-500 dark:text-gray-400 border-b border-slate-200 dark:border-gray-800">
+                    <th className="pb-2 text-xs font-semibold uppercase tracking-wider">Card</th>
+                    <th className="pb-2 text-xs font-semibold uppercase tracking-wider">Reason</th>
+                    <th className="pb-2 text-xs font-semibold uppercase tracking-wider">Student</th>
+                    <th className="pb-2 text-xs font-semibold uppercase tracking-wider">Retired</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-gray-800">
+                  {retired.map((r) => (
+                    <tr key={r.id}>
+                      <td className="py-2 font-mono text-xs text-slate-700 dark:text-gray-300">{r.cardNumber}</td>
+                      <td className="py-2 text-xs">
+                        <span className={'px-2 py-0.5 rounded-full border font-medium ' + (r.reason === 'LOST'
+                          ? 'bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/20'
+                          : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700')}>
+                          {r.reason === 'LOST' ? 'Lost' : 'Replaced'}
+                        </span>
+                      </td>
+                      <td className="py-2 text-xs text-slate-600 dark:text-gray-300">{r.studentName ?? '-'}</td>
+                      <td className="py-2 text-xs text-slate-500 dark:text-gray-400">{formatDate(r.retiredAt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </main>
 
+      <ConfirmDialog
+        open={cardAction !== null}
+        title={cardAction?.action === 'LOST' ? 'Report this card as lost?' : cardAction?.action === 'SUSPEND' ? 'Suspend this card?' : 'Reactivate this card?'}
+        confirmLabel={cardAction?.action === 'LOST' ? 'Report lost' : cardAction?.action === 'SUSPEND' ? 'Suspend card' : 'Reactivate card'}
+        danger={cardAction?.action !== 'REACTIVATE'}
+        busy={cardBusy}
+        onCancel={() => setCardAction(null)}
+        onConfirm={() => { void runCardAction(); }}
+      >
+        <p>Student: <strong>{cardAction?.name}</strong></p>
+        {cardAction?.action === 'REACTIVATE' ? (
+          <p>The card works again at the gate. This is only possible while no replacement card has been issued.</p>
+        ) : (
+          <>
+            <p>The card stops working at the gate. A tap records nothing, shows a notice, and alerts the parent.</p>
+            <p>You can reactivate it until a replacement card is issued. Issuing a replacement retires this card for good.</p>
+          </>
+        )}
+        <p>This is recorded in the Action Log.</p>
+      </ConfirmDialog>
       <DeleteUserModal
         isOpen={deleteTarget !== null}
         user={deleteTarget}

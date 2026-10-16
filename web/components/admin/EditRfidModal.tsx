@@ -78,7 +78,7 @@ export default function EditRfidModal({
         <p>Current card: <span className="font-mono">{currentRfid ?? 'Not assigned'}</span></p>
         <p>New card: <span className="font-mono">{scannedRfid}</span></p>
         <p>The student and parent usernames do not change.</p>
-        <p>The old card will no longer match this student. This is recorded in the Action Log.</p>
+        <p>The old card is retired for good and can never be registered again. This is recorded in the Action Log.</p>
       </ConfirmDialog>
       <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl w-full max-w-md shadow-2xl">
 

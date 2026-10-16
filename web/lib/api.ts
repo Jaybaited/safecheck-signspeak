@@ -141,6 +141,7 @@ export interface User {
   lastName:            string;
   email?:              string;
   rfidCard?:           string | null;
+  rfidCardStatus?:     'ACTIVE' | 'SUSPENDED' | 'LOST';
   phoneNumber?:        string | null;
   gradeLevel?:         string | null;
   role:                'ADMIN' | 'TEACHER' | 'STUDENT' | 'PARENT';
@@ -244,7 +245,7 @@ export interface AttendanceStats {
 
 export interface RfidTapResponse {
   success: boolean;
-  action:  'CHECK_IN' | 'CHECK_OUT' | 'ALREADY_CHECKED_IN' | 'ALREADY_COMPLETE' | 'NO_CHECK_IN' | 'TOO_SOON' | 'ARCHIVED';
+  action:  'CHECK_IN' | 'CHECK_OUT' | 'ALREADY_CHECKED_IN' | 'ALREADY_COMPLETE' | 'NO_CHECK_IN' | 'TOO_SOON' | 'ARCHIVED' | 'CARD_LOST' | 'CARD_SUSPENDED' | 'CARD_RETIRED';
   message?: string;
   student: {
     firstName:  string;
@@ -413,6 +414,26 @@ export const restoreStudent = (id: string, gradeLevel: string) =>
     method: 'POST',
     body: JSON.stringify({ gradeLevel }),
   });
+
+export type CardAction = 'LOST' | 'SUSPEND' | 'REACTIVATE';
+
+export interface RetiredCardRow {
+  id: string;
+  cardNumber: string;
+  reason: 'LOST' | 'REPLACED';
+  studentId: string | null;
+  studentName: string | null;
+  note: string | null;
+  retiredAt: string;
+}
+
+export const setCardStatus = (id: string, action: CardAction, note?: string) =>
+  apiFetch<{ message: string; rfidCardStatus: 'ACTIVE' | 'SUSPENDED' | 'LOST' }>('/users/' + id + '/card-status', {
+    method: 'POST',
+    body: JSON.stringify(note ? { action, note } : { action }),
+  });
+
+export const getRetiredCards = () => apiFetch<RetiredCardRow[]>('/users/retired-cards');
 
 export const updateUser = (id: string, data: Partial<CreateUserDto>) =>
   apiFetch<User>(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
@@ -594,8 +615,10 @@ export const api = {
   getDeletePreview,
   getArchivedStudents,
   archiveStudent,
-  restoreStudent,
+  restoreStudent,
   updateUser,
+  setCardStatus,
+  getRetiredCards,
   deleteUser,
   changePassword,
   forceChangePassword,

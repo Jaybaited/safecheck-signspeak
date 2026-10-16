@@ -6,7 +6,7 @@ import { NetworkTimeService } from '../common/services/network-time.service';
 import { AttendanceQueryDto } from './dto/attendance-query.dto';
 
 type AttendanceAction = 'CHECK_IN' | 'CHECK_OUT';
-type SoftTapAction = 'ALREADY_CHECKED_IN' | 'ALREADY_COMPLETE' | 'NO_CHECK_IN' | 'TOO_SOON' | 'ARCHIVED';
+type SoftTapAction = 'ALREADY_CHECKED_IN' | 'ALREADY_COMPLETE' | 'NO_CHECK_IN' | 'TOO_SOON' | 'ARCHIVED' | 'CARD_LOST' | 'CARD_SUSPENDED' | 'CARD_RETIRED';
 
 export interface RfidTapResult {
   success: boolean;
@@ -52,10 +52,28 @@ export class AttendanceService {
         gradeLevel: true,
         role:       true,
         archivedAt: true,
+        rfidCardStatus: true,
       },
     });
 
-    if (!user) throw new NotFoundException('RFID card not registered');
+    if (!user) {
+      const retired = await this.prisma.retiredCard.findUnique({ where: { cardNumber: rfidCard } });
+      if (retired) {
+        if (retired.studentId) {
+          this.notificationsService
+            .notifyParentBlockedCardTap(retired.studentId, retired.reason === 'LOST' ? 'LOST' : 'RETIRED')
+            .catch(console.error);
+        }
+        return {
+          success: false,
+          action:  'CARD_RETIRED',
+          message: 'This card is no longer valid. Please see the school office.',
+          student: { firstName: retired.studentName ?? '', lastName: '', gradeLevel: null },
+          attendance: { timeIn: null, timeOut: null, status: null },
+        };
+      }
+      throw new NotFoundException('RFID card not registered');
+    }
     if (user.role !== 'STUDENT')
       throw new NotFoundException('Only students can use attendance system');
     if (user.archivedAt) {
@@ -63,6 +81,22 @@ export class AttendanceService {
         success: false,
         action:  'ARCHIVED',
         message: user.firstName + ' is archived and cannot use the attendance system. Please see the school office.',
+        student: { firstName: user.firstName, lastName: user.lastName, gradeLevel: user.gradeLevel },
+        attendance: { timeIn: null, timeOut: null, status: null },
+      };
+    }
+
+    if (user.rfidCardStatus === 'LOST' || user.rfidCardStatus === 'SUSPENDED') {
+      const lost = user.rfidCardStatus === 'LOST';
+      this.notificationsService
+        .notifyParentBlockedCardTap(user.id, lost ? 'LOST' : 'SUSPENDED')
+        .catch(console.error);
+      return {
+        success: false,
+        action:  lost ? 'CARD_LOST' : 'CARD_SUSPENDED',
+        message: lost
+          ? user.firstName + "'s card was reported lost and cannot be used. Please see the school office."
+          : user.firstName + "'s card is suspended. Please see the school office.",
         student: { firstName: user.firstName, lastName: user.lastName, gradeLevel: user.gradeLevel },
         attendance: { timeIn: null, timeOut: null, status: null },
       };
