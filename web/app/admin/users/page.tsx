@@ -1,12 +1,12 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { gradeText, gradeShort } from '@/lib/grade';
+import { ALL_GRADES, gradeText, gradeShort } from '@/lib/grade';
 import { useRouter } from 'next/navigation';
 import {
   Search, Filter, Download, UserPlus,
   GraduationCap, UserCheck, Users,
-  MoreVertical, Trash2, CheckCircle, XCircle, X, Pencil, Archive,
+  MoreVertical, Trash2, CheckCircle, XCircle, X, Pencil, Archive, CalendarCheck,
 } from 'lucide-react';
 import { api, User as ApiUser, CreateUserDto, ChildInfo, ParentSearchResult } from '@/lib/api';
 import Sidebar from '@/components/admin/Sidebar';
@@ -16,6 +16,8 @@ import EditUserModal from '@/components/admin/EditUserModal';
 import ChangeParentModal from '@/components/admin/ChangeParentModal';
 import ArchiveStudentModal from '@/components/admin/ArchiveStudentModal';
 import ThemeToggle from '@/components/ThemeToggle';
+import ConfirmDialog from '@/components/shared/ConfirmDialog';
+import { getSchoolYear, SchoolYear } from '@/lib/school-year-api';
 import { logout } from '@/lib/auth';
 
 interface User {
@@ -97,6 +99,13 @@ export default function ManageUsersPage() {
   const [archiveTarget, setArchiveTarget] = useState<ApiUser | null>(null);
   const [presetParent, setPresetParent] = useState<ParentSearchResult | null>(null);
   const [parentChildMap, setParentChildMap] = useState<Record<string, ChildInfo>>({});
+
+  const [yearEndMode, setYearEndMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkGrade, setBulkGrade] = useState('');
+  const [yearEndAction, setYearEndAction] = useState<'PROMOTE' | 'GRADUATE' | null>(null);
+  const [yearEndBusy, setYearEndBusy] = useState(false);
+  const [schoolYear, setSchoolYear] = useState<SchoolYear | null>(null);
 
   useEffect(() => {
     const token    = localStorage.getItem('token');
@@ -212,6 +221,70 @@ export default function ManageUsersPage() {
     new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   const formatGradeLevel = (g: string | null | undefined) =>
     g ? gradeText(g) : 'N/A';
+
+  useEffect(() => {
+    if (!yearEndMode) return;
+    let off = false;
+    getSchoolYear()
+      .then((s) => { if (!off) setSchoolYear(s); })
+      .catch(() => { /* the school year is optional */ });
+    return () => { off = true; };
+  }, [yearEndMode]);
+
+  const toggleYearEnd = () => {
+    if (yearEndMode) { setYearEndMode(false); setSelectedIds(new Set()); }
+    else { setYearEndMode(true); setRoleFilter('STUDENT'); }
+  };
+
+  const activeStudents = users.filter((u) => u.role === 'STUDENT');
+  const selectedStudents = activeStudents.filter((u) => selectedIds.has(u.id));
+  const selectedTop = selectedStudents.filter((u) => u.gradeLevel === 'GRADE_12').length;
+  const canPromote = selectedStudents.length > 0 && selectedTop === 0 && selectedStudents.every((u) => !!u.gradeLevel);
+  const canGraduate = selectedStudents.length > 0 && selectedTop === selectedStudents.length;
+  const visibleStudentIds = filteredUsers.filter((u) => u.role === 'STUDENT').map((u) => u.id);
+  const allVisibleSelected = visibleStudentIds.length > 0 && visibleStudentIds.every((id) => selectedIds.has(id));
+
+  const toggleOne = (id: string) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  const toggleAllVisible = () =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allVisibleSelected) visibleStudentIds.forEach((id) => next.delete(id));
+      else visibleStudentIds.forEach((id) => next.add(id));
+      return next;
+    });
+  const selectGrade = () => {
+    if (!bulkGrade) return;
+    setSelectedIds(new Set(activeStudents.filter((u) => u.gradeLevel === bulkGrade).map((u) => u.id)));
+  };
+  const nextGradeOf = (g?: string | null): string | null => {
+    if (!g) return null;
+    const list = ALL_GRADES as readonly string[];
+    const i = list.indexOf(g);
+    return i >= 0 && i < list.length - 1 ? list[i + 1] : null;
+  };
+  const runYearEnd = async () => {
+    if (!yearEndAction || yearEndBusy) return;
+    setYearEndBusy(true);
+    setError(null);
+    try {
+      const res = await api.yearEnd(selectedStudents.map((u) => u.id), yearEndAction);
+      setYearEndAction(null);
+      setSelectedIds(new Set());
+      setSuccessMsg(res.message);
+      setTimeout(() => setSuccessMsg(null), 6000);
+      await fetchUsers();
+    } catch (err) {
+      setYearEndAction(null);
+      setError(friendlyError(err));
+    } finally {
+      setYearEndBusy(false);
+    }
+  };
 
   if (loading || !user) {
     return (
@@ -363,6 +436,18 @@ export default function ManageUsersPage() {
                   Export Filtered ({filteredUsers.length})
                 </button>
               )}
+
+              <button
+                type="button"
+                onClick={toggleYearEnd}
+                className={'flex items-center gap-1.5 px-3 py-2 border rounded-lg text-sm transition-colors ' +
+                  (yearEndMode
+                    ? 'bg-[#C4972A]/15 border-[#C4972A]/40 text-[#8B6818] dark:text-[#E8C96A]'
+                    : 'bg-slate-100 hover:bg-slate-200 dark:bg-gray-800 dark:hover:bg-gray-700 border-slate-200 dark:border-gray-700 text-slate-600 dark:text-gray-300')}
+              >
+                <CalendarCheck className="w-3.5 h-3.5" />
+                Year-end
+              </button>
             </div>
 
             <button
@@ -374,6 +459,79 @@ export default function ManageUsersPage() {
               Add User
             </button>
           </div>
+
+          {yearEndMode && (
+            <div className="mb-4 p-4 rounded-xl border border-[#C4972A]/30 bg-[#C4972A]/5 dark:bg-[#C4972A]/10 space-y-3">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <p className="text-sm font-semibold text-slate-900 dark:text-white">Year-end tools</p>
+                  <p className="text-xs text-slate-500 dark:text-gray-400">
+                    {schoolYear ? 'School year ' + schoolYear.name + '. ' : 'School year not set yet (set it on the School Calendar page). '}
+                    Tick the students, then promote them, or graduate Grade 12.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={toggleYearEnd}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-200 dark:border-gray-700 text-slate-600 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-800"
+                >
+                  Done
+                </button>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={bulkGrade}
+                  onChange={(e) => setBulkGrade(e.target.value)}
+                  className="px-3 py-2 bg-white dark:bg-gray-800 border border-slate-200 dark:border-gray-700 rounded-lg text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#7B1113]"
+                >
+                  <option value="">Select all in...</option>
+                  {ALL_GRADES.map((g) => (
+                    <option key={g} value={g}>{gradeText(g)}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={selectGrade}
+                  disabled={!bulkGrade}
+                  className="px-3 py-2 rounded-lg text-sm border border-slate-200 dark:border-gray-700 text-slate-700 dark:text-gray-200 hover:bg-white dark:hover:bg-gray-800 disabled:opacity-40"
+                >
+                  Select
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedIds(new Set())}
+                  disabled={selectedIds.size === 0}
+                  className="px-3 py-2 rounded-lg text-sm border border-slate-200 dark:border-gray-700 text-slate-700 dark:text-gray-200 hover:bg-white dark:hover:bg-gray-800 disabled:opacity-40"
+                >
+                  Clear
+                </button>
+                <span className="text-xs text-slate-500 dark:text-gray-400">{selectedStudents.length} selected</span>
+                <div className="ml-auto flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setYearEndAction('PROMOTE')}
+                    disabled={!canPromote}
+                    className="px-4 py-2 rounded-lg text-sm font-medium bg-[#7B1113] hover:bg-[#9B2020] text-white disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Promote{selectedStudents.length > 0 ? ' ' + selectedStudents.length : ''}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setYearEndAction('GRADUATE')}
+                    disabled={!canGraduate}
+                    className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-900 hover:bg-gray-700 dark:bg-white dark:hover:bg-gray-100 text-white dark:text-gray-900 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Graduate{selectedStudents.length > 0 ? ' ' + selectedStudents.length : ''}
+                  </button>
+                </div>
+              </div>
+              {selectedStudents.length > 0 && !canPromote && !canGraduate && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  Your selection mixes Grade 12 with other grades. Select them separately: Grade 12 can only be graduated.
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Active filters */}
           {(searchTerm || roleFilter !== 'ALL') && (
@@ -397,6 +555,16 @@ export default function ManageUsersPage() {
             <table className="w-full text-sm">
               <thead className="border-b border-slate-200 dark:border-gray-800">
                 <tr className="text-left text-slate-500 dark:text-gray-400 text-xs uppercase tracking-wider">
+                  {yearEndMode && (
+                    <th className="pb-3 pr-2 w-8">
+                      <input
+                        type="checkbox"
+                        checked={allVisibleSelected}
+                        onChange={toggleAllVisible}
+                        aria-label="Select all shown students"
+                      />
+                    </th>
+                  )}
                   <th className="pb-3 font-semibold">Name</th>
                   <th className="pb-3 font-semibold">Username</th>
                   <th className="pb-3 font-semibold">Role</th>
@@ -410,6 +578,18 @@ export default function ManageUsersPage() {
               <tbody>
                 {filteredUsers.map((userData) => (
                   <tr key={userData.id} className="border-b border-slate-100 dark:border-gray-800/50 hover:bg-slate-50 dark:hover:bg-gray-800/30 transition-colors">
+                    {yearEndMode && (
+                      <td className="py-3 pr-2">
+                        {userData.role === 'STUDENT' ? (
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(userData.id)}
+                            onChange={() => toggleOne(userData.id)}
+                            aria-label={'Select ' + userData.firstName + ' ' + userData.lastName}
+                          />
+                        ) : null}
+                      </td>
+                    )}
                     <td className="py-3">
   <div className="flex items-center gap-2.5">
     <div className="w-7 h-7 bg-gradient-to-br from-[#9B2020] to-[#7B1113] rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0">
@@ -579,6 +759,39 @@ export default function ManageUsersPage() {
         onSubmit={handleAddUser}
         error={error}
       />
+      <ConfirmDialog
+        open={yearEndAction !== null}
+        busy={yearEndBusy}
+        danger={yearEndAction === 'GRADUATE'}
+        title={(yearEndAction === 'GRADUATE' ? 'Graduate ' : 'Promote ') + selectedStudents.length + (selectedStudents.length === 1 ? ' student?' : ' students?')}
+        confirmLabel={yearEndAction === 'GRADUATE' ? 'Graduate students' : 'Promote students'}
+        onCancel={() => setYearEndAction(null)}
+        onConfirm={() => { void runYearEnd(); }}
+      >
+        {schoolYear && <p>School year <strong>{schoolYear.name}</strong>.</p>}
+        <div className="max-h-48 overflow-y-auto rounded-lg border border-slate-200 dark:border-gray-700 p-2 space-y-1 text-xs">
+          {selectedStudents.slice(0, 12).map((s) => (
+            <div key={s.id} className="flex justify-between gap-2">
+              <span className="truncate">{s.firstName} {s.lastName}</span>
+              <span className="shrink-0 text-slate-500 dark:text-gray-400">
+                {s.gradeLevel ? gradeText(s.gradeLevel) : 'No grade'} {'->'}{' '}
+                {yearEndAction === 'GRADUATE'
+                  ? 'Graduated'
+                  : nextGradeOf(s.gradeLevel) ? gradeText(nextGradeOf(s.gradeLevel) as string) : '-'}
+              </span>
+            </div>
+          ))}
+          {selectedStudents.length > 12 && (
+            <p className="text-slate-500 dark:text-gray-400">and {selectedStudents.length - 12} more</p>
+          )}
+        </div>
+        {yearEndAction === 'GRADUATE' ? (
+          <p>They are archived as Graduated. They can no longer log in or tap. You can restore them from the Archive page.</p>
+        ) : (
+          <p>Students you did not tick stay in their grade.</p>
+        )}
+        <p>Each parent gets a short message. This is recorded in the Action Log.</p>
+      </ConfirmDialog>
       <DeleteUserModal
         isOpen={showDeleteModal}
         user={selectedUser}

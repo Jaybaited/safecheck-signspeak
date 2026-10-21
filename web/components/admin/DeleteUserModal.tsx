@@ -47,7 +47,7 @@ export default function DeleteUserModal({ isOpen, user, onClose, onConfirm, isDe
             </div>
             <div>
               <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-1">
-                {blocked ? 'This parent cannot be deleted' : 'Delete user'}
+                {blocked ? (preview?.role === 'PARENT' ? 'This parent cannot be deleted' : 'This student cannot be deleted') : 'Delete user'}
               </h2>
               <p className="text-sm text-slate-500 dark:text-gray-400">
                 <span className="font-semibold text-slate-900 dark:text-white">{fullName}</span> ({user.username})
@@ -67,7 +67,18 @@ export default function DeleteUserModal({ isOpen, user, onClose, onConfirm, isDe
             <div className="p-3 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-xl text-sm text-red-700 dark:text-red-400">{error}</div>
           )}
 
-          {blocked && preview && (
+          {blocked && preview && preview.role === 'STUDENT' && (
+            <div className="p-4 bg-slate-50 dark:bg-gray-800/50 border border-slate-200 dark:border-gray-700 rounded-xl text-sm text-slate-600 dark:text-gray-300 space-y-2">
+              <p>{preview.blockedReason}</p>
+              {preview.records && (
+                <p className="text-xs">
+                  {preview.records.attendance} attendance records, {preview.records.fslProgress} FSL progress records, {preview.records.assessmentAttempts} assessment attempts.
+                </p>
+              )}
+            </div>
+          )}
+
+          {blocked && preview && preview.role === 'PARENT' && (
             <div className="p-4 bg-slate-50 dark:bg-gray-800/50 border border-slate-200 dark:border-gray-700 rounded-xl text-sm text-slate-600 dark:text-gray-300 space-y-2">
               <p>A parent account exists to serve its students, so it cannot be deleted while it has any. It is removed automatically when its last student is deleted.</p>
               <p className="font-semibold text-slate-800 dark:text-white">Linked students:</p>

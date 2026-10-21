@@ -408,6 +408,20 @@ export class UsersService {
       }
     }
 
+    // When DELETE_REQUIRES_NO_HISTORY=true (set at deployment), a student with records can only be archived.
+    if (target.role === 'STUDENT' && process.env.DELETE_REQUIRES_NO_HISTORY === 'true') {
+      const [att, fsl, attempts] = await Promise.all([
+        this.prisma.attendance.count({ where: { studentId: id } }),
+        this.prisma.fSLProgress.count({ where: { studentId: id } }),
+        this.prisma.assessmentAttempt.count({ where: { userId: id } }),
+      ]);
+      if (att + fsl + attempts > 0) {
+        throw new BadRequestException(
+          'This student has attendance, FSL, or assessment records. Please archive the student instead of deleting.',
+        );
+      }
+    }
+
     const result = { removedParent: null as string | null };
     try {
       await this.prisma.$transaction(async (tx) => {
@@ -690,9 +704,14 @@ export class UsersService {
         });
         if (others === 0) willDeleteParent = link.parent.username;
       }
+      const restricted =
+        process.env.DELETE_REQUIRES_NO_HISTORY === 'true' && attendance + fslProgress + assessmentAttempts > 0;
       return {
         role: 'STUDENT',
-        canDelete: true,
+        canDelete: !restricted,
+        blockedReason: restricted
+          ? 'This student has attendance, FSL, or assessment records. Real student records are kept, so archive the student instead of deleting.'
+          : null,
         willDeleteParent,
         records: { attendance, fslProgress, assessmentAttempts },
       };
@@ -856,6 +875,134 @@ export class UsersService {
     );
 
     return { message: student.firstName + ' ' + student.lastName + ' was restored to ' + (String(dto.gradeLevel) === 'KINDERGARTEN' ? 'Kindergarten' : String(dto.gradeLevel).replace('GRADE_', 'Grade ')) + '.' };
+  }
+
+  // Year-end tools: promote the selected students, or graduate Grade 12 students.
+  // Everything happens in one transaction, so it is all or nothing.
+  async yearEnd(studentIds: string[], action: 'PROMOTE' | 'GRADUATE', adminId?: string) {
+    const ids = Array.from(new Set(studentIds));
+    if (ids.length === 0) throw new BadRequestException('Select at least one student.');
+
+    const ORDER = [
+      'KINDERGARTEN', 'GRADE_1', 'GRADE_2', 'GRADE_3', 'GRADE_4', 'GRADE_5', 'GRADE_6',
+      'GRADE_7', 'GRADE_8', 'GRADE_9', 'GRADE_10', 'GRADE_11', 'GRADE_12',
+    ];
+    const label = (g: string) => (g === 'KINDERGARTEN' ? 'Kindergarten' : g.replace('GRADE_', 'Grade '));
+    const names = (list: { firstName: string; lastName: string }[]) =>
+      list.slice(0, 5).map((s) => s.firstName + ' ' + s.lastName).join(', ') +
+      (list.length > 5 ? ' and ' + (list.length - 5) + ' more' : '');
+
+    const students = await this.prisma.user.findMany({
+      where:  { id: { in: ids }, role: 'STUDENT', archivedAt: null },
+      select: { id: true, firstName: true, lastName: true, gradeLevel: true },
+    });
+    if (students.length !== ids.length) {
+      throw new BadRequestException(
+        'Some selected students were not found or are already archived. Refresh the list and try again.',
+      );
+    }
+    const noGrade = students.filter((s) => !s.gradeLevel);
+    if (noGrade.length > 0) {
+      throw new BadRequestException('These students have no grade level: ' + names(noGrade) + '. Set it in Edit user first.');
+    }
+    if (action === 'PROMOTE') {
+      const top = students.filter((s) => s.gradeLevel === 'GRADE_12');
+      if (top.length > 0) {
+        throw new BadRequestException('Grade 12 students can only be graduated, not promoted: ' + names(top) + '.');
+      }
+    } else {
+      const notTop = students.filter((s) => s.gradeLevel !== 'GRADE_12');
+      if (notTop.length > 0) {
+        throw new BadRequestException('Only Grade 12 students can be graduated. Not in Grade 12: ' + names(notTop) + '.');
+      }
+    }
+
+    const plan = students.map((s) => {
+      const from = s.gradeLevel as string;
+      return { student: s, from, to: action === 'PROMOTE' ? ORDER[ORDER.indexOf(from) + 1] : null };
+    });
+
+    const yearRow = await this.prisma.appConfig.findUnique({ where: { key: 'school_year' } });
+    const schoolYear = yearRow?.value ?? null;
+    const now = new Date();
+
+    await this.prisma.$transaction(
+      async (tx) => {
+        if (action === 'PROMOTE') {
+          const byGrade = new Map<string, string[]>();
+          for (const p of plan) {
+            const list = byGrade.get(p.to as string) ?? [];
+            list.push(p.student.id);
+            byGrade.set(p.to as string, list);
+          }
+          for (const [toGrade, list] of Array.from(byGrade.entries())) {
+            await tx.user.updateMany({ where: { id: { in: list } }, data: { gradeLevel: toGrade as any } });
+          }
+          return;
+        }
+
+        await tx.user.updateMany({
+          where: { id: { in: ids } },
+          data:  {
+            archivedAt:    now,
+            archiveStatus: 'GRADUATED' as any,
+            archiveNote:   schoolYear ? 'School year ' + schoolYear : null,
+            archivedById:  adminId ?? null,
+          },
+        });
+        await tx.refreshToken.deleteMany({ where: { userId: { in: ids } } });
+        await tx.passwordResetRequest.updateMany({
+          where: { userId: { in: ids }, status: 'PENDING' },
+          data:  { status: 'REJECTED', resolvedAt: now, resolvedBy: adminId ?? null },
+        });
+
+        // A parent whose students are all archived cannot log in any more.
+        const links = await tx.parentStudent.findMany({ where: { studentId: { in: ids } }, select: { parentId: true } });
+        const parentIds = Array.from(new Set(links.map((l) => l.parentId)));
+        if (parentIds.length > 0) {
+          const stillActive = await tx.parentStudent.findMany({
+            where:  { parentId: { in: parentIds }, student: { archivedAt: null } },
+            select: { parentId: true },
+          });
+          const activeSet = new Set(stillActive.map((l) => l.parentId));
+          const inactive = parentIds.filter((p) => !activeSet.has(p));
+          if (inactive.length > 0) await tx.refreshToken.deleteMany({ where: { userId: { in: inactive } } });
+        }
+      },
+      { maxWait: 10000, timeout: 60000 },
+    );
+
+    await this.adminLog.log(
+      adminId,
+      action === 'PROMOTE' ? 'YEAR_END_PROMOTED' : 'YEAR_END_GRADUATED',
+      'USER',
+      null,
+      (action === 'PROMOTE' ? 'Promoted ' : 'Graduated ') + plan.length + ' student(s)' +
+        (schoolYear ? ' for school year ' + schoolYear : ''),
+      {
+        schoolYear,
+        students: plan.map((p) => ({
+          id:   p.student.id,
+          name: p.student.firstName + ' ' + p.student.lastName,
+          from: label(p.from),
+          to:   p.to ? label(p.to) : 'Archived (Graduated)',
+        })),
+      },
+    );
+
+    this.notificationsService
+      .notifyParentsYearEnd(
+        plan.map((p) => ({ studentId: p.student.id, kind: action, toGrade: p.to ? label(p.to) : null })),
+      )
+      .catch(console.error);
+
+    return {
+      count: plan.length,
+      message:
+        action === 'PROMOTE'
+          ? plan.length + ' student(s) moved up to the next grade. Their parents were told.'
+          : plan.length + ' student(s) graduated and were archived. Their parents were told.',
+    };
   }
 
   async getRetiredCards() {

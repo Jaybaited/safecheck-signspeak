@@ -6,6 +6,7 @@ import { CalendarDays, Plus, Trash2, XCircle, CheckCircle, Info, ChevronLeft, Ch
 import Sidebar from '@/components/admin/Sidebar';
 import ThemeToggle from '@/components/ThemeToggle';
 import SummaryDialog from '@/components/shared/SummaryDialog';
+import SchoolYearCard from '@/components/admin/SchoolYearCard';
 import { logout } from '@/lib/auth';
 import { getHolidays, addHoliday, deleteHoliday, Holiday } from '@/lib/calendar-api';
 
@@ -179,6 +180,8 @@ export default function SchoolCalendarPage() {
             <span className="text-emerald-700 dark:text-emerald-400">{success}</span>
           </div>
         )}
+
+        <SchoolYearCard onSaved={flash} onError={setError} />
 
         <form
           onSubmit={handleAdd}

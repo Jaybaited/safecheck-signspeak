@@ -359,6 +359,7 @@ export interface DeletePreview {
   children?: { id: string; name: string }[];
   willDeleteParent?: string | null;
   records?: { attendance: number; fslProgress: number; assessmentAttempts: number };
+  blockedReason?: string | null;
 }
 
 export const changeParent = (studentId: string, parentId: string) =>
@@ -447,6 +448,12 @@ export const removeStudentPhoto = (id: string) =>
 
 export const getStudentPhotoUrl = (id: string) =>
   apiFetch<{ url: string | null }>('/users/' + id + '/photo-url');
+
+export const yearEnd = (studentIds: string[], action: 'PROMOTE' | 'GRADUATE') =>
+  apiFetch<{ message: string; count: number }>('/users/year-end', {
+    method: 'POST',
+    body: JSON.stringify({ studentIds, action }),
+  });
 
 export const updateUser = (id: string, data: Partial<CreateUserDto>) =>
   apiFetch<User>(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
@@ -634,8 +641,9 @@ export const api = {
   getRetiredCards,
   uploadStudentPhoto,
   removeStudentPhoto,
-  getStudentPhotoUrl,
+  getStudentPhotoUrl,
   deleteUser,
+  yearEnd,
   changePassword,
   forceChangePassword,
   getStudentParent,

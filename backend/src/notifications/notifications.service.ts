@@ -108,6 +108,60 @@ export class NotificationsService {
     }
   }
 
+  async notifyParentsYearEnd(
+    items: { studentId: string; kind: 'PROMOTE' | 'GRADUATE'; toGrade: string | null }[],
+  ): Promise<void> {
+    try {
+      if (items.length === 0) return;
+      const byStudent = new Map<string, (typeof items)[number]>();
+      items.forEach((i) => byStudent.set(i.studentId, i));
+
+      const links = await this.prisma.parentStudent.findMany({
+        where: { studentId: { in: items.map((i) => i.studentId) } },
+        select: {
+          studentId: true,
+          parent:  { select: { id: true, pushToken: true } },
+          student: { select: { firstName: true, lastName: true } },
+        },
+      });
+
+      const rows: { userId: string; type: NotificationType; message: string; status: NotificationStatus }[] = [];
+      const pushes: Record<string, unknown>[] = [];
+      for (const link of links) {
+        const item = byStudent.get(link.studentId);
+        if (!item) continue;
+        const name = link.student.firstName + ' ' + link.student.lastName;
+        const body =
+          item.kind === 'GRADUATE'
+            ? name + ' has graduated. Congratulations!'
+            : name + ' moved up to ' + (item.toGrade ?? 'the next grade') + ' for the new school year.';
+        rows.push({ userId: link.parent.id, type: NotificationType.SYSTEM, message: body, status: NotificationStatus.UNREAD });
+        if (link.parent.pushToken) {
+          pushes.push({
+            to: link.parent.pushToken,
+            title: item.kind === 'GRADUATE' ? 'Graduation' : 'New School Year',
+            body,
+            data: { type: 'SYSTEM', studentId: link.studentId },
+            sound: 'default',
+            priority: 'high',
+          });
+        }
+      }
+      if (rows.length > 0) await this.prisma.notification.createMany({ data: rows });
+
+      // Expo accepts up to 100 messages per request.
+      for (let i = 0; i < pushes.length; i += 100) {
+        fetch('https://exp.host/--/api/v2/push/send', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify(pushes.slice(i, i + 100)),
+        }).catch((e) => console.error('Year-end push failed:', e));
+      }
+    } catch (err) {
+      console.error('notifyParentsYearEnd failed:', err);
+    }
+  }
+
   async notifyParentManualMark(studentId: string, action: 'CHECK_IN' | 'CHECK_OUT', by: 'GUARD' | 'ADMIN'): Promise<void> {
     try {
       const links = await this.prisma.parentStudent.findMany({
