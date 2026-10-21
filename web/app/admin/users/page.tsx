@@ -23,7 +23,7 @@ interface User {
   firstName: string; lastName: string;
 }
 
-type RoleFilter = 'ALL' | 'TEACHER' | 'STUDENT' | 'PARENT';
+type RoleFilter = 'ALL' | 'TEACHER' | 'STUDENT' | 'PARENT' | 'GUARD';
 
 function exportToExcel(users: ApiUser[], filename: string) {
   const headers = ['First Name','Last Name','Username','Email','Role','Grade Level','RFID Card','Created Date'];
@@ -228,7 +228,7 @@ export default function ManageUsersPage() {
     { label: 'Total',    count: users.length,                                     icon: Users,         iconBg: 'bg-slate-100 dark:bg-gray-800',         iconColor: 'text-slate-600 dark:text-gray-400'     },
   ];
 
-  const ROLE_OPTIONS: RoleFilter[] = ['ALL', 'TEACHER', 'STUDENT', 'PARENT'];
+  const ROLE_OPTIONS: RoleFilter[] = ['ALL', 'TEACHER', 'STUDENT', 'PARENT', 'GUARD'];
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-gray-950 text-slate-900 dark:text-white transition-colors duration-200">

@@ -29,6 +29,7 @@ function LoginPageContent() {
       else if (user.role === 'STUDENT') router.replace('/student/dashboard')
       else if (user.role === 'TEACHER') router.replace('/teacher/assessment')
       else if (user.role === 'PARENT')  router.replace('/parent/dashboard')
+      else if (user.role === 'GUARD')   router.replace('/guard')
     } catch {
       // Malformed user data — let them log in normally
     }
@@ -91,6 +92,7 @@ function LoginPageContent() {
       else if (role === 'STUDENT') router.push('/student/dashboard')
       else if (role === 'TEACHER') router.push('/teacher/assessment')
       else if (role === 'PARENT')  router.push('/parent/dashboard')
+      else if (role === 'GUARD')   router.push('/guard')
       else                         router.push('/admin/dashboard')
 
     } catch (err: unknown) {

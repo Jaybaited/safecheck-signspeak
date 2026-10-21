@@ -12,6 +12,7 @@ const GRADE_LEVELS: readonly string[] = ALL_GRADES;
 const SELECTABLE_ROLES = [
   { value: 'STUDENT', label: 'Student' },
   { value: 'TEACHER', label: 'Teacher' },
+  { value: 'GUARD',   label: 'Guard'   },
   { value: 'ADMIN',   label: 'Admin'   },
 ];
 
@@ -356,7 +357,7 @@ export default function AddUserModal({ isOpen, onClose, onSubmit, error, presetP
               <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
                 <User className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" />
                 <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest">
-                  {formData.role === 'TEACHER' ? 'Teacher' : formData.role === 'ADMIN' ? 'Admin' : 'Student'} Account
+                  {formData.role === 'TEACHER' ? 'Teacher' : formData.role === 'ADMIN' ? 'Admin' : formData.role === 'GUARD' ? 'Guard' : 'Student'} Account
                 </span>
               </div>
               <div className="p-4 space-y-3">
@@ -531,7 +532,7 @@ export default function AddUserModal({ isOpen, onClose, onSubmit, error, presetP
               <label className={LABEL_CLS}>Role *</label>
               <select required value={formData.role}
                 onChange={(e) => {
-                  const newRole = e.target.value as 'ADMIN' | 'TEACHER' | 'STUDENT';
+                  const newRole = e.target.value as 'ADMIN' | 'TEACHER' | 'STUDENT' | 'GUARD';
                   setFormData({ ...formData, role: newRole, gradeLevel: '', rfidCard: '' });
                   setRfidTaken(false);
                   setRfidChecking(false);

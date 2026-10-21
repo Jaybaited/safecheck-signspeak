@@ -15,6 +15,7 @@ export enum Role {
   TEACHER = 'TEACHER',
   STUDENT = 'STUDENT',
   PARENT  = 'PARENT',
+  GUARD   = 'GUARD',
 }
 
 export enum GradeLevel {

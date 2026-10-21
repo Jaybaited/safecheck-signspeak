@@ -108,6 +108,46 @@ export class NotificationsService {
     }
   }
 
+  async notifyParentManualMark(studentId: string, action: 'CHECK_IN' | 'CHECK_OUT', by: 'GUARD' | 'ADMIN'): Promise<void> {
+    try {
+      const links = await this.prisma.parentStudent.findMany({
+        where: { studentId },
+        select: {
+          parent:  { select: { id: true, pushToken: true } },
+          student: { select: { firstName: true } },
+        },
+      });
+      const time = new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Manila', hour: 'numeric', minute: '2-digit' });
+      for (const link of links) {
+        const title = action === 'CHECK_IN' ? 'Student Arrived' : 'Student Left School';
+        const body =
+          link.student.firstName + ' was ' + (action === 'CHECK_IN' ? 'checked in' : 'checked out') +
+          ' at ' + time + ' by ' + (by === 'GUARD' ? 'the school guard' : 'the school office') + ' (card not used).';
+        await this.prisma.notification.create({
+          data: {
+            userId:  link.parent.id,
+            type:    NotificationType.ATTENDANCE,
+            message: body,
+            status:  NotificationStatus.UNREAD,
+          },
+        });
+        if (link.parent.pushToken) {
+          fetch('https://exp.host/--/api/v2/push/send', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to: link.parent.pushToken, title, body,
+              data: { type: 'ATTENDANCE', studentId },
+              sound: 'default', priority: 'high',
+            }),
+          }).catch((e) => console.error('Manual mark push failed:', e));
+        }
+      }
+    } catch (err) {
+      console.error('notifyParentManualMark failed:', err);
+    }
+  }
+
   async notifyParentCardEvent(studentId: string, kind: 'LOST' | 'SUSPENDED' | 'REACTIVATED' | 'REPLACED'): Promise<void> {
     try {
       const links = await this.prisma.parentStudent.findMany({

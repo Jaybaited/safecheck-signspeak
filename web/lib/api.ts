@@ -144,7 +144,7 @@ export interface User {
   rfidCardStatus?:     'ACTIVE' | 'SUSPENDED' | 'LOST';
   phoneNumber?:        string | null;
   gradeLevel?:         string | null;
-  role:                'ADMIN' | 'TEACHER' | 'STUDENT' | 'PARENT';
+  role: 'ADMIN' | 'TEACHER' | 'STUDENT' | 'PARENT' | 'GUARD';
   mustChangePassword?: boolean;
   createdAt:           string;
 }
@@ -162,7 +162,7 @@ export interface CreateUserDto {
   rfidCard?:    string;
   phoneNumber?: string;
   gradeLevel?:  string;
-  role:         'ADMIN' | 'TEACHER' | 'STUDENT' | 'PARENT';
+  role: 'ADMIN' | 'TEACHER' | 'STUDENT' | 'PARENT' | 'GUARD';
 }
 
 

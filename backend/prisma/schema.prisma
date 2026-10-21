@@ -68,6 +68,9 @@ model Attendance {
   date      DateTime         @default(now()) @db.Date
   status    AttendanceStatus @default(PRESENT)
   noTapOut  Boolean          @default(false)
+  method       AttendanceMethod @default(CARD)
+  markedById   String?
+  markedReason String?
   student   User             @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@unique([studentId, date])
@@ -279,6 +282,7 @@ enum Role {
   PARENT
   STUDENT
   KIOSK
+  GUARD
 }
 
 enum GradeLevel {
@@ -459,4 +463,9 @@ model RetiredCard {
 
   @@index([retiredAt])
   @@map("retired_cards")
+}
+
+enum AttendanceMethod {
+  CARD
+  MANUAL
 }

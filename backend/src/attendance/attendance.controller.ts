@@ -5,6 +5,7 @@ import {
 import { AttendanceService } from './attendance.service';
 import { RfidTapDto } from './dto/rfid-tap.dto';
 import { AttendanceQueryDto } from './dto/attendance-query.dto';
+import { GateMarkDto } from './dto/gate-mark.dto';
 import { JwtAuthGuard } from '../auth/jwt.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -88,5 +89,35 @@ export class AttendanceController {
   @Get('no-tap-out')
   async getNoTapOutStudents() {
     return this.attendanceService.getNoTapOutStudents();
+  }
+
+  // ── Gate Desk: the guard (and the admin) only. Today's data, never history. ──
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('GUARD', 'ADMIN')
+  @Get('gate/today')
+  async gateToday(@Query('q') q?: string, @Query('status') statusFilter?: string) {
+    return this.attendanceService.getGateBoard(q, statusFilter);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('GUARD', 'ADMIN')
+  @Get('gate/photo/:studentId')
+  async gatePhoto(@Param('studentId') studentId: string) {
+    return this.attendanceService.getGatePhoto(studentId);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('GUARD', 'ADMIN')
+  @Post('gate/mark')
+  async gateMark(@Body() body: GateMarkDto, @Req() req: any) {
+    const by = req.user?.id ?? req.user?.sub;
+    return this.attendanceService.markManual(body.studentId, body.action, body.reason, body.note, by, req.user?.role ?? 'GUARD');
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('GUARD', 'ADMIN')
+  @Get('gate/recent')
+  async gateRecent(@Query('limit') limit?: string) {
+    return this.attendanceService.getGateRecent(parseInt(limit ?? '30', 10) || 30);
   }
 }

@@ -316,6 +316,7 @@ export default function EditUserModal({
                   className="w-full px-3 py-2 bg-slate-50 dark:bg-gray-800 border border-slate-200 dark:border-gray-700 rounded-lg text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#7B1113] transition-colors appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <option value="TEACHER">Teacher</option>
+                  <option value="GUARD">Guard</option>
                   {isStudent && <option value="STUDENT">Student</option>}
                   {isParent && <option value="PARENT">Parent</option>}
                   <option value="ADMIN">Admin</option>

@@ -33,6 +33,7 @@ interface ReportRow {
   timeOut:     string | null;
   status:      string | null;
   noTapOut:    boolean;
+  manual:      boolean;
 }
 
 
@@ -68,7 +69,7 @@ function formatTime(iso: string | null) {
 
 
 function exportToCSV(rows: ReportRow[], filename: string) {
-  const headers = ['Student Name', 'RFID Card', 'Grade Level', 'Date', 'Time In', 'Time Out', 'Status'];
+  const headers = ['Student Name', 'RFID Card', 'Grade Level', 'Date', 'Time In', 'Time Out', 'Status', 'Entry'];
   const data = rows.map((r) => [
     r.studentName,
     r.rfidCard    ?? 'No RFID',
@@ -77,6 +78,7 @@ function exportToCSV(rows: ReportRow[], filename: string) {
     r.timeIn      ? formatTime(r.timeIn)  : '--:--',
     r.timeOut     ? formatTime(r.timeOut) : '--:--',
     r.noTapOut ? (r.status ?? '--') + ' (no tap-out)' : (r.status ?? '--'),
+    r.manual ? 'Manual' : 'Card',
   ]);
   const bom = '\uFEFF';
   const csv = [headers, ...data]
@@ -166,6 +168,7 @@ export default function ReportsPage() {
         timeOut: rec.timeOut,
         status:  rec.status,
         noTapOut: Boolean((rec as unknown as { noTapOut?: boolean }).noTapOut),
+        manual: (rec as unknown as { method?: string }).method === 'MANUAL',
       }));
 
 
@@ -563,6 +566,9 @@ export default function ReportsPage() {
                           {statusBadge(row.status)}
                           {row.noTapOut && (
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-500/10 dark:text-orange-400 dark:border-orange-500/20">NO TAP-OUT</span>
+                          )}
+                          {row.manual && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border bg-slate-100 text-slate-600 border-slate-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700">MANUAL</span>
                           )}
                         </div>
                       </td>

@@ -192,7 +192,7 @@ export class UsersController {
   }
 
   @Post(':id/change-password')
-  @Roles('ADMIN', 'TEACHER', 'PARENT', 'STUDENT')
+  @Roles('ADMIN', 'TEACHER', 'PARENT', 'STUDENT', 'GUARD')
   changePassword(
     @Param('id') id: string,
     @Body() body: ChangePasswordDto,
@@ -206,7 +206,7 @@ export class UsersController {
   }
 
   @Post(':id/force-change-password')
-  @Roles('ADMIN', 'TEACHER', 'PARENT', 'STUDENT')
+  @Roles('ADMIN', 'TEACHER', 'PARENT', 'STUDENT', 'GUARD')
   forceChangePassword(
     @Param('id') id: string,
     @Body() body: NewPasswordDto,

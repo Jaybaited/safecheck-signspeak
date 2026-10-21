@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NetworkTimeService } from '../common/services/network-time.service';
 import { PhotoService } from '../common/photo.service';
+import { AdminLogService } from '../common/admin-log.service';
 import { AttendanceQueryDto } from './dto/attendance-query.dto';
 
 type AttendanceAction = 'CHECK_IN' | 'CHECK_OUT';
@@ -43,6 +44,7 @@ export class AttendanceService {
     private readonly notificationsService: NotificationsService,
     private readonly networkTime: NetworkTimeService,
     private readonly photos: PhotoService,
+    private readonly adminLog: AdminLogService,
   ) {}
 
   async handleRfidTap(rfidCard: string, tapMode?: 'CHECK_IN' | 'CHECK_OUT'): Promise<RfidTapResult> {
@@ -217,6 +219,231 @@ export class AttendanceService {
         timeOut: attendance.timeOut,
         status:  attendance.status,
       },
+    };
+  }
+
+  // ── Gate Desk (guard) ─────────────────────────────────────────────────────
+  // Today's board only. The server never returns earlier days to the guard.
+  async getGateBoard(q?: string, status?: string) {
+    const serverNow  = await this.networkTime.getNow();
+    const manilaDate = new Date(serverNow.getTime() + 8 * 60 * 60 * 1000);
+    const { todayStart, todayEnd } = getManilaToday(manilaDate);
+
+    const base: any = { role: 'STUDENT', archivedAt: null };
+    const parts = (q ?? '').trim().split(/\s+/).filter(Boolean).slice(0, 4);
+    if (parts.length > 0) {
+      base.AND = parts.map((p) => ({
+        OR: [
+          { firstName: { contains: p, mode: 'insensitive' } },
+          { lastName:  { contains: p, mode: 'insensitive' } },
+        ],
+      }));
+    }
+
+    // Today's attendance, used for the counts and for the state of every row.
+    const todayRecords = await this.prisma.attendance.findMany({
+      where: { date: { gte: todayStart, lt: todayEnd }, student: { archivedAt: null } },
+      select: { studentId: true, timeIn: true, timeOut: true, status: true, noTapOut: true, method: true },
+    });
+    const byStudent = new Map(todayRecords.map((r) => [r.studentId, r]));
+    const inIds  = todayRecords.filter((r) => r.timeIn && !r.timeOut).map((r) => r.studentId);
+    const outIds = todayRecords.filter((r) => r.timeOut).map((r) => r.studentId);
+    const anyIds = todayRecords.filter((r) => r.timeIn).map((r) => r.studentId);
+
+    const statusFilter = ['IN_SCHOOL', 'CHECKED_OUT', 'NOT_IN'].includes(status ?? '') ? (status as string) : 'ALL';
+    const where: any = { ...base };
+    if (statusFilter === 'IN_SCHOOL')   where.id = { in: inIds };
+    if (statusFilter === 'CHECKED_OUT') where.id = { in: outIds };
+    if (statusFilter === 'NOT_IN')      where.id = { notIn: anyIds };
+
+    const [students, totalStudents] = await Promise.all([
+      this.prisma.user.findMany({
+        where,
+        orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+        take: statusFilter === 'IN_SCHOOL' ? 600 : 100,
+        select: {
+          id: true, firstName: true, lastName: true, gradeLevel: true,
+          rfidCard: true, rfidCardStatus: true, photoUrl: true,
+        },
+      }),
+      this.prisma.user.count({ where: { role: 'STUDENT', archivedAt: null } }),
+    ]);
+
+    let data = students.map((s) => {
+      const r = byStudent.get(s.id);
+      const state =
+        !r || !r.timeIn ? 'NOT_IN'
+        : r.timeOut ? 'CHECKED_OUT'
+        : r.noTapOut ? 'NO_TAP_OUT'
+        : 'CHECKED_IN';
+      return {
+        id:         s.id,
+        firstName:  s.firstName,
+        lastName:   s.lastName,
+        gradeLevel: s.gradeLevel,
+        cardLast4:  s.rfidCard ? s.rfidCard.slice(-4) : null,
+        cardStatus: s.rfidCard ? s.rfidCardStatus : null,
+        hasPhoto:   !!s.photoUrl,
+        state,
+        timeIn:     r?.timeIn ?? null,
+        timeOut:    r?.timeOut ?? null,
+        late:       r?.status === 'LATE',
+        manual:     r?.method === 'MANUAL',
+      };
+    });
+
+    // In school: the student who has been inside the longest comes first.
+    if (statusFilter === 'IN_SCHOOL') {
+      data = data.sort((a, b) => new Date(a.timeIn as Date).getTime() - new Date(b.timeIn as Date).getTime()).slice(0, 100);
+    }
+
+    return {
+      date: todayStart.toISOString().slice(0, 10),
+      totals: {
+        students:   totalStudents,
+        inSchool:   inIds.length,
+        checkedOut: outIds.length,
+        notIn:      Math.max(0, totalStudents - anyIds.length),
+      },
+      data,
+    };
+  }
+
+  async getGateRecent(limit = 30) {
+    const serverNow  = await this.networkTime.getNow();
+    const manilaDate = new Date(serverNow.getTime() + 8 * 60 * 60 * 1000);
+    const { todayStart, todayEnd } = getManilaToday(manilaDate);
+
+    const records = await this.prisma.attendance.findMany({
+      where: { date: { gte: todayStart, lt: todayEnd }, student: { archivedAt: null } },
+      select: {
+        timeIn: true, timeOut: true, status: true, noTapOut: true, method: true,
+        student: { select: { id: true, firstName: true, lastName: true, gradeLevel: true } },
+      },
+    });
+
+    const rows = records.map((r) => ({
+      studentId:  r.student.id,
+      firstName:  r.student.firstName,
+      lastName:   r.student.lastName,
+      gradeLevel: r.student.gradeLevel,
+      timeIn:     r.timeIn,
+      timeOut:    r.timeOut,
+      status:     r.status,
+      noTapOut:   r.noTapOut,
+      manual:     r.method === 'MANUAL',
+      lastAt:     Math.max(r.timeIn ? r.timeIn.getTime() : 0, r.timeOut ? r.timeOut.getTime() : 0),
+    }));
+    rows.sort((a, b) => b.lastAt - a.lastAt);
+    return {
+      rows: rows
+        .slice(0, Math.min(Math.max(limit, 1), 100))
+        .map(({ lastAt, ...rest }) => rest),
+    };
+  }
+
+  async getGatePhoto(studentId: string) {
+    const s = await this.prisma.user.findUnique({
+      where:  { id: studentId },
+      select: { role: true, archivedAt: true, photoUrl: true },
+    });
+    if (!s || s.role !== 'STUDENT' || s.archivedAt) throw new NotFoundException('Student not found.');
+    return { url: await this.photos.signedUrl(s.photoUrl, 300) };
+  }
+
+  // A guard (or the admin) marks a check-in or check-out by hand. Same rules as a card tap.
+  async markManual(
+    studentId: string,
+    action: 'CHECK_IN' | 'CHECK_OUT',
+    reason: string,
+    note: string | undefined,
+    markedById: string,
+    markedByRole: string,
+  ) {
+    const REASON_TEXT: Record<string, string> = {
+      FORGOT_CARD:      'Forgot the card',
+      CARD_LOST:        'Card lost, replacement pending',
+      CARD_NOT_WORKING: 'Card not working',
+    };
+    const cleanNote = (note ?? '').trim();
+    if (reason !== 'OTHER' && !REASON_TEXT[reason]) throw new BadRequestException('Choose a reason.');
+    if (reason === 'OTHER' && cleanNote.length < 3) {
+      throw new BadRequestException('Please write a short note when the reason is Other.');
+    }
+    const reasonText = reason === 'OTHER' ? cleanNote : REASON_TEXT[reason];
+
+    const student = await this.prisma.user.findUnique({
+      where:  { id: studentId },
+      select: { id: true, role: true, firstName: true, lastName: true, archivedAt: true },
+    });
+    if (!student || student.role !== 'STUDENT') throw new NotFoundException('Student not found.');
+    if (student.archivedAt) throw new BadRequestException(student.firstName + ' is archived and cannot be marked.');
+
+    const serverNow  = await this.networkTime.getNow();
+    const manilaDate = new Date(serverNow.getTime() + 8 * 60 * 60 * 1000);
+    const { todayStart, todayEnd } = getManilaToday(manilaDate);
+
+    const existing = await this.prisma.attendance.findFirst({
+      where: { studentId, date: { gte: todayStart, lt: todayEnd } },
+    });
+    const clock = (d: Date | null) =>
+      d ? new Date(d).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Manila' }) : '';
+    const first = student.firstName;
+
+    let attendance: any;
+    if (action === 'CHECK_IN') {
+      if (existing) throw new ConflictException(first + ' already checked in at ' + clock(existing.timeIn) + '.');
+      const hour = manilaDate.getUTCHours();
+      const minute = manilaDate.getUTCMinutes();
+      const late = hour > 8 || (hour === 8 && minute > 0);
+      try {
+        attendance = await this.prisma.attendance.create({
+          data: {
+            studentId,
+            timeIn: serverNow,
+            date: todayStart,
+            status: late ? 'LATE' : 'PRESENT',
+            method: 'MANUAL',
+            markedById,
+            markedReason: reasonText,
+          },
+        });
+      } catch (err: any) {
+        if (err?.code === 'P2002') throw new ConflictException(first + ' was just checked in. Please refresh the list.');
+        throw err;
+      }
+    } else {
+      if (!existing || !existing.timeIn) throw new BadRequestException(first + ' has not checked in yet today.');
+      if (existing.timeOut) throw new ConflictException(first + ' already checked out at ' + clock(existing.timeOut) + '.');
+      const minGapMs = Number(process.env.RFID_MIN_GAP_SECONDS ?? 120) * 1000;
+      if (serverNow.getTime() - new Date(existing.timeIn).getTime() < minGapMs) {
+        throw new ConflictException(first + ' just checked in at ' + clock(existing.timeIn) + '. Please wait a moment before checking out.');
+      }
+      attendance = await this.prisma.attendance.update({
+        where: { id: existing.id },
+        data:  { timeOut: serverNow, method: 'MANUAL', markedById, markedReason: reasonText },
+      });
+    }
+
+    this.notificationsService
+      .notifyParentManualMark(studentId, action, markedByRole === 'ADMIN' ? 'ADMIN' : 'GUARD')
+      .catch(console.error);
+
+    await this.adminLog.log(
+      markedById,
+      action === 'CHECK_IN' ? 'ATTENDANCE_MANUAL_CHECK_IN' : 'ATTENDANCE_MANUAL_CHECK_OUT',
+      'USER',
+      studentId,
+      'Marked ' + student.firstName + ' ' + student.lastName + (action === 'CHECK_IN' ? ' checked in' : ' checked out') + ' by hand: ' + reasonText,
+      { reason, note: cleanNote || null, byRole: markedByRole },
+    );
+
+    const when = action === 'CHECK_IN' ? attendance.timeIn : attendance.timeOut;
+    return {
+      success: true,
+      action,
+      message: first + ' was ' + (action === 'CHECK_IN' ? 'checked in' : 'checked out') + ' at ' + clock(when) + '. The parent was told.',
+      attendance: { timeIn: attendance.timeIn, timeOut: attendance.timeOut, status: attendance.status },
     };
   }
 
